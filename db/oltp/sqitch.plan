@@ -1,0 +1,9 @@
+%syntax-version=1.0.0
+%project=oltp
+%uri=https://github.com/lachlanorr/gaeneco/db/oltp
+
+schema 2020-09-20T00:39:33Z Lachlan Orr <lorr@gaen.org> # oltp schema
+player [schema] 2020-09-20T01:43:11Z Lachlan Orr <lorr@gaen.org> # create player table
+character [player] 2020-09-20T02:09:04Z Lachlan Orr <lorr@gaen.org> # create player table
+character_currency [character] 2020-09-20T02:22:58Z Lachlan Orr <lorr@gaen.org> # create character_currency table
+character_item [character] 2020-09-20T02:25:45Z Lachlan Orr <lorr@gaen.org> # create character_item table
