@@ -14,4 +14,6 @@ CREATE TABLE oltp.character_currency (
   faction_2 INT NOT NULL DEFAULT 0
 );
 
+ALTER SEQUENCE oltp.character_currency_id_seq RESTART WITH 100001;
+
 COMMIT;

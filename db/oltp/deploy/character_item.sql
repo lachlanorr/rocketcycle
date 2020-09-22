@@ -11,4 +11,6 @@ CREATE TABLE oltp.character_item (
   description TEXT NOT NULL
 );
 
+ALTER SEQUENCE oltp.character_item_id_seq RESTART WITH 100001;
+
 COMMIT;

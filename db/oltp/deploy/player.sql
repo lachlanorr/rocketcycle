@@ -11,4 +11,7 @@ CREATE TABLE oltp.player (
   active BOOL NOT NULL
 );
 
+INSERT INTO oltp.player (id, username, active) VALUES (1, 'sys_holding', TRUE);
+ALTER SEQUENCE oltp.player_id_seq RESTART WITH 100001;
+
 COMMIT;
