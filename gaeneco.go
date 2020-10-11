@@ -6,10 +6,12 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v4"
-	"github.com/lachlanorr/gaeneco/txn"
 )
 
 func main() {
+
+	Process()
+
 	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)

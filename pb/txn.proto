@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package gaeneco.proto;
+option go_package = "github.com/lachlanorr/gaeneco/pb";
+
+message Txn {
+    Dir direction = 1;
+    int32 current_step = 2;
+    bool can_rollback = 3;
+    repeated Step steps = 4;
+
+    enum Dir {
+        FORWARD = 0;
+        REVERSE = 1;
+    }
+
+    message Step {
+        string model = 1;
+        string command = 2;
+        repeated string params = 3;
+        Status status = 4;
+        MsgId msg_id = 5;
+        google.protobuf.Timestamp processed_time = 6;
+        google.protobuf.Timestamp effective_time = 7;
+        repeated string errors = 8;
+
+        enum Status {
+            PENDING = 0;
+            COMPLETE = 1;
+            ROLLED_BACK = 2;
+            ERROR = 3;
+        }
+
+        message MsgId {
+            int32 partition = 1;
+            int64 offset = 2;
+        }
+    }
+}
