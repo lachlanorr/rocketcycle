@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: gaeneco-kafka
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    command: zookeeper
+
+  broker:
+    image: gaeneco-kafka
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    command: broker
