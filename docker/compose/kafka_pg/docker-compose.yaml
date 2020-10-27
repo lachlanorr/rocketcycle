@@ -1,13 +1,25 @@
 version: "3.8"
 
 services:
+  db:
+    image: postgres
+    restart: always
+    hostname: db
+    container_name: db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: CHANGEME
+
   zookeeper:
     image: gaeneco-kafka
+    restart: always
     hostname: zookeeper
     container_name: zookeeper
     ports:
       - "2181:2181"
       - "8080:8080"
+      - "9870:9870" # jmx prometheus agent
     environment:
       KAFKA_PROPERTIES: |
         dataDir=/tmp/zookeeper
@@ -24,13 +36,14 @@ services:
 
   broker:
     image: gaeneco-kafka
+    restart: always
     hostname: broker
     container_name: broker
     depends_on:
       - zookeeper
     ports:
       - "9092:9092"
-      - "9101:9101"
+      - "9871:9871" # jmx prometheus agent
     environment:
       KAFKA_PROPERTIES: |
         ############################# Server Basics #############################
@@ -52,7 +65,7 @@ services:
         # it uses the value for "listeners" if configured.  Otherwise, it will use the value
         # returned from java.net.InetAddress.getCanonicalHostName().
         advertised.listeners=PLAINTEXT://localhost:9092
-        jmx.port=9101
+        #jmx.port=9101
 
         # Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details
         #listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
