@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
@@ -6,10 +10,11 @@ package gaeneco.proto;
 option go_package = "github.com/lachlanorr/gaeneco/pb";
 
 message Txn {
-    Dir direction = 1;
-    int32 current_step = 2;
-    bool can_rollback = 3;
-    repeated Step steps = 4;
+    Dir direction = 1;       // starts in forward, can potentially go to reverse if the transaction is reversible
+    int32 current_step = 2;  // starts at 0, increments after each "COMPLETE" step, and decrements during a rollback scenario
+    bool can_rollback = 3;   // whether or not this transaction can be rolled back.
+    repeated Step forward_steps = 4;  // filled upon creation with forward steps
+    repeated Step reverse_steps = 5;  // upon an error in a "can_rollback==true" transaction, this gets filled with the right rollback steps. Separatiing rollback from forward steps preserves the history for review of the nature of the failure.
 
     enum Dir {
         FORWARD = 0;
@@ -17,14 +22,14 @@ message Txn {
     }
 
     message Step {
-        string model = 1;
-        string command = 2;
-        repeated string params = 3;
-        Status status = 4;
-        MsgId msg_id = 5;
-        google.protobuf.Timestamp processed_time = 6;
-        google.protobuf.Timestamp effective_time = 7;
-        repeated string errors = 8;
+        string model = 1;           // logical persistence model, what is used to partition messages
+        string command = 2;         // command name, this will map to a piece of code (e.g. function)
+        repeated string params = 3; // paramters to the command function
+        Status status = 4;          // status of this step, all star at pending, and can transition to complete, error, and rolled back
+        MsgId msg_id = 5;           // kafka (and hopefullly kinesis) gives us a globally unique topic/partition/offset. Topic and model are analogous and used interchangeably here.
+        google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
+        google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+        repeated string errors = 8; // general bucket for error messages that will effectively be the logged errors of this step
 
         enum Status {
             PENDING = 0;

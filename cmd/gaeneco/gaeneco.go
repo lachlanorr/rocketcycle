@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 package main
 
 import (
@@ -6,11 +10,13 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v4"
+
+	"github.com/lachlanorr/gaeneco/internal/dispatch"
 )
 
 func main() {
 
-	Process()
+	dispatch.Process()
 
 	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
 	if err != nil {

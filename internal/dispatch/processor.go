@@ -1,6 +1,10 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //go:generate protoc --go_out=. --go_opt=paths=source_relative pb/txn.proto
 
-package main
+package dispatch
 
 import (
 	"errors"
@@ -99,7 +103,6 @@ func (proc Processor) ProcessNextStep(txn *pb.Txn) (*pb.Txn_Step, error) {
 	}
 
 	return step, nil
-
 }
 
 func Process() {
