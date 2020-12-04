@@ -1,3 +1,4 @@
 
 build
+pb/*.pb.go
 docker/images/__build*
