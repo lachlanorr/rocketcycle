@@ -15,6 +15,14 @@ services:
     environment:
       POSTGRES_PASSWORD: CHANGEME
 
+  grafana:
+    image: grafana/grafana
+    restart: always
+    hostname: grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+
   zookeeper:
     image: gaeneco-kafka
     restart: always
