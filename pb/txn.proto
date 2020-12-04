@@ -4,6 +4,7 @@
 
 syntax = "proto3";
 
+
 import "google/protobuf/timestamp.proto";
 
 package gaeneco.proto;
@@ -25,7 +26,7 @@ message Txn {
         string model = 1;           // logical persistence model, what is used to partition messages
         string command = 2;         // command name, this will map to a piece of code (e.g. function)
         repeated string params = 3; // paramters to the command function
-        Status status = 4;          // status of this step, all star at pending, and can transition to complete, error, and rolled back
+        Status status = 4;          // status of this step, all start at pending, and can transition to complete, error, and rolled back
         MsgId msg_id = 5;           // kafka (and hopefullly kinesis) gives us a globally unique topic/partition/offset. Topic and model are analogous and used interchangeably here.
         google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
         google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
