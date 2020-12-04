@@ -2,8 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//go:generate protoc --go_out=. --go_opt=paths=source_relative pb/txn.proto
-
 package dispatch
 
 import (
@@ -17,15 +15,15 @@ import (
 
 func NextStep(txn *pb.Txn) *pb.Txn_Step {
 	if txn.Direction == pb.Txn_FORWARD {
-		for i, _ := range txn.Steps {
-			if txn.Steps[i].Status == pb.Txn_Step_PENDING {
-				return txn.Steps[i]
+		for i, _ := range txn.ForwardSteps {
+			if txn.ForwardSteps[i].Status == pb.Txn_Step_PENDING {
+				return txn.ForwardSteps[i]
 			}
 		}
 	} else if txn.CanRollback { // txn.Direction == Reverse
-		for i := len(txn.Steps) - 1; i >= 0; i-- {
-			if txn.Steps[i].Status == pb.Txn_Step_COMPLETE {
-				return txn.Steps[i]
+		for i := len(txn.ForwardSteps) - 1; i >= 0; i-- {
+			if txn.ForwardSteps[i].Status == pb.Txn_Step_COMPLETE {
+				return txn.ForwardSteps[i]
 			}
 		}
 	}
@@ -34,15 +32,15 @@ func NextStep(txn *pb.Txn) *pb.Txn_Step {
 
 func LastStep(txn *pb.Txn) (*pb.Txn_Step, error) {
 	if txn.Direction == pb.Txn_FORWARD {
-		return txn.Steps[len(txn.Steps)-1], nil
+		return txn.ForwardSteps[len(txn.ForwardSteps)-1], nil
 	} else { // if txn.Direction == Reverse
-		return txn.Steps[0], nil
+		return txn.ForwardSteps[0], nil
 	}
 }
 
 func HasErrors(txn *pb.Txn) bool {
-	for i, _ := range txn.Steps {
-		if txn.Steps[i].Status == pb.Txn_Step_ERROR {
+	for i, _ := range txn.ForwardSteps {
+		if txn.ForwardSteps[i].Status == pb.Txn_Step_ERROR {
 			return true
 		}
 	}
