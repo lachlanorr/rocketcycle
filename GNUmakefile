@@ -19,8 +19,8 @@ default: all
 .PHONY: all
 all: proto cmd ## build everything
 
-.PHONY: clean ## remove all build artifacts
-clean:
+.PHONY: clean
+clean: ## remove all build artifacts
 	@rm -rf ./build
 	@rm -rf ./pb/*.pb.go
 
@@ -34,15 +34,31 @@ proto: ## generate protocol buffers
      pb/metadata.proto
 
 .PHONY: cmd
-cmd: gaeneco simulate ## compile all cmds
+cmd: control process persist simulate ## compile all cmds
 
-.PHONY: gaeneco
-gaeneco: ## compile gaeneco cmd
+.PHONY: control
+control: ## compile control cmd
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/gaeneco \
-	./cmd/gaeneco
+	-o $(BUILD_BIN_DIR)/control \
+	./cmd/control
+
+.PHONY: process
+process: ## compile process cmd
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/process \
+	./cmd/process
+
+.PHONY: persist
+persist: ## compile persist cmd
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/persist \
+	./cmd/persist
 
 .PHONY: simulate
 simulate: ## compile simulate cmd
