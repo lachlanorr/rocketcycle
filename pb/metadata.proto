@@ -1,0 +1,40 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package gaeneco.proto;
+option go_package = "github.com/lachlanorr/gaeneco/pb";
+
+
+message Application {
+    map<string, Model> models     = 1;
+    map<string, Cluster> clusters = 2;
+
+    message Model {
+        string name    = 1;
+
+        Topics control = 2; // handles control messages to coordinate distributed tasks
+        Topics process = 3; // handles messages that affect internal state of models
+        Topics persist = 4; // handles messages sent to the persistence layer
+
+        message Topics {
+            Topic current   = 1; // current physical topic
+            Topic migration = 2; // topic we're in the process of migrating to, will be null unless an active migration is taking place
+        }
+
+        message Topic {
+            string name           = 1;
+            string cluster_name   = 2; // kafka cluster topic exists within
+            int32 partition_count = 3;
+        }
+    }
+
+    message Cluster {
+        string name              = 1; // unique name of cluster
+        string bootstrap_servers = 2; // kafka bootstrap servers for the cluster
+    }
+
+}
+
