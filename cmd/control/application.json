@@ -1,0 +1,39 @@
+{
+    "name": "rpg",
+    "models": [
+        {
+            "name": "character",
+
+            "control": {
+                "current": {
+                    "name": "gaeneco.rpg.character.control_000001",
+                    "cluster_name": "local-dev",
+                    "partition_count": 4
+                }
+            },
+
+            "process": {
+                "current": {
+                    "name": "gaeneco.rpg.character.process_000001",
+                    "cluster_name": "local-dev",
+                    "partition_count": 4
+                }
+            },
+
+            "persist": {
+                "current": {
+                    "name": "gaeneco.rpg.character.persist_000001",
+                    "cluster_name": "local-dev",
+                    "partition_count": 4
+                }
+            }
+        }
+    ],
+
+    "clusters": [
+        {
+            "name": "local-dev",
+            "bootstrap_servers": "localhost:9092"
+        }
+    ]
+}

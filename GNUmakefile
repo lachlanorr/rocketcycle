@@ -43,6 +43,7 @@ control: ## compile control cmd
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/control \
 	./cmd/control
+	@cp ./cmd/control/application.json $(BUILD_BIN_DIR)
 
 .PHONY: process
 process: ## compile process cmd

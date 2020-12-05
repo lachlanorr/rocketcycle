@@ -9,8 +9,11 @@ option go_package = "github.com/lachlanorr/gaeneco/pb";
 
 
 message Application {
-    map<string, Model> models     = 1;
-    map<string, Cluster> clusters = 2;
+    string name               = 1;
+    repeated Model models     = 2;
+    repeated Cluster clusters = 3;
+
+    map<string, string> header_aliases = 4;
 
     message Model {
         string name    = 1;
@@ -21,7 +24,7 @@ message Application {
 
         message Topics {
             Topic current   = 1; // current physical topic
-            Topic migration = 2; // topic we're in the process of migrating to, will be null unless an active migration is taking place
+            Topic future    = 2;    // topic we're in the process of migrating to, will be null unless an active migration is taking place
         }
 
         message Topic {
