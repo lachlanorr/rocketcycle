@@ -27,7 +27,11 @@ clean:
 .PHONY: proto
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
-	@protoc --go_out=. --go_opt=paths=source_relative pb/txn.proto
+	@protoc \
+     --go_out=. \
+     --go_opt=paths=source_relative \
+     pb/txn.proto \
+     pb/metadata.proto
 
 .PHONY: cmd
 cmd: gaeneco simulate ## compile all cmds
