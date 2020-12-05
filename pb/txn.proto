@@ -13,9 +13,9 @@ option go_package = "github.com/lachlanorr/gaeneco/pb";
 message Txn {
     Dir direction = 1;       // starts in forward, can potentially go to reverse if the transaction is reversible
     int32 current_step = 2;  // starts at 0, increments after each "COMPLETE" step, and decrements during a rollback scenario
-    bool can_rollback = 3;   // whether or not this transaction can be rolled back.
+    bool can_revert = 3;     // whether or not this transaction can be rolled back.
     repeated Step forward_steps = 4;  // filled upon creation with forward steps
-    repeated Step reverse_steps = 5;  // upon an error in a "can_rollback==true" transaction, this gets filled with the right rollback steps. Separatiing rollback from forward steps preserves the history for review of the nature of the failure.
+    repeated Step reverse_steps = 5;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
 
     enum Dir {
         FORWARD = 0;
@@ -23,19 +23,20 @@ message Txn {
     }
 
     message Step {
-        string model = 1;           // logical persistence model, what is used to partition messages
-        string command = 2;         // command name, this will map to a piece of code (e.g. function)
-        repeated string params = 3; // paramters to the command function
-        Status status = 4;          // status of this step, all start at pending, and can transition to complete, error, and rolled back
-        MsgId msg_id = 5;           // kafka (and hopefullly kinesis) gives us a globally unique topic/partition/offset. Topic and model are analogous and used interchangeably here.
-        google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
-        google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
-        repeated string errors = 8; // general bucket for error messages that will effectively be the logged errors of this step
+        string model_name = 1;      // logical persistence model that's used to partition messages
+        string key = 2;             // key into model to use for partitioning against the topic
+        string command = 3;         // command name, this will map to a piece of code (e.g. function)
+        repeated string params = 4; // paramters to the command function
+        Status status = 5;          // status of this step, all start at pending, and can transition to complete, error, and rolled back
+        MsgId msg_id = 6;           // kafka gives us a globally unique topic/partition/offset.
+        google.protobuf.Timestamp processed_time = 7; // actual time this command result was recorded
+        google.protobuf.Timestamp effective_time = 8; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+        repeated string errors = 9; // general bucket for error messages that will effectively be the logged errors of this step
 
         enum Status {
             PENDING = 0;
             COMPLETE = 1;
-            ROLLED_BACK = 2;
+            REVERTED = 2;
             ERROR = 3;
         }
 
