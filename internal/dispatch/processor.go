@@ -20,7 +20,7 @@ func NextStep(txn *pb.Txn) *pb.Txn_Step {
 				return txn.ForwardSteps[i]
 			}
 		}
-	} else if txn.CanRollback { // txn.Direction == Reverse
+	} else if txn.CanRevert { // txn.Direction == Reverse
 		for i := len(txn.ForwardSteps) - 1; i >= 0; i-- {
 			if txn.ForwardSteps[i].Status == pb.Txn_Step_COMPLETE {
 				return txn.ForwardSteps[i]
@@ -93,7 +93,7 @@ func (proc Processor) ProcessNextStep(txn *pb.Txn) (*pb.Txn_Step, error) {
 	} else {
 		step.Errors = append(step.Errors, err.Error())
 		step.Status = pb.Txn_Step_ERROR
-		if txn.Direction == pb.Txn_FORWARD && txn.CanRollback {
+		if txn.Direction == pb.Txn_FORWARD && txn.CanRevert {
 			txn.Direction = pb.Txn_FORWARD
 		} else {
 			return step, err
