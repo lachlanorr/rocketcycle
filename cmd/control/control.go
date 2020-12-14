@@ -5,14 +5,21 @@
 package main
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"strings"
+	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/gaeneco/pb"
 )
@@ -31,7 +38,139 @@ func checkerr(err error) {
 	}
 }
 
+func createTopic(admin *kafka.AdminClient, name string, numPartitions int, replicationFactor int) error {
+	topicSpec := []kafka.TopicSpecification{
+		{
+			Topic:             name,
+			NumPartitions:     numPartitions,
+			ReplicationFactor: replicationFactor,
+		},
+	}
+
+	timeout, _ := time.ParseDuration("30s")
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	result, err := admin.CreateTopics(ctx, topicSpec, nil)
+	if err != nil {
+		return fmt.Errorf("Unable to create topic: %s", name)
+	}
+
+	var errs []string
+	for _, res := range result {
+		if res.Error.Code() != kafka.ErrNoError {
+			errs = append(errs, fmt.Sprintf("createTopic error for topic %s: %s", res.Topic, res.Error.Error()))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
+	}
+	log.Info().
+		Str("TopicName", name).
+		Int("NumPartitions", numPartitions).
+		Int("ReplicationFactor", replicationFactor).
+		Msg("Topic created")
+
+	return nil
+}
+
+var exists struct{}
+
+type clusterInfo struct {
+	admin          *kafka.AdminClient
+	existingTopics map[string]struct{}
+}
+
+func (ci *clusterInfo) Close() {
+	ci.admin.Close()
+}
+
+func NewClusterInfo(cluster *pb.Application_Cluster) (*clusterInfo, error) {
+	var ci = clusterInfo{}
+
+	config := make(kafka.ConfigMap)
+	config.SetKey("bootstrap.servers", cluster.BootstrapServers)
+
+	var err error
+	ci.admin, err = kafka.NewAdminClient(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	ci.existingTopics = make(map[string]struct{})
+
+	md, err := ci.admin.GetMetadata(nil, true, 1000)
+
+	if err != nil {
+		defer ci.admin.Close()
+		return nil, err
+	}
+
+	for _, tp := range md.Topics {
+		log.Info().
+			Str("TopicName", tp.Topic).
+			Msg("Topic found")
+		ci.existingTopics[tp.Topic] = exists
+	}
+
+	return &ci, nil
+}
+
+func createMissingTopic(clusterInfos map[string]*clusterInfo, topic *pb.Application_Model_Topic) {
+	ci, ok := clusterInfos[topic.ClusterName]
+	if !ok {
+		log.Error().
+			Str("ClusterName", topic.ClusterName).
+			Msg("Topic with invalid ClusterName")
+		return
+	}
+	if _, c := ci.existingTopics[topic.Name]; !c {
+		err := createTopic(ci.admin, topic.Name, int(topic.PartitionCount), 1)
+		if err != nil {
+			log.Error().
+				Str("ClusterName", topic.ClusterName).
+				Str("TopicName", topic.Name).
+				Str("Error", err.Error()).
+				Msg("Topic creation failure")
+			return
+		}
+	}
+}
+
+func createMissingTopics(clusterInfos map[string]*clusterInfo, topics *pb.Application_Model_Topics) {
+	if topics != nil && topics.Current != nil {
+		createMissingTopic(clusterInfos, topics.Current)
+	}
+}
+
+func startRuntimeApp(rtapp *runtimeApp) {
+	// start admin connections to all clusters
+	clusterInfos := make(map[string]*clusterInfo)
+	for _, cluster := range rtapp.app.Clusters {
+		ci, err := NewClusterInfo(cluster)
+
+		if err != nil {
+			log.Printf("Unable to connect to cluster '%s', boostrap_servers '%s': %s", cluster.Name, cluster.BootstrapServers, err.Error())
+		}
+
+		clusterInfos[cluster.Name] = ci
+		defer ci.Close()
+		log.Info().
+			Str("ClusterName", cluster.Name).
+			Str("BootstrapServers", cluster.BootstrapServers).
+			Msg("Connected to cluster")
+	}
+
+	for _, model := range rtapp.app.Models {
+		for _, topics := range model.Topics {
+			createMissingTopics(clusterInfos, topics)
+		}
+	}
+}
+
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	appJsonBytes, err := ioutil.ReadFile("./application.json")
 	checkerr(err)
 
@@ -40,27 +179,28 @@ func main() {
 	err = protojson.Unmarshal(appJsonBytes, proto.Message(&app))
 	checkerr(err)
 
-	rtApp, err := buildRuntimeApp(&app)
+	rtapp, err := buildRuntimeApp(&app)
 	checkerr(err)
 
-	fmt.Println(protojson.Format(proto.Message(rtApp.app)))
-	fmt.Println("--------------------------------")
-	fmt.Println(rtApp.app.String())
+	log.Info().
+		Msg(protojson.Format(proto.Message(rtapp.app)))
+
+	startRuntimeApp(rtapp)
 }
 
 func buildRuntimeApp(app *pb.Application) (*runtimeApp, error) {
-	rtApp := runtimeApp{}
+	rtapp := runtimeApp{}
 
-	rtApp.app = app
+	rtapp.app = app
 
 	// calc a checksum of raw bytes for later comparisons to see if ther have been changes
-	appBytes, err := proto.Marshal(proto.Message(rtApp.app))
+	appBytes, err := proto.Marshal(proto.Message(rtapp.app))
 	checkerr(err)
 	md5Bytes := md5.Sum(appBytes)
-	rtApp.hash = hex.EncodeToString(md5Bytes[:])
+	rtapp.hash = hex.EncodeToString(md5Bytes[:])
 
-	rtApp.clusters = make(map[string]*pb.Application_Cluster)
-	for idx, cluster := range rtApp.app.Clusters {
+	rtapp.clusters = make(map[string]*pb.Application_Cluster)
+	for idx, cluster := range rtapp.app.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
 		}
@@ -68,47 +208,40 @@ func buildRuntimeApp(app *pb.Application) (*runtimeApp, error) {
 			return nil, fmt.Errorf("Cluster '%s' missing bootstrap_servers field", cluster.Name)
 		}
 		// verify clusters only appear once
-		if _, ok := rtApp.clusters[cluster.Name]; ok {
-			return nil, fmt.Errorf("Cluster '%s' appears more than once in Application '%s' definition", cluster.Name, rtApp.app.Name)
+		if _, ok := rtapp.clusters[cluster.Name]; ok {
+			return nil, fmt.Errorf("Cluster '%s' appears more than once in Application '%s' definition", cluster.Name, rtapp.app.Name)
 		}
-		rtApp.clusters[cluster.Name] = cluster
+		rtapp.clusters[cluster.Name] = cluster
 	}
 
-	rtApp.models = make(map[string]*pb.Application_Model)
-	for idx, model := range rtApp.app.Models {
+	rtapp.models = make(map[string]*pb.Application_Model)
+	for idx, model := range rtapp.app.Models {
 		if model.Name == "" {
 			return nil, fmt.Errorf("Model %d missing name field", idx)
 		}
 
-		if model.Control == nil {
-			return nil, fmt.Errorf("Model '%s' missing required Control Topics definition", model.Name)
-		} else {
-			if err := validateTopics(model.Control, rtApp.clusters); err != nil {
-				return nil, fmt.Errorf("Model '%s' has invalid Control Topics: %s", model.Name, err.Error())
+		// validate our expected required topics are there
+		requiredTopics := []string{"control", "process", "error"}
+		for _, req := range requiredTopics {
+			if _, ok := model.Topics[req]; !ok {
+				return nil, fmt.Errorf("Model '%s' missing required '%s' Topics definition", model.Name, req)
 			}
 		}
-		if model.Process == nil {
-			return nil, fmt.Errorf("Model '%s' missing required Process Topics definition", model.Name)
-		} else {
-			if err := validateTopics(model.Process, rtApp.clusters); err != nil {
-				return nil, fmt.Errorf("Model '%s' has invalid Process Topics: %s", model.Name, err.Error())
-			}
-		}
-		// Persist is optional, so ok if not there
-		if model.Persist != nil {
-			if err := validateTopics(model.Persist, rtApp.clusters); err != nil {
-				return nil, fmt.Errorf("Model '%s' has invalid Persist Topics: %s", model.Name, err.Error())
+		// validate all topics definitions
+		for name, topics := range model.Topics {
+			if err := validateTopics(topics, rtapp.clusters); err != nil {
+				return nil, fmt.Errorf("Model '%s' has invalid '%s' Topics: %s", model.Name, name, err.Error())
 			}
 		}
 
 		// verify models only appear once
-		if _, ok := rtApp.models[model.Name]; ok {
-			return nil, fmt.Errorf("Model '%s' appears more than once in Application '%s' definition", model.Name, rtApp.app.Name)
+		if _, ok := rtapp.models[model.Name]; ok {
+			return nil, fmt.Errorf("Model '%s' appears more than once in Application '%s' definition", model.Name, rtapp.app.Name)
 		}
-		rtApp.models[model.Name] = model
+		rtapp.models[model.Name] = model
 	}
 
-	return &rtApp, nil
+	return &rtapp, nil
 }
 
 func validateTopics(topics *pb.Application_Model_Topics, clusters map[string]*pb.Application_Cluster) error {

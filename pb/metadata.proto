@@ -16,15 +16,19 @@ message Application {
     map<string, string> header_aliases = 4;
 
     message Model {
-        string name    = 1;
+        string name     = 1;
 
-        Topics control = 2; // handles control messages to coordinate distributed tasks
-        Topics process = 3; // handles messages that affect internal state of models
-        Topics persist = 4; // handles messages sent to the persistence layer
+        // Several topics are defined, some examples include:
+        //   control - handles control messages to coordinate distributed tasks
+        //   process - handles messages that affect internal state of models
+        //   error - errors encountered during processing written here
+        //   complete - optional, completed transactions written here for post processing
+        //   persist - optional, handles messages sent to the persistence layer
+        map<string, Topics> topics = 2;
 
         message Topics {
             Topic current   = 1; // current physical topic
-            Topic future    = 2;    // topic we're in the process of migrating to, will be null unless an active migration is taking place
+            Topic future    = 2; // topic we're in the process of migrating to, will be null unless an active migration is taking place
         }
 
         message Topic {
