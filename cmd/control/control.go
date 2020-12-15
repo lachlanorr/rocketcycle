@@ -6,7 +6,7 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,12 +30,6 @@ type runtimeApp struct {
 	hash     string
 	models   map[string]*pb.Application_Model
 	clusters map[string]*pb.Application_Cluster
-}
-
-func checkerr(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
 
 func createTopic(admin *kafka.AdminClient, name string, numPartitions int, replicationFactor int) error {
@@ -138,12 +132,17 @@ func createMissingTopic(clusterInfos map[string]*clusterInfo, topic *pb.Applicat
 }
 
 func createMissingTopics(clusterInfos map[string]*clusterInfo, topics *pb.Application_Model_Topics) {
-	if topics != nil && topics.Current != nil {
-		createMissingTopic(clusterInfos, topics.Current)
+	if topics != nil {
+		if topics.Current != nil {
+			createMissingTopic(clusterInfos, topics.Current)
+		}
+		if topics.Future != nil {
+			createMissingTopic(clusterInfos, topics.Future)
+		}
 	}
 }
 
-func startRuntimeApp(rtapp *runtimeApp) {
+func updateTopics(rtapp *runtimeApp) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
 	for _, cluster := range rtapp.app.Clusters {
@@ -171,21 +170,53 @@ func startRuntimeApp(rtapp *runtimeApp) {
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	appJsonBytes, err := ioutil.ReadFile("./application.json")
-	checkerr(err)
+	configPath := "./application.json"
 
-	app := pb.Application{}
+	var oldRtApp *runtimeApp
 
-	err = protojson.Unmarshal(appJsonBytes, proto.Message(&app))
-	checkerr(err)
+	for {
+		time.Sleep(time.Second)
 
-	rtapp, err := buildRuntimeApp(&app)
-	checkerr(err)
+		appJsonBytes, err := ioutil.ReadFile(configPath)
+		if err != nil {
+			log.Error().
+				Str("Error", err.Error()).
+				Str("Path", configPath).
+				Msg("Error reading config file")
+			continue
+		}
 
-	log.Info().
-		Msg(protojson.Format(proto.Message(rtapp.app)))
+		app := pb.Application{}
+		err = protojson.Unmarshal(appJsonBytes, proto.Message(&app))
+		if err != nil {
+			log.Error().
+				Str("Error", err.Error()).
+				Str("Path", configPath).
+				Str("Content", string(appJsonBytes)).
+				Msg("Error unmarshalling config file")
+			continue
+		}
 
-	startRuntimeApp(rtapp)
+		rtapp, err := buildRuntimeApp(&app)
+		if err != nil {
+			log.Error().
+				Str("Error", err.Error()).
+				Str("Path", configPath).
+				Str("Content", string(appJsonBytes)).
+				Msg("Error building runtimeApp")
+			continue
+		}
+
+		if oldRtApp == nil || rtapp.hash != oldRtApp.hash {
+			oldRtApp = rtapp
+			configStr := protojson.Format(proto.Message(rtapp.app))
+			log.Info().
+				Msg(configStr)
+
+			updateTopics(rtapp)
+		}
+	}
+
 }
 
 func buildRuntimeApp(app *pb.Application) (*runtimeApp, error) {
@@ -193,11 +224,9 @@ func buildRuntimeApp(app *pb.Application) (*runtimeApp, error) {
 
 	rtapp.app = app
 
-	// calc a checksum of raw bytes for later comparisons to see if ther have been changes
-	appBytes, err := proto.Marshal(proto.Message(rtapp.app))
-	checkerr(err)
-	md5Bytes := md5.Sum(appBytes)
-	rtapp.hash = hex.EncodeToString(md5Bytes[:])
+	appJson := protojson.Format(proto.Message(rtapp.app))
+	sha256Bytes := sha256.Sum256([]byte(appJson))
+	rtapp.hash = hex.EncodeToString(sha256Bytes[:])
 
 	rtapp.clusters = make(map[string]*pb.Application_Cluster)
 	for idx, cluster := range rtapp.app.Clusters {
