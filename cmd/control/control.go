@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -100,11 +101,18 @@ func NewClusterInfo(cluster *pb.Application_Cluster) (*clusterInfo, error) {
 		return nil, err
 	}
 
+	sortedTopics := make([]string, 0, len(md.Topics))
 	for _, tp := range md.Topics {
-		log.Info().
-			Str("TopicName", tp.Topic).
-			Msg("Topic found")
+		sortedTopics = append(sortedTopics, tp.Topic)
 		ci.existingTopics[tp.Topic] = exists
+	}
+
+	sort.Strings(sortedTopics)
+	for _, topicName := range sortedTopics {
+		log.Info().
+			Str("ClusterName", cluster.Name).
+			Str("TopicName", topicName).
+			Msg("Topic found")
 	}
 
 	return &ci, nil
