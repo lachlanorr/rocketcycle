@@ -218,8 +218,7 @@ func main() {
 		if oldRtApp == nil || rtapp.hash != oldRtApp.hash {
 			oldRtApp = rtapp
 			configStr := protojson.Format(proto.Message(rtapp.app))
-			log.Info().
-				Msg(configStr)
+			log.Printf("config:\n%s", configStr)
 
 			updateTopics(rtapp)
 		}
