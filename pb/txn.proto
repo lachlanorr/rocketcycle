@@ -34,6 +34,9 @@ message Txn {
         google.protobuf.Timestamp effective_time = 8; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
         repeated string errors = 9; // general bucket for error messages that will effectively be the logged errors of this step
 
+        bytes content = 10;         // opaque payload, application specific
+        string content_type = 11;   // type of opaque payload, application specific
+
         enum Status {
             PENDING = 0;
             COMPLETE = 1;
