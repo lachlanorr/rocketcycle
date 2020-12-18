@@ -34,7 +34,7 @@ proto: ## generate protocol buffers
      pb/metadata.proto
 
 .PHONY: cmd
-cmd: admin process persist simulate ## compile all cmds
+cmd: admin process storage simulate ## compile all cmds
 
 .PHONY: admin
 admin: ## compile admin cmd
@@ -53,13 +53,13 @@ process: ## compile process cmd
 	-o $(BUILD_BIN_DIR)/process \
 	./cmd/process
 
-.PHONY: persist
-persist: ## compile persist cmd
+.PHONY: storage
+storage: ## compile storage cmd
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/persist \
-	./cmd/persist
+	-o $(BUILD_BIN_DIR)/storage \
+	./cmd/storage
 
 .PHONY: simulate
 simulate: ## compile simulate cmd
