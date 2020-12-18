@@ -9,8 +9,8 @@ THIS_OS := $(shell uname | cut -d- -f1)
 BUILD_DIR := $(PROJECT_ROOT)/build/bin
 BUILD_BIN_DIR := $(PROJECT_ROOT)/build/bin
 
-GIT_COMMIT := $(shell git rev-parse HEAD)
-GIT_DIRTY := $(if $(shell git status --porcelain),+CHANGES)
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+GIT_DIRTY := $(if $(shell git status --porcelain),+)
 
 GO_LDFLAGS := "-X github.com/lachlanorr/gaeneco/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
@@ -34,16 +34,16 @@ proto: ## generate protocol buffers
      pb/metadata.proto
 
 .PHONY: cmd
-cmd: control process persist simulate ## compile all cmds
+cmd: admin process persist simulate ## compile all cmds
 
-.PHONY: control
-control: ## compile control cmd
+.PHONY: admin
+admin: ## compile admin cmd
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/control \
-	./cmd/control
-	@cp ./cmd/control/application.json $(BUILD_BIN_DIR)
+	-o $(BUILD_BIN_DIR)/admin \
+	./cmd/admin
+	@cp ./cmd/admin/metadata.json $(BUILD_BIN_DIR)
 
 .PHONY: process
 process: ## compile process cmd

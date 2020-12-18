@@ -24,7 +24,7 @@ message Txn {
     }
 
     message Step {
-        string model_name = 1;      // logical persistence model that's used to partition messages
+        string app_name = 1;        // logical persistence model that's used to partition messages
         string key = 2;             // key into model to use for partitioning against the topic
         string command = 3;         // command name, this will map to a piece of code (e.g. function)
         repeated string params = 4; // paramters to the command function

@@ -8,31 +8,63 @@ package gaeneco.proto;
 option go_package = "github.com/lachlanorr/gaeneco/pb";
 
 
-message Application {
-    string name               = 1;
-    repeated Model models     = 2;
-    repeated Cluster clusters = 3;
+message Metadata {
+    string name                       = 1;
+    repeated App apps = 2;
+    repeated Cluster clusters         = 3;
 
     map<string, string> header_aliases = 4;
 
-    message Model {
-        string name     = 1;
+    message App {
+        Type type   = 1;
+        string name = 2;
 
-        // Several topics are defined, some examples include:
-        //   control - handles control messages to coordinate distributed tasks
-        //   process - handles messages that affect internal state of models
-        //   error - errors encountered during processing written here
-        //   complete - optional, completed transactions written here for post processing
-        //   persist - optional, handles messages sent to the persistence layer
-        map<string, Topics> topics = 2;
+        repeated Topics topics = 3;
+
+        // Type implies what topics will be present
+        enum Type {
+            // error - errors encountered during processing written here
+            // additional application specific topics with no relationship
+            GENERAL = 0;
+
+            // error - errors encountered during processing written here
+            // Additional application specific topics representing stages of processing.
+            // For telemetry purposes, stage topics are assumed to be in alphabetical order.
+            // Batch jobs topics aren't created by default, but on demand with the timestamp
+            // included in the names
+            BATCH = 1;
+
+            // admin - handles control messages to coordinate distributed tasks
+            // process - handles messages that affect internal state of models
+            // error - errors encountered during processing written here
+            // complete - completed transactions written here for post processing
+            // storage - handles messages sent to the persistence layer
+            APECS = 2;
+        }
 
         message Topics {
-            Topic current   = 1; // current physical topic
-            Topic future    = 2; // topic we're in the process of migrating to, will be null unless an active migration is taking place
+            string name   = 1; // base name, it will get decorated with additional dot notated pieces
+            State state   = 2; // current vs future transition state
+
+            Topic current = 3; // current physical topic
+            Topic future  = 4; // topic we're in the process of migrating to, will be null unless an active migration is taking place
+
+            // Staes surrounding current vs future topics and current to future transition
+            enum State {
+                CURRENT                = 0; // no future topic exists, everyting using current
+                FUTURE_INIT            = 1; // future topic added to metadata and gets created
+                FUTURE_MIRROR          = 2; // current to future mirroring starts and gets as caught up as possible
+                PRODUCER_PAUSE         = 3; // producers all pause
+                FUTURE_MIRROR_VALIDATE = 4; // wait until mirror is confirmed on all partitions
+                CONSUMER_SHUTDOWN      = 5; // consumers read until end and shutdown
+                CONSUMER_FUTURE_START  = 6; // new consumers start on future, advanced passed newest
+                PRODUCER_FUTURE_START  = 7; // producers unpause and produce to future
+                FUTURE_TO_CURRENT      = 8; // future becomes current in metadata, future is nulled, state set to CURRENT
+            }
         }
 
         message Topic {
-            string name           = 1;
+            int64 created_at      = 1; // unix timestamp of creation, nanos since 1/1/1970
             string cluster_name   = 2; // kafka cluster topic exists within
             int32 partition_count = 3;
         }
@@ -42,6 +74,4 @@ message Application {
         string name              = 1; // unique name of cluster
         string bootstrap_servers = 2; // kafka bootstrap servers for the cluster
     }
-
 }
-
