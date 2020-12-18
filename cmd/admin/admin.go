@@ -190,6 +190,7 @@ func updateTopics(rtmeta *runtimeMeta) {
 
 		if err != nil {
 			log.Printf("Unable to connect to cluster '%s', boostrap_servers '%s': %s", cluster.Name, cluster.BootstrapServers, err.Error())
+			return
 		}
 
 		clusterInfos[cluster.Name] = ci
