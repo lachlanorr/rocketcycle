@@ -7,6 +7,15 @@
 
             "topics": [
                 {
+                    "name": "error",
+                    "state": 0,
+                    "current": {
+                        "created_at": 3,
+                        "cluster_name": "local-dev",
+                        "partition_count": 6
+                    }
+                },
+                {
                     "name": "phase1",
                     "state": 0,
                     "current": {

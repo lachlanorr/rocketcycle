@@ -211,6 +211,15 @@ func updateTopics(rtmeta *runtimeMeta) {
 	}
 }
 
+func contains(slice []string, item string) bool {
+	for _, val := range slice {
+		if val == item {
+			return true
+		}
+	}
+	return false
+}
+
 func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
 	rtmeta := runtimeMeta{}
 
@@ -235,30 +244,31 @@ func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
 		rtmeta.clusters[cluster.Name] = cluster
 	}
 
+	requiredTopics := map[pb.Metadata_App_Type][]string{
+		pb.Metadata_App_GENERAL: {"error"},
+		pb.Metadata_App_BATCH:   {"error"},
+		pb.Metadata_App_APECS:   {"admin", "process", "error", "complete", "storage"},
+	}
+
 	rtmeta.apps = make(map[string]*pb.Metadata_App)
 	for idx, app := range rtmeta.meta.Apps {
 		if app.Name == "" {
 			return nil, fmt.Errorf("App %d missing name field", idx)
 		}
 
-		log.Warn().
-			Msg("NEED TO VALIDATE TOPICS")
-		// validate our expected required topics are there
-		// requiredTopics := map[pb.Metadata_App_Type][]string{
-		// 	pb.Metadata_App_GENERAL: {"error"},
-		// 	pb.Metadata_App_BATCH:   {"error"},
-		// 	pb.Metadata_App_APECS:   {"admin", "process", "error", "complete", "storage"},
-		// }
-
-		// for _, req := range requiredTopics {
-		// 	if _, ok := app.Topics[req]; !ok {
-		// 		return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
-		// 	}
-		// }
+		var topicNames []string
 		// validate all topics definitions
-		for name, topics := range app.Topics {
+		for _, topics := range app.Topics {
+			topicNames = append(topicNames, topics.Name)
 			if err := validateTopics(topics, rtmeta.clusters); err != nil {
-				return nil, fmt.Errorf("App '%s' has invalid '%s' Topics: %s", app.Name, name, err.Error())
+				return nil, fmt.Errorf("App '%s' has invalid '%s' Topics: %s", app.Name, topics.Name, err.Error())
+			}
+		}
+
+		// validate our expected required topics are there
+		for _, req := range requiredTopics[app.Type] {
+			if !contains(topicNames, req) {
+				return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
 			}
 		}
 
