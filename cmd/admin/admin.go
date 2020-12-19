@@ -201,12 +201,16 @@ func updateTopics(rtmeta *runtimeMeta) {
 			Msg("Connected to cluster")
 	}
 
+	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
+
 	for _, app := range rtmeta.meta.Apps {
-		for _, topics := range app.Topics {
-			createMissingTopics(
-				topicNamePrefix(rtmeta.meta.Name, app.Name, app.Type),
-				topics,
-				clusterInfos)
+		if contains(appTypesAutoCreate, pb.Metadata_App_Type_name[int32(app.Type)]) {
+			for _, topics := range app.Topics {
+				createMissingTopics(
+					topicNamePrefix(rtmeta.meta.Name, app.Name, app.Type),
+					topics,
+					clusterInfos)
+			}
 		}
 	}
 }
