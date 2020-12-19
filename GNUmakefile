@@ -30,7 +30,7 @@ proto: ## generate protocol buffers
 	@protoc \
      --go_out=. \
      --go_opt=paths=source_relative \
-     pb/txn.proto \
+     pb/apecs_txn.proto \
      pb/metadata.proto
 
 .PHONY: cmd

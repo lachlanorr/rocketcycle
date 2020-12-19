@@ -10,7 +10,7 @@ import "google/protobuf/timestamp.proto";
 package gaeneco.proto;
 option go_package = "github.com/lachlanorr/gaeneco/pb";
 
-message Txn {
+message ApecsTxn {
     string id = 1;           // uuid of txn used for tracing and reporting
     Dir direction = 2;       // starts in forward, can potentially go to reverse if the transaction is reversible
     bool can_revert = 3;     // whether or not this transaction can be rolled back.
@@ -33,9 +33,6 @@ message Txn {
         google.protobuf.Timestamp processed_time = 7; // actual time this command result was recorded
         google.protobuf.Timestamp effective_time = 8; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
         repeated string errors = 9; // general bucket for error messages that will effectively be the logged errors of this step
-
-        bytes content = 10;         // opaque payload, application specific
-        string content_type = 11;   // type of opaque payload, application specific
 
         enum Status {
             PENDING = 0;
