@@ -22,8 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/gaeneco/pb"
-	"github.com/lachlanorr/gaeneco/version"
+	"github.com/lachlanorr/rocketcycle/pb"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
 // Metadata pb, with some convenience lookup maps
@@ -127,7 +127,7 @@ func NewClusterInfo(cluster *pb.Metadata_Cluster) (*clusterInfo, error) {
 }
 
 func topicNamePrefix(metaName string, appName string, appType pb.Metadata_App_Type) string {
-	return fmt.Sprintf("gaeneco.%s.%s.%s", metaName, appName, pb.Metadata_App_Type_name[int32(appType)])
+	return fmt.Sprintf("rc.%s.%s.%s", metaName, appName, pb.Metadata_App_Type_name[int32(appType)])
 }
 
 func topicName(topicNamePrefix string, name string, createdAt int64) string {

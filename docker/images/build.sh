@@ -66,4 +66,4 @@ rm -rf Dockerfile
 mv Dockerfile_subst Dockerfile
 rm -rf Dockerfile_subst
 
-docker build . -t gaeneco-${IMAGETAG} ${ARGS} 
+docker build . -t rocketcycle-${IMAGETAG} ${ARGS}

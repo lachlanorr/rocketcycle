@@ -24,7 +24,7 @@ services:
       - "3000:3000"
 
   zookeeper:
-    image: gaeneco-kafka
+    image: rocketcycle-kafka
     restart: always
     hostname: zookeeper
     container_name: zookeeper
@@ -47,7 +47,7 @@ services:
       /bin/sh -c "echo \"$$KAFKA_PROPERTIES\" > /opt/kafka/config/zookeeper.properties; /bin/bash start.sh zookeeper"
 
   broker:
-    image: gaeneco-kafka
+    image: rocketcycle-kafka
     restart: always
     hostname: broker
     container_name: broker

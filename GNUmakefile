@@ -12,7 +12,7 @@ BUILD_BIN_DIR := $(PROJECT_ROOT)/build/bin
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_DIRTY := $(if $(shell git status --porcelain),+)
 
-GO_LDFLAGS := "-X github.com/lachlanorr/gaeneco/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
+GO_LDFLAGS := "-X github.com/lachlanorr/rocketcycle/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
 default: all
 

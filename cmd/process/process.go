@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v4"
 
-	"github.com/lachlanorr/gaeneco/internal/dispatch"
+	"github.com/lachlanorr/rocketcycle/internal/dispatch"
 )
 
 func main() {

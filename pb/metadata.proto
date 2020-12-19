@@ -4,8 +4,8 @@
 
 syntax = "proto3";
 
-package gaeneco.proto;
-option go_package = "github.com/lachlanorr/gaeneco/pb";
+package rocketcycle.proto;
+option go_package = "github.com/lachlanorr/rocketcycle/pb";
 
 
 message Metadata {

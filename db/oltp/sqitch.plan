@@ -1,6 +1,6 @@
 %syntax-version=1.0.0
 %project=oltp
-%uri=https://github.com/lachlanorr/gaeneco/db/oltp
+%uri=https://github.com/lachlanorr/rocketcycle/db/oltp
 
 schema 2020-09-20T00:39:33Z Lachlan Orr <lorr@gaen.org> # oltp schema
 player [schema] 2020-09-20T01:43:11Z Lachlan Orr <lorr@gaen.org> # create player table

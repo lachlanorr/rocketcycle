@@ -1,4 +1,4 @@
-module github.com/lachlanorr/gaeneco
+module github.com/lachlanorr/rocketcycle
 
 go 1.15
 

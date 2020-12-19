@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lachlanorr/gaeneco/pb"
-
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pb"
 )
 
 func NextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {
