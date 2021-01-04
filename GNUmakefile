@@ -28,8 +28,17 @@ clean: ## remove all build artifacts
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
 	@protoc \
-     --go_out=. \
-     --go_opt=paths=source_relative \
+     -I . \
+     -I ./pb/third_party/googleapis \
+     --go_out . \
+     --go_opt paths=source_relative \
+     --go-grpc_out . \
+     --go-grpc_opt paths=source_relative \
+     --grpc-gateway_out . \
+     --grpc-gateway_opt logtostderr=true \
+     --grpc-gateway_opt paths=source_relative \
+     --grpc-gateway_opt generate_unbound_methods=true \
+     pb/admin_api.proto \
      pb/apecs_txn.proto \
      pb/metadata.proto
 

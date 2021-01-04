@@ -1,0 +1,22 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package rocketcycle.pb;
+option go_package = "github.com/lachlanorr/rocketcycle/pb";
+
+import "google/api/annotations.proto";
+import "pb/metadata.proto";
+
+message MetadataArgs {
+}
+
+service AdminService {
+    rpc Metadata(MetadataArgs) returns (rocketcycle.pb.Metadata) {
+        option (google.api.http) = {
+            get: "/v1/metadata"
+        };
+    }
+}

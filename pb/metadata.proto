@@ -4,14 +4,14 @@
 
 syntax = "proto3";
 
-package rocketcycle.proto;
+package rocketcycle.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/pb";
 
 
 message Metadata {
-    string name                       = 1;
-    repeated App apps = 2;
-    repeated Cluster clusters         = 3;
+    string name               = 1;
+    repeated App apps         = 2;
+    repeated Cluster clusters = 3;
 
     map<string, string> header_aliases = 4;
 
