@@ -13,6 +13,8 @@ function help_and_exit
 }
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+BUILD_ROOT=${DIR}/../../build/docker
+mkdir -p ${BUILD_ROOT}
 
 OFFICIAL=false
 HELP=false
@@ -46,7 +48,7 @@ echo "IMAGE=$IMAGE"
 echo "TAG=$TAG"
 echo "ARGS=$ARGS"
 
-BUILDDIR=${DIR}/__build_${IMAGE}
+BUILDDIR=${BUILD_ROOT}/__build_${IMAGE}
 rm -rf $BUILDDIR
 mkdir $BUILDDIR
 
