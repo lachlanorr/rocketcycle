@@ -5,12 +5,12 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/net/context"
 
 	"github.com/lachlanorr/rocketcycle/version"
 )
