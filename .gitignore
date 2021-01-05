@@ -1,5 +1,3 @@
 
 build
-pb/*.pb.go
-pb/*.pb.gw.go
 docker/images/__build*

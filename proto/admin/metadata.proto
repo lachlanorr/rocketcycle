@@ -5,8 +5,7 @@
 syntax = "proto3";
 
 package rocketcycle.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pb";
-
+option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
 message Metadata {
     string name               = 1;

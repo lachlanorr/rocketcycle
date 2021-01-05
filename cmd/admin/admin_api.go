@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/lachlanorr/rocketcycle/pb"
+	pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
 )
 
 type server struct {

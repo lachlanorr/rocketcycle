@@ -6,8 +6,8 @@ SHELL = bash
 PROJECT_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 THIS_OS := $(shell uname | cut -d- -f1)
 
-BUILD_DIR := $(PROJECT_ROOT)/build/bin
-BUILD_BIN_DIR := $(PROJECT_ROOT)/build/bin
+BUILD_DIR := $(PROJECT_ROOT)/build
+BUILD_BIN_DIR := $(BUILD_DIR)/bin
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_DIRTY := $(if $(shell git status --porcelain),+)
@@ -22,25 +22,25 @@ all: proto cmd ## build everything
 .PHONY: clean
 clean: ## remove all build artifacts
 	@rm -rf ./build
-	@rm -rf ./pb/*.pb.go
 
 .PHONY: proto
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
+	@mkdir -p $(BUILD_DIR)
 	@protoc \
      -I . \
-     -I ./pb/third_party/googleapis \
-     --go_out . \
+     -I ./proto/third_party/googleapis \
+     --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
-     --go-grpc_out . \
+     --go-grpc_out $(BUILD_DIR) \
      --go-grpc_opt paths=source_relative \
-     --grpc-gateway_out . \
+     --grpc-gateway_out $(BUILD_DIR) \
      --grpc-gateway_opt logtostderr=true \
      --grpc-gateway_opt paths=source_relative \
      --grpc-gateway_opt generate_unbound_methods=true \
-     pb/admin_api.proto \
-     pb/apecs_txn.proto \
-     pb/metadata.proto
+     proto/admin/api.proto \
+     proto/admin/metadata.proto \
+     proto/process/apecs_txn.proto
 
 .PHONY: cmd
 cmd: admin process storage simulate ## compile all cmds

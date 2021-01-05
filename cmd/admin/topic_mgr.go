@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pb"
+	pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
 )
 
 // Metadata pb, with some convenience lookup maps

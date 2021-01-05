@@ -8,7 +8,7 @@ syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 
 package rocketcycle.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pb";
+option go_package = "github.com/lachlanorr/rocketcycle/build/proto/process";
 
 message ApecsTxn {
     string id = 1;           // uuid of txn used for tracing and reporting

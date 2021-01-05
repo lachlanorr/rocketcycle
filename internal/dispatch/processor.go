@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pb"
+	pb "github.com/lachlanorr/rocketcycle/build/proto/process"
 )
 
 func NextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {

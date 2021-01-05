@@ -5,10 +5,10 @@
 syntax = "proto3";
 
 package rocketcycle.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pb";
+option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
 import "google/api/annotations.proto";
-import "pb/metadata.proto";
+import "proto/admin/metadata.proto";
 
 message MetadataArgs {
 }
