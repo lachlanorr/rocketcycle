@@ -6,13 +6,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/lachlanorr/rocketcycle/pb"
 )
@@ -25,7 +26,7 @@ func (s *server) Metadata(ctx context.Context, in *pb.MetadataArgs) (*pb.Metadat
 	if oldRtmeta != nil {
 		return oldRtmeta.meta, nil
 	}
-	return nil, errors.New("metadata not yet initialized")
+	return nil, status.New(codes.FailedPrecondition, "metadata not yet initialized").Err()
 }
 
 func prepareGrpcServer(ctx context.Context) {
