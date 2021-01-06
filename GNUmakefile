@@ -29,7 +29,14 @@ proto: ## generate protocol buffers
 	@mkdir -p $(BUILD_DIR)
 	@protoc \
      -I . \
-     -I ./proto/third_party/googleapis \
+     -I ./third_party/proto/googleapis \
+     --go_out $(BUILD_DIR) \
+     --go_opt paths=source_relative \
+     proto/admin/metadata.proto \
+     proto/process/apecs_txn.proto
+	@protoc \
+     -I . \
+     -I ./third_party/proto/googleapis \
      --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
      --go-grpc_out $(BUILD_DIR) \
@@ -38,9 +45,9 @@ proto: ## generate protocol buffers
      --grpc-gateway_opt logtostderr=true \
      --grpc-gateway_opt paths=source_relative \
      --grpc-gateway_opt generate_unbound_methods=true \
+     --openapiv2_out $(BUILD_DIR) \
+	 --openapiv2_opt logtostderr=true \
      proto/admin/api.proto \
-     proto/admin/metadata.proto \
-     proto/process/apecs_txn.proto
 
 .PHONY: cmd
 cmd: admin process storage simulate ## compile all cmds
@@ -48,6 +55,9 @@ cmd: admin process storage simulate ## compile all cmds
 .PHONY: admin
 admin: ## compile admin cmd
 	@echo "==> Building $@..."
+	@rm -rf ./cmd/admin/__static
+	@mkdir -p ./cmd/admin/__static
+	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/admin/__static/swagger.json
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/admin \

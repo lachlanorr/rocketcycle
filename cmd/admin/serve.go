@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"net"
 	"net/http"
 
@@ -17,6 +18,9 @@ import (
 
 	pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
 )
+
+//go:embed __static/swagger.json
+var swaggerJson string
 
 type server struct {
 	pb.UnimplementedAdminServiceServer
