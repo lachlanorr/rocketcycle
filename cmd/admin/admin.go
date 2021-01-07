@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 	"os/signal"
 
@@ -16,6 +17,8 @@ import (
 )
 
 func main() {
+	flag.Parse()
+
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

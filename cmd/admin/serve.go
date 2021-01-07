@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"embed"
+	"flag"
 	"net"
 	"net/http"
 
@@ -23,6 +24,9 @@ import (
 //go:embed __static/docs
 var docsFiles embed.FS
 
+var httpAddr = flag.String("http_addr", ":11371", "Address for http listener")
+var grpcAddr = flag.String("grpc_addr", ":11372", "Address for grpc listener")
+
 type server struct {
 	pb.UnimplementedAdminServiceServer
 }
@@ -35,7 +39,7 @@ func (s *server) Metadata(ctx context.Context, in *pb.MetadataArgs) (*pb.Metadat
 }
 
 func prepareGrpcServer(ctx context.Context) {
-	lis, err := net.Listen("tcp", ":11372")
+	lis, err := net.Listen("tcp", *grpcAddr)
 	if err != nil {
 		log.Error().
 			Msg("Unable to create grpc listener on tcp port 11372")
@@ -45,10 +49,15 @@ func prepareGrpcServer(ctx context.Context) {
 	grpcServer := grpc.NewServer()
 	pb.RegisterAdminServiceServer(grpcServer, &srv)
 
+	log.Info().
+		Str("Address", *grpcAddr).
+		Msg("gRPC server started")
+
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Error().
 			Str("Error", err.Error()).
 			Msg("failed to serve admin grpc")
+		return
 	}
 }
 
@@ -59,7 +68,7 @@ func serve(ctx context.Context) {
 	// Register grpc gateway server endpoint
 	apiMux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	err := pb.RegisterAdminServiceHandlerFromEndpoint(ctx, apiMux, ":11372", opts)
+	err := pb.RegisterAdminServiceHandlerFromEndpoint(ctx, apiMux, *grpcAddr, opts)
 	if err != nil {
 		log.Error().
 			Str("Error", err.Error()).
@@ -77,9 +86,13 @@ func serve(ctx context.Context) {
 		return
 	}
 
+	log.Info().
+		Str("Address", *httpAddr).
+		Msg("HTTP server started")
+
 	// This listener will serve up swagger on /docs and pass all other
 	// requests through to the grpc gw
-	err = http.ListenAndServe(":11371", mux)
+	err = http.ListenAndServe(*httpAddr, mux)
 	if err != nil {
 		log.Error().
 			Str("Error", err.Error()).
