@@ -55,9 +55,10 @@ cmd: admin process storage simulate ## compile all cmds
 .PHONY: admin
 admin: ## compile admin cmd
 	@echo "==> Building $@..."
-	@rm -rf ./cmd/admin/__static
-	@mkdir -p ./cmd/admin/__static
-	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/admin/__static/swagger.json
+	@rm -rf ./cmd/admin/__static/
+	@mkdir -p ./cmd/admin/__static/docs
+	@cp -rf ./third_party/swagger-ui/* ./cmd/admin/__static/docs
+	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/admin/__static/docs/swagger.json
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/admin \

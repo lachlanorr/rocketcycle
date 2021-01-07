@@ -26,7 +26,7 @@ func main() {
 		Msg("admin started")
 
 	go manageTopics(ctx)
-	go listenAndServe(ctx)
+	go serve(ctx)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
