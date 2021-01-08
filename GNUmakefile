@@ -47,6 +47,7 @@ proto: ## generate protocol buffers
      --grpc-gateway_opt generate_unbound_methods=true \
      --openapiv2_out $(BUILD_DIR) \
 	 --openapiv2_opt logtostderr=true \
+	 --openapiv2_opt fqn_for_openapi_name=true \
      proto/admin/api.proto \
 
 .PHONY: cmd

@@ -48,7 +48,7 @@ message Metadata {
             Topic current = 3; // current physical topic
             Topic future  = 4; // topic we're in the process of migrating to, will be null unless an active migration is taking place
 
-            // Staes surrounding current vs future topics and current to future transition
+            // States surrounding current vs future topics and current to future transition
             enum State {
                 CURRENT                = 0; // no future topic exists, everyting using current
                 FUTURE_INIT            = 1; // future topic added to metadata and gets created
