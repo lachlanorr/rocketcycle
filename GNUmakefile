@@ -17,7 +17,11 @@ GO_LDFLAGS := "-X github.com/lachlanorr/rocketcycle/version.GitCommit=$(GIT_COMM
 default: all
 
 .PHONY: all
-all: proto cmd ## build everything
+all: check proto cmd ## build everything
+
+.PHONY: check
+check: ## check license headers in files
+	@go run ./scripts/check_file_headers.go cmd internal pkg proto scratch scripts
 
 .PHONY: clean
 clean: ## remove all build artifacts
