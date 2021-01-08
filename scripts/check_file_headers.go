@@ -28,7 +28,7 @@ func fileHasHeaderIssue(path string) bool {
 		content := string(bytes)
 
 		if !strings.Contains(content, header) {
-			fmt.Printf("Bad header: %s\n", path)
+			fmt.Printf("%s:1:1: bad license header\n", path)
 			return true
 		}
 	}
