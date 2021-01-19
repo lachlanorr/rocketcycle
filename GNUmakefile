@@ -55,44 +55,44 @@ proto: ## generate protocol buffers
      proto/admin/api.proto \
 
 .PHONY: cmd
-cmd: admin process storage simulate ## compile all cmds
+cmd: rcadmin rcproc rcstore rcsim ## compile all cmds
 
-.PHONY: admin
-admin: ## compile admin cmd
+.PHONY: rcadmin
+rcadmin: ## compile rcadmin cmd
 	@echo "==> Building $@..."
-	@rm -rf ./cmd/admin/__static/
-	@mkdir -p ./cmd/admin/__static/docs
-	@cp -rf ./third_party/swagger-ui/* ./cmd/admin/__static/docs
-	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/admin/__static/docs/swagger.json
+	@rm -rf ./cmd/rcadmin/__static/
+	@mkdir -p ./cmd/rcadmin/__static/docs
+	@cp -rf ./third_party/swagger-ui/* ./cmd/rcadmin/__static/docs
+	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/rcadmin/__static/docs/swagger.json
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/admin \
-	./cmd/admin
-	@cp ./cmd/admin/metadata.json $(BUILD_BIN_DIR)
+	-o $(BUILD_BIN_DIR)/rcadmin \
+	./cmd/rcadmin
+	@cp ./cmd/rcadmin/metadata.json $(BUILD_BIN_DIR)
 
-.PHONY: process
-process: ## compile process cmd
-	@echo "==> Building $@..."
-	@go build \
-	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/process \
-	./cmd/process
-
-.PHONY: storage
-storage: ## compile storage cmd
+.PHONY: rcproc
+rcproc: ## compile rcproc cmd
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/storage \
-	./cmd/storage
+	-o $(BUILD_BIN_DIR)/rcproc \
+	./cmd/rcproc
 
-.PHONY: simulate
-simulate: ## compile simulate cmd
+.PHONY: rcstore
+rcstore: ## compile rcstore cmd
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/simulate \
-    ./cmd/simulate
+	-o $(BUILD_BIN_DIR)/rcstore \
+	./cmd/rcstore
+
+.PHONY: rcsim
+rcsim: ## compile rcsim cmd
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/rcsim \
+    ./cmd/rcsim
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help
