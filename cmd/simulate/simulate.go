@@ -4,5 +4,21 @@
 
 package main
 
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "rcsim",
+	Short: "Rocketcycle Simulator",
+	Long:  "Provides client application simulation for Rocketcycle MMO economy test scenario",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("test\n")
+	},
+}
+
 func main() {
+	rootCmd.Execute()
 }
