@@ -32,45 +32,64 @@ message Metadata {
             // Batch jobs topics aren't created by default, but on demand with the timestamp
             // included in the names
             BATCH = 1;
-
-            // admin - handles control messages to coordinate distributed tasks
-            // process - handles messages that affect internal state of models
-            // error - errors encountered during processing written here
-            // complete - completed transactions written here for post processing
-            // storage - handles messages sent to the persistence layer
+            // Default topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * process - handles messages that affect internal state of models
+            //     * error - errors encountered during processing written here
+            //     * complete - completed transactions written here for post processing
+            //     * storage - handles messages sent to the persistence layer
             APECS = 2;
         }
 
         message Topics {
-            string name   = 1; // base name, it will get decorated with additional dot notated pieces
-            State state   = 2; // current vs future transition state
+            // base name, it will get decorated with additional dot notated pieces
+            string name   = 1;
+            // current vs future transition state
+            State state   = 2;
 
-            Topic current = 3; // current physical topic
-            Topic future  = 4; // topic we're in the process of migrating to, will be null unless an active migration is taking place
+            // current physical topic
+            Topic current = 3;
+
+            // topic we're in the process of migrating to, will be
+            // null unless an active migration is taking place
+            Topic future  = 4;
 
             // States surrounding current vs future topics and current to future transition
             enum State {
-                CURRENT                = 0; // no future topic exists, everyting using current
-                FUTURE_INIT            = 1; // future topic added to metadata and gets created
-                FUTURE_MIRROR          = 2; // current to future mirroring starts and gets as caught up as possible
-                PRODUCER_PAUSE         = 3; // producers all pause
-                FUTURE_MIRROR_VALIDATE = 4; // wait until mirror is confirmed on all partitions
-                CONSUMER_SHUTDOWN      = 5; // consumers read until end and shutdown
-                CONSUMER_FUTURE_START  = 6; // new consumers start on future, advanced passed newest
-                PRODUCER_FUTURE_START  = 7; // producers unpause and produce to future
-                FUTURE_TO_CURRENT      = 8; // future becomes current in metadata, future is nulled, state set to CURRENT
+                // no future topic exists, everyting using current
+                CURRENT                = 0;
+                // future topic added to metadata and gets created
+                FUTURE_INIT            = 1;
+                // current to future mirroring starts and gets as caught up as possible
+                FUTURE_MIRROR          = 2;
+                // producers all pause
+                PRODUCER_PAUSE         = 3;
+                // wait until mirror is confirmed on all partitions
+                FUTURE_MIRROR_VALIDATE = 4;
+                // consumers read until end and shutdown
+                CONSUMER_SHUTDOWN      = 5;
+                // new consumers start on future, advanced passed newest
+                CONSUMER_FUTURE_START  = 6;
+                // producers unpause and produce to future
+                PRODUCER_FUTURE_START  = 7;
+                // future becomes current in metadata, future is nulled, state set to CURRENT
+                FUTURE_TO_CURRENT      = 8;
             }
         }
 
         message Topic {
-            int64 created_at      = 1; // unix timestamp of creation, nanos since 1/1/1970
-            string cluster_name   = 2; // kafka cluster topic exists within
+            // unix timestamp of creation, nanos since 1/1/1970
+            int64 created_at      = 1;
+            // kafka cluster topic exists within
+            string cluster_name   = 2;
             int32 partition_count = 3;
         }
     }
 
     message Cluster {
-        string name              = 1; // unique name of cluster
-        string bootstrap_servers = 2; // kafka bootstrap servers for the cluster
+        // unique name of cluster
+        string name              = 1;
+        // kafka bootstrap servers for the cluster
+        string bootstrap_servers = 2;
     }
 }
