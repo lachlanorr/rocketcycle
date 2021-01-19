@@ -37,7 +37,8 @@ proto: ## generate protocol buffers
      --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
      proto/admin/metadata.proto \
-     proto/process/apecs_txn.proto
+     proto/process/apecs_txn.proto \
+     proto/storage/mmo.proto
 	@protoc \
      -I . \
      -I ./third_party/proto/googleapis \
@@ -53,9 +54,10 @@ proto: ## generate protocol buffers
 	 --openapiv2_opt logtostderr=true \
 	 --openapiv2_opt fqn_for_openapi_name=true \
      proto/admin/api.proto \
+     proto/edge/api.proto
 
 .PHONY: cmd
-cmd: rcadmin rcproc rcstore rcsim ## compile all cmds
+cmd: rcadmin rcproc rcstore rcedge rcsim ## compile all cmds
 
 .PHONY: rcadmin
 rcadmin: ## compile rcadmin cmd
@@ -85,6 +87,18 @@ rcstore: ## compile rcstore cmd
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rcstore \
 	./cmd/rcstore
+
+.PHONY: rcedge
+rcedge: ## compile rcedge cmd
+	@echo "==> Building $@..."
+	@rm -rf ./cmd/rcedge/__static/
+	@mkdir -p ./cmd/rcedge/__static/docs
+	@cp -rf ./third_party/swagger-ui/* ./cmd/rcedge/__static/docs
+	@cp -f $(BUILD_DIR)/proto/edge/api.swagger.json ./cmd/rcedge/__static/docs/swagger.json
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/rcedge \
+    ./cmd/rcedge
 
 .PHONY: rcsim
 rcsim: ## compile rcsim cmd

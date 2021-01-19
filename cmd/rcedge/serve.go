@@ -14,28 +14,27 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	//	"google.golang.org/grpc/codes"
+	//	"google.golang.org/grpc/status"
 
-	pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	pb_edge "github.com/lachlanorr/rocketcycle/build/proto/edge"
+	pb_storage "github.com/lachlanorr/rocketcycle/build/proto/storage"
 	"github.com/lachlanorr/rocketcycle/internal/serve_utils"
 )
 
 //go:embed __static/docs
 var docsFiles embed.FS
 
-var httpAddr = flag.String("http_addr", ":11371", "Address for http listener")
-var grpcAddr = flag.String("grpc_addr", ":11381", "Address for grpc listener")
+var httpAddr = flag.String("http_addr", ":11372", "Address for http listener")
+var grpcAddr = flag.String("grpc_addr", ":11382", "Address for grpc listener")
 
 type server struct {
-	pb.UnimplementedAdminServiceServer
+	pb_edge.UnimplementedMmoServiceServer
 }
 
-func (s *server) Metadata(ctx context.Context, in *pb.MetadataArgs) (*pb.Metadata, error) {
-	if oldRtmeta != nil {
-		return oldRtmeta.meta, nil
-	}
-	return nil, status.New(codes.FailedPrecondition, "metadata not yet initialized").Err()
+func (s *server) CreatePlayer(ctx context.Context, in *pb_storage.Player) (*pb_storage.Player, error) {
+	player := pb_storage.Player{}
+	return &player, nil
 }
 
 func prepareGrpcServer(ctx context.Context) {
@@ -47,7 +46,7 @@ func prepareGrpcServer(ctx context.Context) {
 	}
 	srv := server{}
 	grpcServer := grpc.NewServer()
-	pb.RegisterAdminServiceServer(grpcServer, &srv)
+	pb_edge.RegisterMmoServiceServer(grpcServer, &srv)
 
 	log.Info().
 		Str("Address", *grpcAddr).
@@ -56,7 +55,7 @@ func prepareGrpcServer(ctx context.Context) {
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Error().
 			Str("Error", err.Error()).
-			Msg("failed to serve admin grpc")
+			Msg("failed to serve mmo grpc")
 		return
 	}
 }
@@ -68,11 +67,11 @@ func serve(ctx context.Context) {
 	// Register grpc gateway server endpoint
 	apiMux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
-	err := pb.RegisterAdminServiceHandlerFromEndpoint(ctx, apiMux, *grpcAddr, opts)
+	err := pb_edge.RegisterMmoServiceHandlerFromEndpoint(ctx, apiMux, *grpcAddr, opts)
 	if err != nil {
 		log.Error().
 			Str("Error", err.Error()).
-			Msg("pb.RegisterAdminServiceHandlerFromEndpoint failed")
+			Msg("pb_edge.RegisterMmoServiceHandlerFromEndpoint failed")
 		return
 	}
 
