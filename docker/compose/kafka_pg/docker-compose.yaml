@@ -13,7 +13,8 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_PASSWORD: CHANGEME
+      POSTGRES_HOST_AUTH_METHOD: trust
+      #POSTGRES_PASSWORD: CHANGEME
 
   grafana:
     image: grafana/grafana
