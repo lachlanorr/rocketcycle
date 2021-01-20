@@ -1,1 +1,1 @@
-CREATE SCHEMA oltp;
+CREATE SCHEMA mmo;

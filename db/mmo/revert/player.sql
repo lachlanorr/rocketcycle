@@ -1,3 +1,3 @@
--- Revert oltp:player from pg
+-- Revert mmo:player from pg
 
-DROP TABLE oltp.player;
+DROP TABLE mmo.player;

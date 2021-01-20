@@ -1,3 +1,3 @@
--- Revert oltp:character_item from pg
+-- Revert mmo:character_item from pg
 
-DROP TABLE oltp.character_item;
+DROP TABLE mmo.character_item;

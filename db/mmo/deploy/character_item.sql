@@ -1,16 +1,16 @@
--- Deploy oltp:character_item to pg
+-- Deploy mmo:character_item to pg
 -- requires: character
 
 BEGIN;
 
 SET client_min_messages = 'warning';
 
-CREATE TABLE oltp.character_item (
+CREATE TABLE mmo.character_item (
   id BIGSERIAL PRIMARY KEY,
-  character_id BIGINT REFERENCES oltp.character(id) NOT NULL,
+  character_id BIGINT REFERENCES mmo.character(id) NOT NULL,
   description TEXT NOT NULL
 );
 
-ALTER SEQUENCE oltp.character_item_id_seq RESTART WITH 100001;
+ALTER SEQUENCE mmo.character_item_id_seq RESTART WITH 100001;
 
 COMMIT;

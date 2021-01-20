@@ -1,1 +1,1 @@
-DROP SCHEMA oltp;
+DROP SCHEMA mmo;

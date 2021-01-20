@@ -1,5 +1,5 @@
--- Verify oltp:player on pg
+-- Verify mmo:player on pg
 
 SELECT id, username, active
-  FROM oltp.player
+  FROM mmo.player
 WHERE FALSE;

@@ -1,3 +1,3 @@
--- Revert oltp:character_currency from pg
+-- Revert mmo:character_currency from pg
 
-DROP TABLE oltp.character_currency;
+DROP TABLE mmo.character_currency;

@@ -1,1 +1,1 @@
-SELECT pg_catalog.has_schema_privilege('oltp', 'usage');
+SELECT pg_catalog.has_schema_privilege('mmo', 'usage');
