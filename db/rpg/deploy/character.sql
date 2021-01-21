@@ -1,13 +1,13 @@
--- Deploy mmo:character to pg
+-- Deploy rpg:character to pg
 -- requires: player
 
 BEGIN;
 
 SET client_min_messages = 'warning';
 
-CREATE TABLE mmo.character (
+CREATE TABLE rpg.character (
   id BIGSERIAL PRIMARY KEY,
-  player_id BIGINT REFERENCES mmo.player(id) NOT NULL,
+  player_id BIGINT REFERENCES rpg.player(id) NOT NULL,
   fullname TEXT NOT NULL,
   active BOOL NOT NULL
 );
@@ -21,10 +21,10 @@ BEGIN
     LOOP
         EXIT WHEN i = end_id;
 
-        INSERT INTO mmo.character (id, player_id, fullname, active) VALUES (i, 1, 'sys_holding_' || i, TRUE);
+        INSERT INTO rpg.character (id, player_id, fullname, active) VALUES (i, 1, 'sys_holding_' || i, TRUE);
         i := i + 1;
     END LOOP;
-    ALTER SEQUENCE mmo.character_id_seq RESTART WITH 100001;
+    ALTER SEQUENCE rpg.character_id_seq RESTART WITH 100001;
 END $$;
 
 COMMIT;
