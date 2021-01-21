@@ -4,14 +4,14 @@
 
 syntax = "proto3";
 
-package rocketcycle.pb;
+package rocketcycle.proto;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/edge";
 
 import "google/api/annotations.proto";
 import "proto/storage/rpg.proto";
 
 service MmoService {
-    rpc CreatePlayer(rocketcycle.pb.Player) returns (rocketcycle.pb.Player) {
+    rpc CreatePlayer(rocketcycle.proto.Player) returns (rocketcycle.proto.Player) {
         option (google.api.http) = {
             post: "/v1/createPlayer"
         };

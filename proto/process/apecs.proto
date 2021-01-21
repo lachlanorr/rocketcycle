@@ -7,14 +7,14 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package rocketcycle.pb;
+package rocketcycle.proto;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/process";
 
 message MostRecentOffsets {
-    int32 storage_topic = 0;
-    int64 storage_offset = 1;
-    int32 process_topic = 2;
-    int64 process_offset = 3;
+    int32 storage_topic = 1;
+    int64 storage_offset = 2;
+    int32 process_topic = 3;
+    int64 process_offset = 4;
 }
 
 message ApecsTxn {

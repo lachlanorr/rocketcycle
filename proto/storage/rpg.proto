@@ -4,10 +4,15 @@
 
 syntax = "proto3";
 
-package rocketcycle.pb;
+package rocketcycle.proto;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/storage";
 
-import "proto/process/annotate.proto";
+import "proto/process/apecs.proto";
 
-message MostRecentOffsets {
+message Player {
+    int64 id = 1;
+    string username = 2;
+    bool active = 3;
+
+    rocketcycle.proto.MostRecentOffsets mro = 4;
 }
