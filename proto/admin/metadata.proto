@@ -83,6 +83,9 @@ message Metadata {
             // kafka cluster topic exists within
             string cluster_name   = 2;
             int32 partition_count = 3;
+
+            // How to determine which partiton messages are produced to
+            PartitionStrategy partition_strat = 4;
         }
     }
 
@@ -92,4 +95,12 @@ message Metadata {
         // kafka bootstrap servers for the cluster
         string bootstrap_servers = 2;
     }
+
+
+    // Different types of partitioning mechanisms
+    enum PartitionStrategy {
+        // FNV-1 64 bit has followed by modulus of partition count
+        FNV64_MOD              = 0;
+    }
+
 }

@@ -37,8 +37,8 @@ proto: ## generate protocol buffers
      --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
      proto/admin/metadata.proto \
-     proto/process/apecs_txn.proto \
-     proto/storage/mmo.proto
+     proto/process/apecs.proto \
+     proto/storage/rpg.proto
 	@protoc \
      -I . \
      -I ./third_party/proto/googleapis \

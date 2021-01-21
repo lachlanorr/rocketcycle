@@ -10,6 +10,13 @@ import "google/protobuf/timestamp.proto";
 package rocketcycle.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/process";
 
+message MostRecentOffsets {
+    int32 storage_topic = 0;
+    int64 storage_offset = 1;
+    int32 process_topic = 2;
+    int64 process_offset = 3;
+}
+
 message ApecsTxn {
     string id = 1;           // uuid of txn used for tracing and reporting
     Dir direction = 2;       // starts in forward, can potentially go to reverse if the transaction is reversible

@@ -8,7 +8,7 @@ package rocketcycle.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/edge";
 
 import "google/api/annotations.proto";
-import "proto/storage/mmo.proto";
+import "proto/storage/rpg.proto";
 
 service MmoService {
     rpc CreatePlayer(rocketcycle.pb.Player) returns (rocketcycle.pb.Player) {
