@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"sort"
 	"strings"
 	"time"
@@ -20,22 +19,23 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/internal/rckafka"
 )
 
-// Metadata pb, with some convenience lookup maps
-type runtimeMeta struct {
-	meta     *pb.Metadata
+// Platform pb, with some convenience lookup maps
+type runtimePlatform struct {
+	platform *admin_pb.Platform
 	hash     string
-	apps     map[string]*pb.Metadata_App
-	clusters map[string]*pb.Metadata_Cluster
+	apps     map[string]*admin_pb.Platform_App
+	clusters map[string]*admin_pb.Platform_Cluster
 }
 
 var exists struct{}
-var oldRtmeta *runtimeMeta = nil
+var oldRtPlat *runtimePlatform = nil
 
 type clusterInfo struct {
-	cluster        *pb.Metadata_Cluster
+	cluster        *admin_pb.Platform_Cluster
 	admin          *kafka.AdminClient
 	existingTopics map[string]struct{}
 	brokerCount    int
@@ -76,7 +76,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	}
 	log.Info().
 		Str("ClusterName", ci.cluster.Name).
-		Str("TopicName", name).
+		Str("Topic", name).
 		Int("NumPartitions", numPartitions).
 		Int("ReplicationFactor", replicationFactor).
 		Msg("Topic created")
@@ -84,7 +84,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func NewClusterInfo(cluster *pb.Metadata_Cluster) (*clusterInfo, error) {
+func NewClusterInfo(cluster *admin_pb.Platform_Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
@@ -117,19 +117,52 @@ func NewClusterInfo(cluster *pb.Metadata_Cluster) (*clusterInfo, error) {
 	for _, topicName := range sortedTopics {
 		log.Info().
 			Str("ClusterName", cluster.Name).
-			Str("TopicName", topicName).
+			Str("Topic", topicName).
 			Msg("Topic found")
 	}
 
 	return &ci, nil
 }
 
-func topicNamePrefix(metaName string, appName string, appType pb.Metadata_App_Type) string {
-	return fmt.Sprintf("rc.%s.%s.%s", metaName, appName, pb.Metadata_App_Type_name[int32(appType)])
+func buildTopicNamePrefix(platformName string, appName string, appType admin_pb.Platform_App_Type) string {
+	return fmt.Sprintf("rc.%s.%s.%s", platformName, appName, admin_pb.Platform_App_Type_name[int32(appType)])
 }
 
-func topicName(topicNamePrefix string, name string, createdAt int64) string {
+func buildTopicName(topicNamePrefix string, name string, createdAt int64) string {
 	return fmt.Sprintf("%s.%s.%010d", topicNamePrefix, name, createdAt)
+}
+
+func FindApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App {
+	for _, app := range platform.Apps {
+		if app.Name == appName {
+			return app
+		}
+	}
+	return nil
+}
+
+func FindTopic(app *admin_pb.Platform_App, topicName string) *admin_pb.Platform_App_Topics {
+	for _, topics := range app.Topics {
+		if topics.Name == topicName {
+			return topics
+		}
+	}
+	return nil
+}
+
+func CurrentTopicName(platform *admin_pb.Platform, appName string, topicName string) (string, error) {
+	app := FindApp(platform, appName)
+	if app == nil {
+		return "", errors.New(fmt.Sprintf("App '%s' not found", appName))
+	}
+
+	topics := FindTopic(app, topicName)
+	if topics == nil {
+		return "", errors.New(fmt.Sprintf("Topic '%s' not found in App '%s'", topicName, appName))
+	}
+
+	pref := buildTopicNamePrefix(platform.Name, app.Name, app.Type)
+	return buildTopicName(pref, topics.Name, topics.Current.CreatedAt), nil
 }
 
 func min(x, y int) int {
@@ -139,7 +172,7 @@ func min(x, y int) int {
 	return y
 }
 
-func createMissingTopic(topicName string, topic *pb.Metadata_App_Topic, clusterInfos map[string]*clusterInfo) {
+func createMissingTopic(topicName string, topic *admin_pb.Platform_App_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.ClusterName]
 	if !ok {
 		log.Error().
@@ -154,36 +187,36 @@ func createMissingTopic(topicName string, topic *pb.Metadata_App_Topic, clusterI
 			int(topic.PartitionCount))
 		if err != nil {
 			log.Error().
+				Err(err).
 				Str("ClusterName", topic.ClusterName).
-				Str("TopicName", topicName).
-				Str("Error", err.Error()).
+				Str("Topic", topicName).
 				Msg("Topic creation failure")
 			return
 		}
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *pb.Metadata_App_Topics, clusterInfos map[string]*clusterInfo) {
+func createMissingTopics(topicNamePrefix string, topics *admin_pb.Platform_App_Topics, clusterInfos map[string]*clusterInfo) {
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
-				topicName(topicNamePrefix, topics.Name, topics.Current.CreatedAt),
+				buildTopicName(topicNamePrefix, topics.Name, topics.Current.CreatedAt),
 				topics.Current,
 				clusterInfos)
 		}
 		if topics.Future != nil {
 			createMissingTopic(
-				topicName(topicNamePrefix, topics.Name, topics.Future.CreatedAt),
+				buildTopicName(topicNamePrefix, topics.Name, topics.Future.CreatedAt),
 				topics.Future,
 				clusterInfos)
 		}
 	}
 }
 
-func updateTopics(rtmeta *runtimeMeta) {
+func updateTopics(rtPlat *runtimePlatform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
-	for _, cluster := range rtmeta.meta.Clusters {
+	for _, cluster := range rtPlat.platform.Clusters {
 		ci, err := NewClusterInfo(cluster)
 
 		if err != nil {
@@ -201,11 +234,11 @@ func updateTopics(rtmeta *runtimeMeta) {
 
 	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
 
-	for _, app := range rtmeta.meta.Apps {
-		if contains(appTypesAutoCreate, pb.Metadata_App_Type_name[int32(app.Type)]) {
+	for _, app := range rtPlat.platform.Apps {
+		if contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
 			for _, topics := range app.Topics {
 				createMissingTopics(
-					topicNamePrefix(rtmeta.meta.Name, app.Name, app.Type),
+					buildTopicNamePrefix(rtPlat.platform.Name, app.Name, app.Type),
 					topics,
 					clusterInfos)
 			}
@@ -222,17 +255,17 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
-	rtmeta := runtimeMeta{}
+func buildRuntimeApp(platform *admin_pb.Platform) (*runtimePlatform, error) {
+	rtPlat := runtimePlatform{}
 
-	rtmeta.meta = meta
+	rtPlat.platform = platform
 
-	appJson := protojson.Format(proto.Message(rtmeta.meta))
+	appJson := protojson.Format(proto.Message(rtPlat.platform))
 	sha256Bytes := sha256.Sum256([]byte(appJson))
-	rtmeta.hash = hex.EncodeToString(sha256Bytes[:])
+	rtPlat.hash = hex.EncodeToString(sha256Bytes[:])
 
-	rtmeta.clusters = make(map[string]*pb.Metadata_Cluster)
-	for idx, cluster := range rtmeta.meta.Clusters {
+	rtPlat.clusters = make(map[string]*admin_pb.Platform_Cluster)
+	for idx, cluster := range rtPlat.platform.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
 		}
@@ -240,20 +273,20 @@ func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
 			return nil, fmt.Errorf("Cluster '%s' missing bootstrap_servers field", cluster.Name)
 		}
 		// verify clusters only appear once
-		if _, ok := rtmeta.clusters[cluster.Name]; ok {
-			return nil, fmt.Errorf("Cluster '%s' appears more than once in Metadata '%s' definition", cluster.Name, rtmeta.meta.Name)
+		if _, ok := rtPlat.clusters[cluster.Name]; ok {
+			return nil, fmt.Errorf("Cluster '%s' appears more than once in Platform '%s' definition", cluster.Name, rtPlat.platform.Name)
 		}
-		rtmeta.clusters[cluster.Name] = cluster
+		rtPlat.clusters[cluster.Name] = cluster
 	}
 
-	requiredTopics := map[pb.Metadata_App_Type][]string{
-		pb.Metadata_App_GENERAL: {"error"},
-		pb.Metadata_App_BATCH:   {"error"},
-		pb.Metadata_App_APECS:   {"admin", "process", "error", "complete", "storage"},
+	requiredTopics := map[admin_pb.Platform_App_Type][]string{
+		admin_pb.Platform_App_GENERAL: {"error"},
+		admin_pb.Platform_App_BATCH:   {"error"},
+		admin_pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 
-	rtmeta.apps = make(map[string]*pb.Metadata_App)
-	for idx, app := range rtmeta.meta.Apps {
+	rtPlat.apps = make(map[string]*admin_pb.Platform_App)
+	for idx, app := range rtPlat.platform.Apps {
 		if app.Name == "" {
 			return nil, fmt.Errorf("App %d missing name field", idx)
 		}
@@ -262,7 +295,7 @@ func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
 		// validate all topics definitions
 		for _, topics := range app.Topics {
 			topicNames = append(topicNames, topics.Name)
-			if err := validateTopics(topics, rtmeta.clusters); err != nil {
+			if err := validateTopics(topics, rtPlat.clusters); err != nil {
 				return nil, fmt.Errorf("App '%s' has invalid '%s' Topics: %s", app.Name, topics.Name, err.Error())
 			}
 		}
@@ -275,16 +308,16 @@ func buildRuntimeApp(meta *pb.Metadata) (*runtimeMeta, error) {
 		}
 
 		// verify apps only appear once
-		if _, ok := rtmeta.apps[app.Name]; ok {
-			return nil, fmt.Errorf("App '%s' appears more than once in Metadata '%s' definition", app.Name, rtmeta.meta.Name)
+		if _, ok := rtPlat.apps[app.Name]; ok {
+			return nil, fmt.Errorf("App '%s' appears more than once in Platform '%s' definition", app.Name, rtPlat.platform.Name)
 		}
-		rtmeta.apps[app.Name] = app
+		rtPlat.apps[app.Name] = app
 	}
 
-	return &rtmeta, nil
+	return &rtPlat, nil
 }
 
-func validateTopics(topics *pb.Metadata_App_Topics, clusters map[string]*pb.Metadata_Cluster) error {
+func validateTopics(topics *admin_pb.Platform_App_Topics, clusters map[string]*admin_pb.Platform_Cluster) error {
 	if topics.Name == "" {
 		return errors.New("Topics missing Name field")
 	}
@@ -303,7 +336,7 @@ func validateTopics(topics *pb.Metadata_App_Topics, clusters map[string]*pb.Meta
 	return nil
 }
 
-func validateTopic(topic *pb.Metadata_App_Topic, clusters map[string]*pb.Metadata_Cluster) error {
+func validateTopic(topic *admin_pb.Platform_App_Topic, clusters map[string]*admin_pb.Platform_Cluster) error {
 	if topic.CreatedAt == 0 {
 		return errors.New("Topic missing CreatedAt field")
 	}
@@ -319,10 +352,9 @@ func validateTopic(topic *pb.Metadata_App_Topic, clusters map[string]*pb.Metadat
 	return nil
 }
 
-func manageTopics(ctx context.Context) {
-	configPath := "./metadata.json"
-
-	ticker := time.NewTicker(time.Second)
+func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
+	platCh := make(chan admin_pb.Platform, 10)
+	go rckafka.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -330,45 +362,23 @@ func manageTopics(ctx context.Context) {
 			log.Info().
 				Msg("manageTopics exiting, ctx.Done()")
 			return
-		case <-ticker.C:
-			appJsonBytes, err := ioutil.ReadFile(configPath)
+		case plat := <-platCh:
+			rtPlat, err := buildRuntimeApp(&plat)
 			if err != nil {
 				log.Error().
-					Str("Error", err.Error()).
-					Str("Path", configPath).
-					Msg("Error reading config file")
+					Err(err).
+					Msg("Failed to buildRuntimeApp")
 				continue
 			}
 
-			app := pb.Metadata{}
-			err = protojson.Unmarshal(appJsonBytes, proto.Message(&app))
-			if err != nil {
-				log.Error().
-					Str("Error", err.Error()).
-					Str("Path", configPath).
-					Str("Metadata", string(appJsonBytes)).
-					Msg("Error unmarshalling config file")
-				continue
-			}
-
-			rtmeta, err := buildRuntimeApp(&app)
-			if err != nil {
-				log.Error().
-					Str("Error", err.Error()).
-					Str("Path", configPath).
-					Str("Metadata", string(appJsonBytes)).
-					Msg("Error building runtimeMeta")
-				continue
-			}
-
-			if oldRtmeta == nil || rtmeta.hash != oldRtmeta.hash {
-				oldRtmeta = rtmeta
-				jsonBytes, _ := protojson.Marshal(proto.Message(rtmeta.meta))
+			if oldRtPlat == nil || rtPlat.hash != oldRtPlat.hash {
+				oldRtPlat = rtPlat
+				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.platform))
 				log.Info().
-					Str("Metadata", string(jsonBytes)).
-					Msg("Metadata parsed")
+					Str("Platform", string(jsonBytes)).
+					Msg("Platform parsed")
 
-				updateTopics(rtmeta)
+				updateTopics(rtPlat)
 			}
 		}
 	}

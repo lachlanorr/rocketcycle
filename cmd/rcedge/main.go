@@ -6,41 +6,50 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/signal"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/lachlanorr/rocketcycle/internal/utils"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "rcedge",
-	Short: "Rocketcycle Edge Api",
-	Long:  "Rest api the runs on the 'edge' of the rest of the system. Provides server api for Rocketcycle MMO economy test scenario",
-	Run: func(cmd *cobra.Command, args []string) {
-		//fmt.Printf("test\n")
-	},
+// Cobra sets these values based on command parsing
+var (
+	platform         string
+	bootstrapServers string
+	httpAddr         string
+	grpcAddr         string
+)
+
+func runCobra() {
+	rootCmd := &cobra.Command{
+		Use:       "rcedge platform",
+		Short:     "Rocketcycle Edge Api Server",
+		Long:      "Provides rest entrypoints into application",
+		Run:       rcedge,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{"platform"},
+	}
+	rootCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	rootCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11372", "Address to host http api")
+	rootCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11382", "Address to host grpc api")
+
+	rootCmd.Execute()
 }
 
-func main() {
-	//	rootCmd.Execute()
-
-	flag.Parse()
+func rcedge(cmd *cobra.Command, args []string) {
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("rcedge started")
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	log.Info().
-		Str("GitCommit", version.GitCommit).
-		Msg("admin started")
-
-	go serve(ctx)
+	go serve(ctx, httpAddr, grpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -49,4 +58,9 @@ func main() {
 		cancel()
 		return
 	}
+}
+
+func main() {
+	utils.PrepLogging()
+	runCobra()
 }

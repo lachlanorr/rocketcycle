@@ -6,36 +6,61 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"os/signal"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
+	"github.com/lachlanorr/rocketcycle/internal/utils"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
-func main() {
-	flag.Parse()
+// Cobra sets these values based on command parsing
+var (
+	platform         string
+	bootstrapServers string
+	httpAddr         string
+	grpcAddr         string
+)
 
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+func runCobra() {
+	rootCmd := &cobra.Command{
+		Use:       "rcadmin platform",
+		Short:     "Rocketcycle Admin Server",
+		Long:      "Provides admin activities and provides rest api to query state of system",
+		Run:       rcadmin,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{"platform"},
+	}
+	rootCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	rootCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11371", "Address to host http api")
+	rootCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
 
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	rootCmd.Execute()
+}
+
+func rcadmin(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("admin started")
+		Msg("rcadmin started")
 
-	go manageTopics(ctx)
-	go serve(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	platformName := args[0]
+	go manageTopics(ctx, bootstrapServers, platformName)
+	go serve(ctx, httpAddr, grpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
-		cancel()
 		return
 	}
+}
+
+func main() {
+	utils.PrepLogging()
+	runCobra()
 }

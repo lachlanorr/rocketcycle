@@ -1,0 +1,73 @@
+{
+    "name": "rpg",
+    "apps": [
+        {
+            "type": 2,
+            "name": "player",
+
+            "topics": [
+                {
+                    "name": "admin",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                },
+                {
+                    "name": "prodctrl",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                },
+                {
+                    "name": "process",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                },
+                {
+                    "name": "error",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                },
+                {
+                    "name": "complete",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                },
+                {
+                    "name": "storage",
+                    "state": 0,
+                    "current": {
+                        "created_at": 1,
+                        "cluster_name": "local-dev",
+                        "partition_count": 4
+                    }
+                }
+            ]
+        }
+    ],
+
+    "clusters": [
+        {
+            "name": "local-dev",
+            "bootstrap_servers": "localhost:9092"
+        }
+    ]
+}

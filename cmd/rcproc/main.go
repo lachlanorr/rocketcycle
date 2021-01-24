@@ -7,31 +7,39 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/jackc/pgx/v4"
+	"github.com/rs/zerolog/log"
 
 	"github.com/lachlanorr/rocketcycle/internal/dispatch"
+	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
 func main() {
+	utils.PrepLogging()
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("rcproc started")
 
-	dispatch.Process()
-
-	conn, err := pgx.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	conn, err := pgx.Connect(context.Background(), "postgresql://postgres@127.0.0.1:5432/rpg")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		log.Fatal().
+			Err(err).
+			Msg("Unable to connect to database")
 	}
 	defer conn.Close(context.Background())
 
 	var username string
 	var active bool
-	err = conn.QueryRow(context.Background(), "select username, active from oltp.player where id=$1", 1).Scan(&username, &active)
+	err = conn.QueryRow(context.Background(), "select username, active from rpg.player where id=$1", 1).Scan(&username, &active)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-		os.Exit(1)
+		log.Fatal().
+			Err(err).
+			Msg("QueryRow failed")
 	}
 
-	fmt.Println(username, active)
+	log.Info().Msg(fmt.Sprintf("username = %s, active = %t", username, active))
+
+	dispatch.Process()
 }

@@ -8,15 +8,15 @@ package rocketcycle.proto;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
 import "google/api/annotations.proto";
-import "proto/admin/metadata.proto";
+import "proto/admin/platform.proto";
 
-message MetadataArgs {
+message PlatformArgs {
 }
 
 service AdminService {
-    rpc Metadata(MetadataArgs) returns (rocketcycle.proto.Metadata) {
+    rpc Platform(PlatformArgs) returns (rocketcycle.proto.Platform) {
         option (google.api.http) = {
-            get: "/v1/metadata"
+            get: "/v1/platform"
         };
     }
 }

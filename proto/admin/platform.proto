@@ -7,7 +7,7 @@ syntax = "proto3";
 package rocketcycle.proto;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
-message Metadata {
+message Platform {
     string name               = 1;
     repeated App apps         = 2;
     repeated Cluster clusters = 3;
@@ -58,7 +58,7 @@ message Metadata {
             enum State {
                 // no future topic exists, everyting using current
                 CURRENT                = 0;
-                // future topic added to metadata and gets created
+                // future topic added to app and gets created
                 FUTURE_INIT            = 1;
                 // current to future mirroring starts and gets as caught up as possible
                 FUTURE_MIRROR          = 2;
@@ -72,7 +72,7 @@ message Metadata {
                 CONSUMER_FUTURE_START  = 6;
                 // producers unpause and produce to future
                 PRODUCER_FUTURE_START  = 7;
-                // future becomes current in metadata, future is nulled, state set to CURRENT
+                // future becomes current, future is nulled, state set to CURRENT
                 FUTURE_TO_CURRENT      = 8;
             }
         }

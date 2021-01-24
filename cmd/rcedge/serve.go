@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"embed"
-	"flag"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -21,19 +20,19 @@ import (
 //go:embed __static/docs
 var docsFiles embed.FS
 
-var httpAddr = flag.String("http_addr", ":11372", "Address for http listener")
-var grpcAddr = flag.String("grpc_addr", ":11382", "Address for grpc listener")
-
 type server struct {
 	edge.UnimplementedMmoServiceServer
+
+	httpAddr string
+	grpcAddr string
 }
 
-func (server) HttpAddr() string {
-	return *httpAddr
+func (srv server) HttpAddr() string {
+	return srv.httpAddr
 }
 
-func (server) GrpcAddr() string {
-	return *grpcAddr
+func (srv server) GrpcAddr() string {
+	return srv.grpcAddr
 }
 
 func (server) StaticFiles() http.FileSystem {
@@ -58,7 +57,7 @@ func (server) CreatePlayer(ctx context.Context, in *storage.Player) (*storage.Pl
 	return &player, nil
 }
 
-func serve(ctx context.Context) {
-	srv := server{}
+func serve(ctx context.Context, httpAddr string, grpcAddr string) {
+	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	serve_utils.Serve(ctx, srv)
 }

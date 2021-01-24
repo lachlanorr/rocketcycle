@@ -36,7 +36,7 @@ proto: ## generate protocol buffers
      -I ./third_party/proto/googleapis \
      --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
-     proto/admin/metadata.proto \
+     proto/admin/platform.proto \
      proto/process/apecs.proto \
      proto/storage/rpg.proto
 	@protoc \
@@ -57,7 +57,7 @@ proto: ## generate protocol buffers
      proto/edge/api.proto
 
 .PHONY: cmd
-cmd: rcadmin rcproc rcstore rcedge rcsim ## compile all cmds
+cmd: rcadmin rcproc rcstore rcshdo rcedge rcsim ## compile all cmds
 
 .PHONY: rcadmin
 rcadmin: ## compile rcadmin cmd
@@ -70,7 +70,6 @@ rcadmin: ## compile rcadmin cmd
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rcadmin \
 	./cmd/rcadmin
-	@cp ./cmd/rcadmin/metadata.json $(BUILD_BIN_DIR)
 
 .PHONY: rcproc
 rcproc: ## compile rcproc cmd
@@ -87,6 +86,15 @@ rcstore: ## compile rcstore cmd
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rcstore \
 	./cmd/rcstore
+
+.PHONY: rcshdo
+rcshdo: ## compile rcshdo cmd
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/rcshdo \
+    ./cmd/rcshdo
+	@cp ./cmd/rcshdo/platform.json $(BUILD_BIN_DIR)
 
 .PHONY: rcedge
 rcedge: ## compile rcedge cmd

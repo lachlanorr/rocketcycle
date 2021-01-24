@@ -4,5 +4,22 @@
 
 package main
 
+import (
+	"time"
+
+	"github.com/rs/zerolog/log"
+
+	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/version"
+)
+
 func main() {
+	utils.PrepLogging()
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("rcstore started")
+
+	time.Sleep(30 * time.Second)
+
+	log.Info().Msg("rcstore exit")
 }
