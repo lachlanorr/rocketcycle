@@ -18,7 +18,6 @@ import (
 
 // Cobra sets these values based on command parsing
 var (
-	platform         string
 	bootstrapServers string
 	httpAddr         string
 	grpcAddr         string

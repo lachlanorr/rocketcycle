@@ -55,7 +55,7 @@ func (server) RegisterHandlerFromEndpoint(
 
 func (server) Platform(ctx context.Context, in *admin_pb.PlatformArgs) (*admin_pb.Platform, error) {
 	if oldRtPlat != nil {
-		return oldRtPlat.platform, nil
+		return oldRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
 }

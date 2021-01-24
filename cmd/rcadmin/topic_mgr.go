@@ -6,8 +6,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -20,19 +18,13 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/internal/platform"
 	"github.com/lachlanorr/rocketcycle/internal/rckafka"
+	"github.com/lachlanorr/rocketcycle/internal/utils"
 )
 
-// Platform pb, with some convenience lookup maps
-type runtimePlatform struct {
-	platform *admin_pb.Platform
-	hash     string
-	apps     map[string]*admin_pb.Platform_App
-	clusters map[string]*admin_pb.Platform_Cluster
-}
-
 var exists struct{}
-var oldRtPlat *runtimePlatform = nil
+var oldRtPlat *platform.RtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *admin_pb.Platform_Cluster
@@ -213,10 +205,10 @@ func createMissingTopics(topicNamePrefix string, topics *admin_pb.Platform_App_T
 	}
 }
 
-func updateTopics(rtPlat *runtimePlatform) {
+func updateTopics(rtPlat *platform.RtPlatform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
-	for _, cluster := range rtPlat.platform.Clusters {
+	for _, cluster := range rtPlat.Platform.Clusters {
 		ci, err := NewClusterInfo(cluster)
 
 		if err != nil {
@@ -234,122 +226,16 @@ func updateTopics(rtPlat *runtimePlatform) {
 
 	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
 
-	for _, app := range rtPlat.platform.Apps {
-		if contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
+	for _, app := range rtPlat.Platform.Apps {
+		if utils.Contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
 			for _, topics := range app.Topics {
 				createMissingTopics(
-					buildTopicNamePrefix(rtPlat.platform.Name, app.Name, app.Type),
+					buildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
 					topics,
 					clusterInfos)
 			}
 		}
 	}
-}
-
-func contains(slice []string, item string) bool {
-	for _, val := range slice {
-		if val == item {
-			return true
-		}
-	}
-	return false
-}
-
-func buildRuntimeApp(platform *admin_pb.Platform) (*runtimePlatform, error) {
-	rtPlat := runtimePlatform{}
-
-	rtPlat.platform = platform
-
-	appJson := protojson.Format(proto.Message(rtPlat.platform))
-	sha256Bytes := sha256.Sum256([]byte(appJson))
-	rtPlat.hash = hex.EncodeToString(sha256Bytes[:])
-
-	rtPlat.clusters = make(map[string]*admin_pb.Platform_Cluster)
-	for idx, cluster := range rtPlat.platform.Clusters {
-		if cluster.Name == "" {
-			return nil, fmt.Errorf("Cluster %d missing name field", idx)
-		}
-		if cluster.BootstrapServers == "" {
-			return nil, fmt.Errorf("Cluster '%s' missing bootstrap_servers field", cluster.Name)
-		}
-		// verify clusters only appear once
-		if _, ok := rtPlat.clusters[cluster.Name]; ok {
-			return nil, fmt.Errorf("Cluster '%s' appears more than once in Platform '%s' definition", cluster.Name, rtPlat.platform.Name)
-		}
-		rtPlat.clusters[cluster.Name] = cluster
-	}
-
-	requiredTopics := map[admin_pb.Platform_App_Type][]string{
-		admin_pb.Platform_App_GENERAL: {"error"},
-		admin_pb.Platform_App_BATCH:   {"error"},
-		admin_pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
-	}
-
-	rtPlat.apps = make(map[string]*admin_pb.Platform_App)
-	for idx, app := range rtPlat.platform.Apps {
-		if app.Name == "" {
-			return nil, fmt.Errorf("App %d missing name field", idx)
-		}
-
-		var topicNames []string
-		// validate all topics definitions
-		for _, topics := range app.Topics {
-			topicNames = append(topicNames, topics.Name)
-			if err := validateTopics(topics, rtPlat.clusters); err != nil {
-				return nil, fmt.Errorf("App '%s' has invalid '%s' Topics: %s", app.Name, topics.Name, err.Error())
-			}
-		}
-
-		// validate our expected required topics are there
-		for _, req := range requiredTopics[app.Type] {
-			if !contains(topicNames, req) {
-				return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
-			}
-		}
-
-		// verify apps only appear once
-		if _, ok := rtPlat.apps[app.Name]; ok {
-			return nil, fmt.Errorf("App '%s' appears more than once in Platform '%s' definition", app.Name, rtPlat.platform.Name)
-		}
-		rtPlat.apps[app.Name] = app
-	}
-
-	return &rtPlat, nil
-}
-
-func validateTopics(topics *admin_pb.Platform_App_Topics, clusters map[string]*admin_pb.Platform_Cluster) error {
-	if topics.Name == "" {
-		return errors.New("Topics missing Name field")
-	}
-	if topics.Current == nil {
-		return errors.New("Topics missing Current Topic")
-	} else {
-		if err := validateTopic(topics.Current, clusters); err != nil {
-			return err
-		}
-	}
-	if topics.Future != nil {
-		if err := validateTopic(topics.Future, clusters); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateTopic(topic *admin_pb.Platform_App_Topic, clusters map[string]*admin_pb.Platform_Cluster) error {
-	if topic.CreatedAt == 0 {
-		return errors.New("Topic missing CreatedAt field")
-	}
-	if topic.ClusterName == "" {
-		return errors.New("Topic missing ClusterName field")
-	}
-	if _, ok := clusters[topic.ClusterName]; !ok {
-		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.ClusterName)
-	}
-	if topic.PartitionCount < 4 || topic.PartitionCount > 1024 {
-		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)
-	}
-	return nil
 }
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
@@ -363,7 +249,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				Msg("manageTopics exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := buildRuntimeApp(&plat)
+			rtPlat, err := platform.NewRtPlatform(&plat)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -371,9 +257,9 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				continue
 			}
 
-			if oldRtPlat == nil || rtPlat.hash != oldRtPlat.hash {
+			if oldRtPlat == nil || rtPlat.Hash != oldRtPlat.Hash {
 				oldRtPlat = rtPlat
-				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.platform))
+				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 				log.Info().
 					Str("Platform", string(jsonBytes)).
 					Msg("Platform parsed")

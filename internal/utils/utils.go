@@ -14,3 +14,12 @@ import (
 func PrepLogging() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
 }
+
+func Contains(slice []string, item string) bool {
+	for _, val := range slice {
+		if val == item {
+			return true
+		}
+	}
+	return false
+}
