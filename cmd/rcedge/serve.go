@@ -10,10 +10,12 @@ import (
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 
 	"github.com/lachlanorr/rocketcycle/build/proto/edge"
-	"github.com/lachlanorr/rocketcycle/build/proto/storage"
+	edge_pb "github.com/lachlanorr/rocketcycle/build/proto/edge"
+	storage_pb "github.com/lachlanorr/rocketcycle/build/proto/storage"
 	"github.com/lachlanorr/rocketcycle/internal/serve_utils"
 )
 
@@ -52,9 +54,15 @@ func (server) RegisterHandlerFromEndpoint(
 	return edge.RegisterMmoServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (server) CreatePlayer(ctx context.Context, in *storage.Player) (*storage.Player, error) {
-	player := storage.Player{}
+func (server) GetPlayer(ctx context.Context, in *edge_pb.MmoRequest) (*storage_pb.Player, error) {
+	log.Info().Msg("GetPlayer " + in.Uuid)
+	player := storage_pb.Player{}
 	return &player, nil
+}
+
+func (server) CreatePlayer(ctx context.Context, in *storage_pb.Player) (*storage_pb.Player, error) {
+	log.Info().Msg("CreatePlayer " + in.Username)
+	return in, nil
 }
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string) {

@@ -103,8 +103,8 @@ func runStorage(ctx context.Context, consumeTopic *admin_pb.Platform_App_Topics)
 
 func rcshdoConf(cmd *cobra.Command, args []string) {
 	slog := log.With().
-		Str("bootstrap.servers", bootstrapServers).
-		Str("config_path", configFilePath).
+		Str("BootstrapServers", bootstrapServers).
+		Str("ConfigPath", configFilePath).
 		Logger()
 
 	// read platform conf file and deserialize

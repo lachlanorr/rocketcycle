@@ -7,7 +7,7 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package rocketcycle.proto;
+package rocketcycle.proto.process;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/process";
 
 message ApecsTxn {
@@ -25,14 +25,12 @@ message ApecsTxn {
 
     message Step {
         string app_name = 1;        // logical persistence model that's used to partition messages
-        string key = 2;             // key into model to use for partitioning against the topic
-        string command = 3;         // command name, this will map to a piece of code (e.g. function)
-        repeated string params = 4; // paramters to the command function
-        Status status = 5;          // status of this step, all start at pending, and can transition to complete, error, and rolled back
-        MsgId msg_id = 6;           // kafka gives us a globally unique topic/partition/offset. topic is implied by model_name
-        google.protobuf.Timestamp processed_time = 7; // actual time this command result was recorded
-        google.protobuf.Timestamp effective_time = 8; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
-        repeated string errors = 9; // general bucket for error messages that will effectively be the logged errors of this step
+        int32 command   = 2;        // command name, this will map to a piece of code (e.g. function)
+        bytes payload   = 3;        // opaque payload for command
+        Status status   = 4;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
+        google.protobuf.Timestamp processed_time = 5; // actual time this command result was recorded
+        google.protobuf.Timestamp effective_time = 6; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+        repeated Error errors = 7; // general bucket for error messages that will effectively be the logged errors of this step
 
         enum Status {
             PENDING = 0;
@@ -41,22 +39,16 @@ message ApecsTxn {
             ERROR = 3;
         }
 
-        message MsgId {
-            int32 partition = 1;
-            int64 offset = 2;
+        message Error {
+            int32 code = 1;
+            string msg = 2;
         }
     }
 }
 
-message StorageModel {
-    bytes model = 1;
-
-    MostRecentOffsets mro = 2;
-}
-
 message MostRecentOffsets {
-    int64 process_topic = 1;
+    int32 process_generation = 1;
     int64 process_offset = 2;
-    int64 storage_topic = 3;
+    int32 storage_generation = 3;
     int64 storage_offset = 4;
 }

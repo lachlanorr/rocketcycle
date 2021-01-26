@@ -120,8 +120,8 @@ func buildTopicNamePrefix(platformName string, appName string, appType admin_pb.
 	return fmt.Sprintf("rc.%s.%s.%s", platformName, appName, admin_pb.Platform_App_Type_name[int32(appType)])
 }
 
-func buildTopicName(topicNamePrefix string, name string, createdAt int64) string {
-	return fmt.Sprintf("%s.%s.%010d", topicNamePrefix, name, createdAt)
+func buildTopicName(topicNamePrefix string, name string, generation int32) string {
+	return fmt.Sprintf("%s.%s.%010d", topicNamePrefix, name, generation)
 }
 
 func FindApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App {
@@ -154,7 +154,7 @@ func CurrentTopicName(platform *admin_pb.Platform, appName string, topicName str
 	}
 
 	pref := buildTopicNamePrefix(platform.Name, app.Name, app.Type)
-	return buildTopicName(pref, topics.Name, topics.Current.CreatedAt), nil
+	return buildTopicName(pref, topics.Name, topics.Current.Generation), nil
 }
 
 func min(x, y int) int {
@@ -192,13 +192,13 @@ func createMissingTopics(topicNamePrefix string, topics *admin_pb.Platform_App_T
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
-				buildTopicName(topicNamePrefix, topics.Name, topics.Current.CreatedAt),
+				buildTopicName(topicNamePrefix, topics.Name, topics.Current.Generation),
 				topics.Current,
 				clusterInfos)
 		}
 		if topics.Future != nil {
 			createMissingTopic(
-				buildTopicName(topicNamePrefix, topics.Name, topics.Future.CreatedAt),
+				buildTopicName(topicNamePrefix, topics.Name, topics.Future.Generation),
 				topics.Future,
 				clusterInfos)
 		}
@@ -253,7 +253,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 			if err != nil {
 				log.Error().
 					Err(err).
-					Msg("Failed to buildRuntimeApp")
+					Msg("Failed to NewRtPlatform")
 				continue
 			}
 

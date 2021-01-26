@@ -42,6 +42,7 @@ proto: ## generate protocol buffers
 	@protoc \
      -I . \
      -I ./third_party/proto/googleapis \
+     -I ./third_party/proto/grpc-gateway \
      --go_out $(BUILD_DIR) \
      --go_opt paths=source_relative \
      --go-grpc_out $(BUILD_DIR) \

@@ -21,25 +21,47 @@ var (
 	bootstrapServers string
 	httpAddr         string
 	grpcAddr         string
+	adminAddr        string
 )
 
 func runCobra() {
 	rootCmd := &cobra.Command{
-		Use:       "rcadmin platform",
+		Use:   "rcadmin",
+		Short: "Rocketcycle Admin",
+		Long:  "Runs admin server and also allows for client calls through the rest api",
+	}
+
+	getCmd := &cobra.Command{
+		Use:   "get",
+		Short: "get a specific resource from rest api",
+	}
+	getCmd.PersistentFlags().StringVarP(&adminAddr, "rcadmin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	rootCmd.AddCommand(getCmd)
+
+	getPlatformCmd := &cobra.Command{
+		Use:   "platform",
+		Short: "get the platform definition",
+		Run:   rcadminGetPlatform,
+	}
+	getCmd.AddCommand(getPlatformCmd)
+
+	serveCmd := &cobra.Command{
+		Use:       "serve platform",
 		Short:     "Rocketcycle Admin Server",
-		Long:      "Provides admin activities and provides rest api to query state of system",
-		Run:       rcadmin,
+		Long:      "Manages topics and provides rest api for admin activities",
+		Run:       rcadminServe,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"platform"},
 	}
-	rootCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	rootCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11371", "Address to host http api")
-	rootCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
+	serveCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	serveCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11371", "Address to host http api")
+	serveCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
+	rootCmd.AddCommand(serveCmd)
 
 	rootCmd.Execute()
 }
 
-func rcadmin(cmd *cobra.Command, args []string) {
+func rcadminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcadmin started")

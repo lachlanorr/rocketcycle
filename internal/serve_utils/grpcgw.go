@@ -12,6 +12,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type grpcgw interface {
@@ -45,10 +46,21 @@ func prepareGrpcServer(ctx context.Context, srv interface{}) {
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Error().
-			Str("Error", err.Error()).
+			Err(err).
 			Msg("failed to serve grpc")
 		return
 	}
+}
+
+func prettyHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// checking Values as map[string][]string also catches ?pretty and ?pretty=
+		// r.URL.Query().Get("pretty") would not.
+		if _, ok := r.URL.Query()["pretty"]; ok {
+			r.Header.Set("Accept", "application/json+pretty")
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func Serve(ctx context.Context, srv interface{}) {
@@ -56,12 +68,24 @@ func Serve(ctx context.Context, srv interface{}) {
 	go prepareGrpcServer(ctx, srv)
 
 	// Register grpc gateway server endpoint
-	apiMux := runtime.NewServeMux()
+	apiMux := runtime.NewServeMux(
+		runtime.WithMarshalerOption("application/json+pretty", &runtime.JSONPb{
+			MarshalOptions: protojson.MarshalOptions{
+				Indent:          "  ",
+				Multiline:       true,
+				EmitUnpopulated: true,
+			},
+			UnmarshalOptions: protojson.UnmarshalOptions{
+				DiscardUnknown: false,
+			},
+		}),
+	)
+
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	err := srv.(grpcgw).RegisterHandlerFromEndpoint(ctx, apiMux, srv.(grpcgw).GrpcAddr(), opts)
 	if err != nil {
 		log.Error().
-			Str("Error", err.Error()).
+			Err(err).
 			Msg("RegisterHandlerFromEndpoint failed")
 		return
 	}
@@ -70,7 +94,7 @@ func Serve(ctx context.Context, srv interface{}) {
 	mux, err := NewServeMux(srv.(grpcgw).StaticFiles(), "^/docs", "/__static/docs", apiMux)
 	if err != nil {
 		log.Error().
-			Str("Error", err.Error()).
+			Err(err).
 			Msg("serve_utils.NewServerMux failed")
 		return
 	}
@@ -81,10 +105,10 @@ func Serve(ctx context.Context, srv interface{}) {
 
 	// This listener will serve up swagger on /docs and pass all other
 	// requests through to the grpc gw
-	err = http.ListenAndServe(srv.(grpcgw).HttpAddr(), mux)
+	err = http.ListenAndServe(srv.(grpcgw).HttpAddr(), prettyHandler(mux))
 	if err != nil {
 		log.Error().
-			Str("Error", err.Error()).
+			Err(err).
 			Msg("http.ListenAndServe failed")
 		return
 	}

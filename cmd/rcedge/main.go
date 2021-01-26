@@ -22,25 +22,53 @@ var (
 	bootstrapServers string
 	httpAddr         string
 	grpcAddr         string
+	edgeAddr         string
 )
 
 func runCobra() {
 	rootCmd := &cobra.Command{
-		Use:       "rcedge platform",
+		Use:   "rcedge",
+		Short: "Rocketcycle Edge Rest Api",
+		Long:  "Client interaction rest api that provides synchronous access over http",
+	}
+
+	getCmd := &cobra.Command{
+		Use:       "get resource id",
+		Short:     "get a specific resource from rest api",
+		Run:       rcedgeGetResource,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{"resource", "id"},
+	}
+	getCmd.PersistentFlags().StringVarP(&edgeAddr, "rcedge_addr", "", "http://localhost:11372", "Address against which to make client requests")
+	rootCmd.AddCommand(getCmd)
+
+	createCmd := &cobra.Command{
+		Use:       "create resource [key1=val1] [key2=val2]",
+		Short:     "create a resource from provided arguments",
+		Run:       rcedgeCreateResource,
+		Args:      cobra.MinimumNArgs(2),
+		ValidArgs: []string{"resource"},
+	}
+	createCmd.PersistentFlags().StringVarP(&edgeAddr, "rcedge_addr", "", "http://localhost:11372", "Address against which to make client requests")
+	rootCmd.AddCommand(createCmd)
+
+	serveCmd := &cobra.Command{
+		Use:       "serve platform",
 		Short:     "Rocketcycle Edge Api Server",
 		Long:      "Provides rest entrypoints into application",
-		Run:       rcedge,
+		Run:       rcedgeServe,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"platform"},
 	}
-	rootCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	rootCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11372", "Address to host http api")
-	rootCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11382", "Address to host grpc api")
+	serveCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	serveCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11372", "Address to host http api")
+	serveCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11382", "Address to host grpc api")
+	rootCmd.AddCommand(serveCmd)
 
 	rootCmd.Execute()
 }
 
-func rcedge(cmd *cobra.Command, args []string) {
+func rcedgeServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcedge started")

@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package rocketcycle.proto;
+package rocketcycle.proto.admin;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
 message Platform {
@@ -22,17 +22,22 @@ message Platform {
 
         // Type implies what topics will be present
         enum Type {
-            // error - errors encountered during processing written here
-            // additional application specific topics with no relationship
+            // Required topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * error - errors encountered during processing written here
+            //     * ... - additional application specific topics
             GENERAL = 0;
 
-            // error - errors encountered during processing written here
-            // Additional application specific topics representing stages of processing.
+            // Required topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * error - errors encountered during processing written here
+            //     * ... - additional application specific topics for stages of batch processing
             // For telemetry purposes, stage topics are assumed to be in alphabetical order.
             // Batch jobs topics aren't created by default, but on demand with the timestamp
-            // included in the names
+            // included in the names.
             BATCH = 1;
-            // Default topics:
+
+            // Required topics:
             //     * admin - handles control messages to coordinate distributed tasks
             //     * process - handles messages that affect internal state of models
             //     * error - errors encountered during processing written here
@@ -78,8 +83,8 @@ message Platform {
         }
 
         message Topic {
-            // unix timestamp of creation, nanos since 1/1/1970
-            int64 created_at      = 1;
+            // incrementing generation id, +1 every time we migrate a logical topic
+            int32 generation      = 1;
             // kafka cluster topic exists within
             string cluster_name   = 2;
             int32 partition_count = 3;

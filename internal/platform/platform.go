@@ -30,8 +30,8 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 
 	rtPlat.Platform = platform
 
-	appJson := protojson.Format(proto.Message(rtPlat.Platform))
-	sha256Bytes := sha256.Sum256([]byte(appJson))
+	platJson := protojson.Format(proto.Message(rtPlat.Platform))
+	sha256Bytes := sha256.Sum256([]byte(platJson))
 	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
 
 	rtPlat.Clusters = make(map[string]*admin_pb.Platform_Cluster)
@@ -107,8 +107,8 @@ func validateTopics(topics *admin_pb.Platform_App_Topics, clusters map[string]*a
 }
 
 func validateTopic(topic *admin_pb.Platform_App_Topic, clusters map[string]*admin_pb.Platform_Cluster) error {
-	if topic.CreatedAt == 0 {
-		return errors.New("Topic missing CreatedAt field")
+	if topic.Generation == 0 {
+		return errors.New("Topic missing Generation field")
 	}
 	if topic.ClusterName == "" {
 		return errors.New("Topic missing ClusterName field")
@@ -116,7 +116,7 @@ func validateTopic(topic *admin_pb.Platform_App_Topic, clusters map[string]*admi
 	if _, ok := clusters[topic.ClusterName]; !ok {
 		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.ClusterName)
 	}
-	if topic.PartitionCount < 4 || topic.PartitionCount > 1024 {
+	if topic.PartitionCount < 1 || topic.PartitionCount > 1024 {
 		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)
 	}
 	return nil

@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package rocketcycle.proto;
+package rocketcycle.proto.admin;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/admin";
 
 import "google/api/annotations.proto";
@@ -14,9 +14,9 @@ message PlatformArgs {
 }
 
 service AdminService {
-    rpc Platform(PlatformArgs) returns (rocketcycle.proto.Platform) {
+    rpc Platform(PlatformArgs) returns (rocketcycle.proto.admin.Platform) {
         option (google.api.http) = {
-            get: "/v1/platform"
+            get: "/v1/platform/get"
         };
     }
 }

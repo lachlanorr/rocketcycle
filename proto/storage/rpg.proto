@@ -4,15 +4,15 @@
 
 syntax = "proto3";
 
-package rocketcycle.proto;
+package rocketcycle.proto.storage;
 option go_package = "github.com/lachlanorr/rocketcycle/build/proto/storage";
 
 import "proto/process/apecs.proto";
 
 message Player {
-    int64 id = 1;
+    string id = 1;
     string username = 2;
     bool active = 3;
 
-    rocketcycle.proto.MostRecentOffsets mro = 4;
+    rocketcycle.proto.process.MostRecentOffsets mro = 4;
 }

@@ -25,12 +25,12 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 	groupName := "__" + platformTopic + "__non_committed_group"
 
 	slog := log.With().
-		Str("bootstrap.servers", bootstrapServers).
+		Str("BootstrapServers", bootstrapServers).
 		Str("Topic", platformTopic).
 		Logger()
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":  "localhost",
+		"bootstrap.servers":  bootstrapServers,
 		"group.id":           groupName,
 		"enable.auto.commit": false,
 	})
@@ -78,12 +78,14 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
 			if err != nil && !timedOut {
 				slog.Error().
+					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				plat := admin_pb.Platform{}
 				err = proto.Unmarshal(msg.Value, &plat)
 				if err != nil {
 					slog.Error().
+						Err(err).
 						Msg("Failed to Unmarshall Platform")
 				} else {
 					ch <- plat

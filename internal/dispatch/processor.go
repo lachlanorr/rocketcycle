@@ -10,19 +10,19 @@ import (
 
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	pb "github.com/lachlanorr/rocketcycle/build/proto/process"
+	process_pb "github.com/lachlanorr/rocketcycle/build/proto/process"
 )
 
-func NextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {
-	if txn.Direction == pb.ApecsTxn_FORWARD {
+func NextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step {
+	if txn.Direction == process_pb.ApecsTxn_FORWARD {
 		for i, _ := range txn.ForwardSteps {
-			if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_PENDING {
+			if txn.ForwardSteps[i].Status == process_pb.ApecsTxn_Step_PENDING {
 				return txn.ForwardSteps[i]
 			}
 		}
 	} else if txn.CanRevert { // txn.Direction == Reverse
 		for i := len(txn.ForwardSteps) - 1; i >= 0; i-- {
-			if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_COMPLETE {
+			if txn.ForwardSteps[i].Status == process_pb.ApecsTxn_Step_COMPLETE {
 				return txn.ForwardSteps[i]
 			}
 		}
@@ -30,17 +30,17 @@ func NextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {
 	return nil
 }
 
-func LastStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, error) {
-	if txn.Direction == pb.ApecsTxn_FORWARD {
+func LastStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
+	if txn.Direction == process_pb.ApecsTxn_FORWARD {
 		return txn.ForwardSteps[len(txn.ForwardSteps)-1], nil
 	} else { // if txn.Direction == Reverse
 		return txn.ForwardSteps[0], nil
 	}
 }
 
-func HasErrors(txn *pb.ApecsTxn) bool {
+func HasErrors(txn *process_pb.ApecsTxn) bool {
 	for i, _ := range txn.ForwardSteps {
-		if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_ERROR {
+		if txn.ForwardSteps[i].Status == process_pb.ApecsTxn_Step_ERROR {
 			return true
 		}
 	}
@@ -48,39 +48,39 @@ func HasErrors(txn *pb.ApecsTxn) bool {
 }
 
 type StepHandler struct {
-	Command string
-	Topic   string
-	Do      func(params []string) error
-	Undo    func(params []string) error
+	AppName string
+	Command int
+	Do      func(txn *process_pb.ApecsTxn) error
+	Undo    func(txn *process_pb.ApecsTxn) error
 }
 
 type Processor struct {
-	Handlers map[string]StepHandler
+	Handlers map[int32]StepHandler
 
 	// exactly one of these will be called per ApecsTxn processed
-	Committed  func(*pb.ApecsTxn)
-	RolledBack func(*pb.ApecsTxn)
-	Panicked   func(*pb.ApecsTxn, error)
+	Committed  func(*process_pb.ApecsTxn)
+	RolledBack func(*process_pb.ApecsTxn)
+	Panicked   func(*process_pb.ApecsTxn, error)
 }
 
 type StepRunner interface {
-	HandleStep(step *pb.ApecsTxn_Step, direction pb.ApecsTxn_Dir) error
-	ProcessNextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step
+	HandleStep(step *process_pb.ApecsTxn_Step, direction process_pb.ApecsTxn_Dir) error
+	ProcessNextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step
 }
 
-func (proc Processor) AdvanceApecsTxn(step *pb.ApecsTxn_Step, direction pb.ApecsTxn_Dir) error {
+func (proc Processor) AdvanceApecsTxn(step *process_pb.ApecsTxn_Step, direction process_pb.ApecsTxn_Dir) error {
 	if handler, ok := proc.Handlers[step.Command]; ok {
-		if direction == pb.ApecsTxn_FORWARD {
-			return handler.Do(step.Params)
+		if direction == process_pb.ApecsTxn_FORWARD {
+			return handler.Do(nil) // LORRTODO: fix
 		} else {
-			return handler.Undo(step.Params)
+			return handler.Undo(nil) // LORRTODO: fix
 		}
 	} else {
 		return errors.New(fmt.Sprintf("AdvanceApecsTxn - invalid command '%s'", step.Command))
 	}
 }
 
-func (proc Processor) ProcessNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, error) {
+func (proc Processor) ProcessNextStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
 	step := NextStep(txn)
 
 	if step == nil {
@@ -89,12 +89,12 @@ func (proc Processor) ProcessNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, erro
 
 	err := proc.AdvanceApecsTxn(step, txn.Direction)
 	if err == nil {
-		step.Status = pb.ApecsTxn_Step_COMPLETE
+		step.Status = process_pb.ApecsTxn_Step_COMPLETE
 	} else {
-		step.Errors = append(step.Errors, err.Error())
-		step.Status = pb.ApecsTxn_Step_ERROR
-		if txn.Direction == pb.ApecsTxn_FORWARD && txn.CanRevert {
-			txn.Direction = pb.ApecsTxn_FORWARD
+		step.Errors = nil // LORRTODO: fix this //append(step.Errors, err.Error())
+		step.Status = process_pb.ApecsTxn_Step_ERROR
+		if txn.Direction == process_pb.ApecsTxn_FORWARD && txn.CanRevert {
+			txn.Direction = process_pb.ApecsTxn_FORWARD
 		} else {
 			return step, err
 		}
