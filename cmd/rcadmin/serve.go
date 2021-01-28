@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/serve_utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 )
 
 //go:embed __static/docs
@@ -62,5 +62,5 @@ func (server) Platform(ctx context.Context, in *admin_pb.PlatformArgs) (*admin_p
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string) {
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
-	serve_utils.Serve(ctx, srv)
+	rkcy.Serve(ctx, srv)
 }

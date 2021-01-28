@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package rckafka
+package rkcy
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/utils"
 )
 
 func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, bootstrapServers string, platformName string) {
@@ -62,7 +61,7 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 		{
 			Topic:     &platformTopic,
 			Partition: 0,
-			Offset:    kafka.Offset(utils.Maxi(0, high-1)),
+			Offset:    kafka.Offset(Maxi(0, high-1)),
 		},
 	})
 

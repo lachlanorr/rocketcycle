@@ -20,9 +20,7 @@ import (
 	edge_pb "github.com/lachlanorr/rocketcycle/build/proto/edge"
 	process_pb "github.com/lachlanorr/rocketcycle/build/proto/process"
 	storage_pb "github.com/lachlanorr/rocketcycle/build/proto/storage"
-	"github.com/lachlanorr/rocketcycle/internal/platform"
-	"github.com/lachlanorr/rocketcycle/internal/rckafka"
-	"github.com/lachlanorr/rocketcycle/internal/serve_utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 )
 
 //go:embed __static/docs
@@ -82,7 +80,7 @@ func manageProducers(ctx context.Context, bootstrapServers string, platformName 
 	//producers := make(map[string]*kafka.Producer)
 
 	platCh := make(chan admin_pb.Platform)
-	go rckafka.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	go rkcy.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -91,7 +89,7 @@ func manageProducers(ctx context.Context, bootstrapServers string, platformName 
 				Msg("manageProducers exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := platform.NewRtPlatform(&plat)
+			rtPlat, err := rkcy.NewRtPlatform(&plat)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -121,5 +119,5 @@ func manageProducers(ctx context.Context, bootstrapServers string, platformName 
 func serve(ctx context.Context, httpAddr string, grpcAddr string) {
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 
-	serve_utils.Serve(ctx, srv)
+	rkcy.Serve(ctx, srv)
 }

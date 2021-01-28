@@ -9,12 +9,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
 func main() {
-	utils.PrepLogging()
+	rkcy.PrepLogging()
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcstore started")

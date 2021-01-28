@@ -2,17 +2,47 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package rckafka
+package rkcy
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
+
+func PrepLogging() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
+}
+
+func Contains(slice []string, item string) bool {
+	for _, val := range slice {
+		if val == item {
+			return true
+		}
+	}
+	return false
+}
+
+func Maxi(x, y int64) int64 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func Mini(x, y int64) int64 {
+	if x > y {
+		return y
+	}
+	return x
+}
 
 func FindHeader(msg *kafka.Message, key string) []byte {
 	for _, hdr := range msg.Headers {

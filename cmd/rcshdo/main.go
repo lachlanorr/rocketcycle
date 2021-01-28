@@ -21,8 +21,7 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/rckafka"
-	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 )
 
 // Cobra sets these values based on command parsing
@@ -128,7 +127,7 @@ func rcshdoConf(cmd *cobra.Command, args []string) {
 	}
 
 	// connect to kafka and make sure we have our platform topic
-	adminTopic, err := rckafka.CreateAdminTopic(context.Background(), bootstrapServers, plat.Name)
+	adminTopic, err := rkcy.CreateAdminTopic(context.Background(), bootstrapServers, plat.Name)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -152,7 +151,7 @@ func rcshdoConf(cmd *cobra.Command, args []string) {
 	err = prod.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        rckafka.MsgTypeHeaders(proto.Message(&plat)),
+		Headers:        rkcy.MsgTypeHeaders(proto.Message(&plat)),
 	}, nil)
 	if err != nil {
 		slog.Fatal().
@@ -194,7 +193,7 @@ func rcshdoRun(cmd *cobra.Command, args []string) {
 	signal.Notify(interruptCh, os.Interrupt)
 
 	platCh := make(chan admin_pb.Platform, 10)
-	go rckafka.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	go rkcy.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -208,6 +207,6 @@ func rcshdoRun(cmd *cobra.Command, args []string) {
 }
 
 func main() {
-	utils.PrepLogging()
+	rkcy.PrepLogging()
 	runCobra()
 }

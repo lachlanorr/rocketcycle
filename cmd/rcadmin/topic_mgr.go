@@ -18,13 +18,11 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/platform"
-	"github.com/lachlanorr/rocketcycle/internal/rckafka"
-	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 )
 
 var exists struct{}
-var oldRtPlat *platform.RtPlatform = nil
+var oldRtPlat *rkcy.RtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *admin_pb.Platform_Cluster
@@ -205,7 +203,7 @@ func createMissingTopics(topicNamePrefix string, topics *admin_pb.Platform_App_T
 	}
 }
 
-func updateTopics(rtPlat *platform.RtPlatform) {
+func updateTopics(rtPlat *rkcy.RtPlatform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
 	for _, cluster := range rtPlat.Platform.Clusters {
@@ -227,7 +225,7 @@ func updateTopics(rtPlat *platform.RtPlatform) {
 	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
 
 	for _, app := range rtPlat.Platform.Apps {
-		if utils.Contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
+		if rkcy.Contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
 			for _, topics := range app.Topics {
 				createMissingTopics(
 					buildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
@@ -240,7 +238,7 @@ func updateTopics(rtPlat *platform.RtPlatform) {
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
 	platCh := make(chan admin_pb.Platform)
-	go rckafka.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	go rkcy.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -249,7 +247,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				Msg("manageTopics exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := platform.NewRtPlatform(&plat)
+			rtPlat, err := rkcy.NewRtPlatform(&plat)
 			if err != nil {
 				log.Error().
 					Err(err).

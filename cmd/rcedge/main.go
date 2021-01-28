@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -91,6 +91,6 @@ func rcedgeServe(cmd *cobra.Command, args []string) {
 }
 
 func main() {
-	utils.PrepLogging()
+	rkcy.PrepLogging()
 	runCobra()
 }

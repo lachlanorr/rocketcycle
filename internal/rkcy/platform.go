@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package platform
+package rkcy
 
 import (
 	"crypto/sha256"
@@ -14,7 +14,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/utils"
 )
 
 // Platform pb, with some convenience lookup maps
@@ -84,7 +83,7 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 
 		// validate our expected required topics are there
 		for _, req := range requiredTopics[app.Type] {
-			if !utils.Contains(topicNames, req) {
+			if !Contains(topicNames, req) {
 				return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
 			}
 		}

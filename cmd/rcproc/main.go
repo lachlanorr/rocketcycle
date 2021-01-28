@@ -11,13 +11,12 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/rs/zerolog/log"
 
-	"github.com/lachlanorr/rocketcycle/internal/dispatch"
-	"github.com/lachlanorr/rocketcycle/internal/utils"
+	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
 func main() {
-	utils.PrepLogging()
+	rkcy.PrepLogging()
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcproc started")
@@ -41,5 +40,5 @@ func main() {
 
 	log.Info().Msg(fmt.Sprintf("username = %s, active = %t", username, active))
 
-	dispatch.Process()
+	rkcy.Process()
 }

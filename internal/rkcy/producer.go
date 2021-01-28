@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package platform
+package rkcy
 
 import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
