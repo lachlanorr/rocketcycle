@@ -27,7 +27,6 @@ import (
 
 // Cobra sets these values based on command parsing
 var (
-	platform         string
 	bootstrapServers string
 	configFilePath   string
 )
@@ -121,10 +120,6 @@ func rcshdoConf(cmd *cobra.Command, args []string) {
 			Err(err).
 			Msg("Failed to unmarshal platform")
 	}
-	platformTopic := rckafka.PlatformTopic(plat.Name)
-	slog = slog.With().
-		Str("Topic", platformTopic).
-		Logger()
 	platMar, err := proto.Marshal(&plat)
 	if err != nil {
 		slog.Fatal().
@@ -133,53 +128,19 @@ func rcshdoConf(cmd *cobra.Command, args []string) {
 	}
 
 	// connect to kafka and make sure we have our platform topic
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-	})
+	adminTopic, err := rckafka.CreateAdminTopic(context.Background(), bootstrapServers, plat.Name)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
-			Msg("Failed to NewAdminClient")
+			Msgf("Failed to CreateAdminTopic for platform %s", plat.Name)
 	}
+	slog = slog.With().
+		Str("Topic", adminTopic).
+		Logger()
+	slog.Info().
+		Msgf("Created platform admin topic: %s", adminTopic)
 
-	md, err := admin.GetMetadata(nil, true, 1000)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to GetMetadata")
-	}
-
-	_, ok := md.Topics[platformTopic]
-	if !ok { // platform topic doesn't exist
-		result, err := admin.CreateTopics(
-			context.Background(),
-			[]kafka.TopicSpecification{
-				{
-					Topic:             platformTopic,
-					NumPartitions:     1,
-					ReplicationFactor: len(md.Brokers),
-				},
-			},
-			nil,
-		)
-		if err != nil {
-			slog.Fatal().
-				Err(err).
-				Msg("Failed to create metadata topic")
-		}
-		for _, res := range result {
-			if res.Error.Code() != kafka.ErrNoError {
-				slog.Fatal().
-					Err(res.Error).
-					Msg("Failed to create metadata topic")
-			}
-		}
-		slog.Info().
-			Msg("Created platform topic")
-	}
-
-	// At this point we are guaranteed to have a platform config topic
-
+	// At this point we are guaranteed to have a platform admin topic
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": bootstrapServers})
 	if err != nil {
 		slog.Fatal().
@@ -189,8 +150,9 @@ func rcshdoConf(cmd *cobra.Command, args []string) {
 	defer prod.Close()
 
 	err = prod.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{Topic: &platformTopic, Partition: 0},
+		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
+		Headers:        rckafka.MsgTypeHeaders(proto.Message(&plat)),
 	}, nil)
 	if err != nil {
 		slog.Fatal().

@@ -23,3 +23,17 @@ func Contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+func Maxi(x, y int64) int64 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func Mini(x, y int64) int64 {
+	if x > y {
+		return y
+	}
+	return x
+}

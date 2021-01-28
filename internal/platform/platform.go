@@ -25,6 +25,18 @@ type RtPlatform struct {
 	Clusters map[string]*admin_pb.Platform_Cluster
 }
 
+func (rtPlat *RtPlatform) FindTopic(appName string, topicName string) *admin_pb.Platform_App_Topics {
+	app, ok := rtPlat.Apps[appName]
+	if ok {
+		for _, topics := range app.Topics {
+			if topicName == topics.Name {
+				return topics
+			}
+		}
+	}
+	return nil
+}
+
 func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 	rtPlat := RtPlatform{}
 
@@ -50,8 +62,8 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 	}
 
 	requiredTopics := map[admin_pb.Platform_App_Type][]string{
-		admin_pb.Platform_App_GENERAL: {"error"},
-		admin_pb.Platform_App_BATCH:   {"error"},
+		admin_pb.Platform_App_GENERAL: {"admin", "error"},
+		admin_pb.Platform_App_BATCH:   {"admin", "error"},
 		admin_pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 

@@ -121,7 +121,7 @@ func buildTopicNamePrefix(platformName string, appName string, appType admin_pb.
 }
 
 func buildTopicName(topicNamePrefix string, name string, generation int32) string {
-	return fmt.Sprintf("%s.%s.%010d", topicNamePrefix, name, generation)
+	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
 func FindApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App {
@@ -239,7 +239,7 @@ func updateTopics(rtPlat *platform.RtPlatform) {
 }
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
-	platCh := make(chan admin_pb.Platform, 10)
+	platCh := make(chan admin_pb.Platform)
 	go rckafka.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {

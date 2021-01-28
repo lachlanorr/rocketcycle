@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -46,6 +46,10 @@ func rcedgeGetResource(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(string(body))
+
+	if resp.StatusCode != 200 {
+		os.Exit(1)
+	}
 }
 
 func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string, initId bool) error {
@@ -98,13 +102,6 @@ func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string,
 				msgR.Set(field, protoreflect.ValueOf(valFloat))
 			}
 		}
-	}
-	if initId {
-		field := fields.ByJSONName("id")
-		if field == nil || field.Kind() != protoreflect.StringKind {
-			return errors.New(fmt.Sprintf("No 'id' string field for %s resource", resourceName))
-		}
-		msgR.Set(field, protoreflect.ValueOf(uuid.NewString()))
 	}
 
 	return nil
@@ -160,5 +157,9 @@ func rcedgeCreateResource(cmd *cobra.Command, args []string) {
 
 	if len(body) > 0 {
 		fmt.Println(string(body))
+	}
+
+	if resp.StatusCode != 200 {
+		os.Exit(1)
 	}
 }

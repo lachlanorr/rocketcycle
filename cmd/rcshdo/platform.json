@@ -12,7 +12,7 @@
                     "current": {
                         "generation": 1,
                         "cluster_name": "local-dev",
-                        "partition_count": 2
+                        "partition_count": 1
                     }
                 },
                 {

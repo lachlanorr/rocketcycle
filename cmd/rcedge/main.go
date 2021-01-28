@@ -18,7 +18,6 @@ import (
 
 // Cobra sets these values based on command parsing
 var (
-	platform         string
 	bootstrapServers string
 	httpAddr         string
 	grpcAddr         string
@@ -77,6 +76,9 @@ func rcedgeServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	platformName := args[0]
+
+	go manageProducers(ctx, bootstrapServers, platformName)
 	go serve(ctx, httpAddr, grpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)

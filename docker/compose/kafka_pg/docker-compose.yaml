@@ -180,5 +180,7 @@ services:
         # However, in production environments the default value of 3 seconds is more suitable as this will help to avoid unnecessary, and potentially expensive, rebalances during application startup.
         group.initial.rebalance.delay.ms=0
 
+        auto.create.topics.enable=false
+
     entrypoint:
       /bin/sh -c "echo \"$$KAFKA_PROPERTIES\" > /opt/kafka/config/server.properties; /bin/bash start.sh broker"
