@@ -9,5 +9,9 @@ import (
 )
 
 func main() {
-	rkcy.Run()
+	sys := rkcy.System{
+		Name: "rpg",
+	}
+
+	rkcy.Run(&sys)
 }

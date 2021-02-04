@@ -13,8 +13,12 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-func Run() {
-	rkcy.Run()
+type System struct {
+	Name string
+}
+
+func Run(sys *System) {
+	rkcy.Run(sys.Name)
 }
 
 func ServeGrpcGateway(ctx context.Context, srv interface{}) {

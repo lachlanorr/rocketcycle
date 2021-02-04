@@ -22,10 +22,10 @@ type Flags struct {
 
 var flags Flags
 
-func runCobra() {
+func runCobra(name string) {
 	rootCmd := &cobra.Command{
-		Use:   "rpg",
-		Short: "Rpg Rocketcycle Platform",
+		Use:   name,
+		Short: "Rocketcycle Platform - " + name,
 	}
 
 	// admin sub command
@@ -109,7 +109,7 @@ func runCobra() {
 	rootCmd.Execute()
 }
 
-func Run() {
+func Run(name string) {
 	PrepLogging()
-	runCobra()
+	runCobra(name)
 }
