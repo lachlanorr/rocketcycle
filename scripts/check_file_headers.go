@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -17,16 +18,17 @@ var header = `// This Source Code Form is subject to the terms of the Mozilla Pu
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 `
 
+var incl *regexp.Regexp = regexp.MustCompile(`\.(go|proto)$`)
+var excl *regexp.Regexp = regexp.MustCompile(`(\.pb\.gw\.go|_grpc\.pb\.go)$`)
+
 func fileHasHeaderIssue(path string) bool {
-	ext := filepath.Ext(path)
-	if ext == ".go" || ext == ".proto" {
+	if incl.MatchString(path) && !excl.MatchString(path) {
 		bytes, err := ioutil.ReadFile(path)
 		if err != nil {
 			fmt.Printf("Failed to read %s, err: %s\n", path, err.Error())
 			return true
 		}
 		content := string(bytes)
-
 		if !strings.Contains(content, header) {
 			fmt.Printf("%s:1:1: bad license header\n", path)
 			return true

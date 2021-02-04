@@ -1,0 +1,207 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "admin.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "AdminService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/platform/get": {
+      "get": {
+        "operationId": "AdminService_Platform",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.pb.Platform"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "google.protobuf.Any": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "google.rpc.Status": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/google.protobuf.Any"
+          }
+        }
+      }
+    },
+    "rkcy.pb.Platform": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.pb.Platform.App"
+          }
+        },
+        "clusters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.pb.Platform.Cluster"
+          }
+        },
+        "headerAliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rkcy.pb.Platform.App": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/rkcy.pb.Platform.App.Type"
+        },
+        "name": {
+          "type": "string"
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.pb.Platform.App.Topics"
+          }
+        }
+      }
+    },
+    "rkcy.pb.Platform.App.Topic": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "int32",
+          "description": "incrementing generation id, +1 every time we migrate a logical topic"
+        },
+        "clusterName": {
+          "type": "string",
+          "description": "kafka cluster topic exists within"
+        },
+        "partitionCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "partitionStrat": {
+          "$ref": "#/definitions/rkcy.pb.Platform.PartitionStrategy",
+          "description": "How to determine which partiton messages are produced to"
+        }
+      }
+    },
+    "rkcy.pb.Platform.App.Topics": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "base name, it will get decorated with additional dot notated pieces"
+        },
+        "state": {
+          "$ref": "#/definitions/rkcy.pb.Platform.App.Topics.State",
+          "description": "current vs future transition state"
+        },
+        "current": {
+          "$ref": "#/definitions/rkcy.pb.Platform.App.Topic",
+          "description": "current physical topic"
+        },
+        "future": {
+          "$ref": "#/definitions/rkcy.pb.Platform.App.Topic",
+          "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
+        }
+      }
+    },
+    "rkcy.pb.Platform.App.Topics.State": {
+      "type": "string",
+      "enum": [
+        "CURRENT",
+        "FUTURE_INIT",
+        "FUTURE_MIRROR",
+        "PRODUCER_PAUSE",
+        "FUTURE_MIRROR_VALIDATE",
+        "CONSUMER_SHUTDOWN",
+        "CONSUMER_FUTURE_START",
+        "PRODUCER_FUTURE_START",
+        "FUTURE_TO_CURRENT"
+      ],
+      "default": "CURRENT",
+      "description": "States surrounding current vs future topics and current to future transition\n\n - CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to app and gets created\n - FUTURE_MIRROR: current to future mirroring starts and gets as caught up as possible\n - PRODUCER_PAUSE: producers all pause\n - FUTURE_MIRROR_VALIDATE: wait until mirror is confirmed on all partitions\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT"
+    },
+    "rkcy.pb.Platform.App.Type": {
+      "type": "string",
+      "enum": [
+        "GENERAL",
+        "BATCH",
+        "APECS"
+      ],
+      "default": "GENERAL",
+      "description": "Type implies what topics will be present\n\n - GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional application specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional application specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer"
+    },
+    "rkcy.pb.Platform.Cluster": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "unique name of cluster"
+        },
+        "bootstrapServers": {
+          "type": "string",
+          "description": "kafka bootstrap servers for the cluster"
+        }
+      }
+    },
+    "rkcy.pb.Platform.PartitionStrategy": {
+      "type": "string",
+      "enum": [
+        "FNV64_MOD"
+      ],
+      "default": "FNV64_MOD",
+      "description": "Different types of partitioning mechanisms\n\n - FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count"
+    }
+  }
+}

@@ -12,10 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, bootstrapServers string, platformName string) {
+func ConsumePlatformConfig(ctx context.Context, ch chan<- pb.Platform, bootstrapServers string, platformName string) {
 	platformTopic := adminTopic(platformName)
 	groupName := "__" + platformTopic + "__non_committed_group"
 
@@ -86,7 +86,7 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
-				plat := admin_pb.Platform{}
+				plat := pb.Platform{}
 				if val := findHeader(msg, "type"); val != nil {
 					if string(val) == msgTypeName(proto.Message(&plat)) {
 						err = proto.Unmarshal(msg.Value, &plat)

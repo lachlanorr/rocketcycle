@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 func confCommand(cmd *cobra.Command, args []string) {
@@ -31,7 +31,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
-	plat := admin_pb.Platform{}
+	plat := pb.Platform{}
 	err = protojson.Unmarshal(conf, proto.Message(&plat))
 	if err != nil {
 		slog.Fatal().

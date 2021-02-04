@@ -10,7 +10,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/internal/rkcy"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 func Run() {
@@ -25,7 +25,7 @@ func PrepLogging() {
 	rkcy.PrepLogging()
 }
 
-func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, bootstrapServers string, platformName string) {
+func ConsumePlatformConfig(ctx context.Context, ch chan<- pb.Platform, bootstrapServers string, platformName string) {
 	rkcy.ConsumePlatformConfig(ctx, ch, bootstrapServers, platformName)
 }
 

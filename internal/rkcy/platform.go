@@ -13,18 +13,18 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 // Platform pb, with some convenience lookup maps
 type RtPlatform struct {
-	Platform *admin_pb.Platform
+	Platform *pb.Platform
 	Hash     string
-	Apps     map[string]*admin_pb.Platform_App
-	Clusters map[string]*admin_pb.Platform_Cluster
+	Apps     map[string]*pb.Platform_App
+	Clusters map[string]*pb.Platform_Cluster
 }
 
-func (rtPlat *RtPlatform) FindTopic(appName string, topicName string) *admin_pb.Platform_App_Topics {
+func (rtPlat *RtPlatform) FindTopic(appName string, topicName string) *pb.Platform_App_Topics {
 	app, ok := rtPlat.Apps[appName]
 	if ok {
 		for _, topics := range app.Topics {
@@ -36,7 +36,7 @@ func (rtPlat *RtPlatform) FindTopic(appName string, topicName string) *admin_pb.
 	return nil
 }
 
-func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
+func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 	rtPlat := RtPlatform{}
 
 	rtPlat.Platform = platform
@@ -45,7 +45,7 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 	sha256Bytes := sha256.Sum256([]byte(platJson))
 	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
 
-	rtPlat.Clusters = make(map[string]*admin_pb.Platform_Cluster)
+	rtPlat.Clusters = make(map[string]*pb.Platform_Cluster)
 	for idx, cluster := range rtPlat.Platform.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
@@ -60,13 +60,13 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 		rtPlat.Clusters[cluster.Name] = cluster
 	}
 
-	requiredTopics := map[admin_pb.Platform_App_Type][]string{
-		admin_pb.Platform_App_GENERAL: {"admin", "error"},
-		admin_pb.Platform_App_BATCH:   {"admin", "error"},
-		admin_pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
+	requiredTopics := map[pb.Platform_App_Type][]string{
+		pb.Platform_App_GENERAL: {"admin", "error"},
+		pb.Platform_App_BATCH:   {"admin", "error"},
+		pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 
-	rtPlat.Apps = make(map[string]*admin_pb.Platform_App)
+	rtPlat.Apps = make(map[string]*pb.Platform_App)
 	for idx, app := range rtPlat.Platform.Apps {
 		if app.Name == "" {
 			return nil, fmt.Errorf("App %d missing name field", idx)
@@ -98,7 +98,7 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 	return &rtPlat, nil
 }
 
-func validateTopics(topics *admin_pb.Platform_App_Topics, clusters map[string]*admin_pb.Platform_Cluster) error {
+func validateTopics(topics *pb.Platform_App_Topics, clusters map[string]*pb.Platform_Cluster) error {
 	if topics.Name == "" {
 		return errors.New("Topics missing Name field")
 	}
@@ -117,7 +117,7 @@ func validateTopics(topics *admin_pb.Platform_App_Topics, clusters map[string]*a
 	return nil
 }
 
-func validateTopic(topic *admin_pb.Platform_App_Topic, clusters map[string]*admin_pb.Platform_Cluster) error {
+func validateTopic(topic *pb.Platform_App_Topic, clusters map[string]*pb.Platform_Cluster) error {
 	if topic.Generation == 0 {
 		return errors.New("Topic missing Generation field")
 	}

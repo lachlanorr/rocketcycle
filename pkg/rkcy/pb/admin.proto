@@ -1,0 +1,22 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package rkcy.pb;
+option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+
+import "google/api/annotations.proto";
+import "platform.proto";
+
+message PlatformArgs {
+}
+
+service AdminService {
+    rpc Platform(PlatformArgs) returns (rkcy.pb.Platform) {
+        option (google.api.http) = {
+            get: "/v1/platform/get"
+        };
+    }
+}

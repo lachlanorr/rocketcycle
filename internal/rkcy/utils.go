@@ -70,7 +70,7 @@ func findHeader(msg *kafka.Message, key string) []byte {
 }
 
 func adminTopic(internalName string) string {
-	return fmt.Sprintf("rc.%s.admin", internalName)
+	return fmt.Sprintf("rkcy.%s.admin", internalName)
 }
 
 func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {

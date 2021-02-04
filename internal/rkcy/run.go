@@ -15,10 +15,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-func runStorage(ctx context.Context, consumeTopic *admin_pb.Platform_App_Topics) {
+func runStorage(ctx context.Context, consumeTopic *pb.Platform_App_Topics) {
 	cmd := exec.CommandContext(ctx, "./rcstore")
 
 	stderr, _ := cmd.StderrPipe()
@@ -42,7 +42,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
 
-	platCh := make(chan admin_pb.Platform, 10)
+	platCh := make(chan pb.Platform, 10)
 	go ConsumePlatformConfig(ctx, platCh, flags.bootstrapServers, flags.platformName)
 
 	for {

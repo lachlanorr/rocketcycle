@@ -1,0 +1,111 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package rkcy.pb;
+option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+
+message Platform {
+    string name               = 1;
+    repeated App apps         = 2;
+    repeated Cluster clusters = 3;
+
+    map<string, string> header_aliases = 4;
+
+    message App {
+        Type type   = 1;
+        string name = 2;
+
+        repeated Topics topics = 3;
+
+        // Type implies what topics will be present
+        enum Type {
+            // Required topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * error - errors encountered during processing written here
+            //     * ... - additional application specific topics
+            GENERAL = 0;
+
+            // Required topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * error - errors encountered during processing written here
+            //     * ... - additional application specific topics for stages of batch processing
+            // For telemetry purposes, stage topics are assumed to be in alphabetical order.
+            // Batch jobs topics aren't created by default, but on demand with the timestamp
+            // included in the names.
+            BATCH = 1;
+
+            // Required topics:
+            //     * admin - handles control messages to coordinate distributed tasks
+            //     * process - handles messages that affect internal state of models
+            //     * error - errors encountered during processing written here
+            //     * complete - completed transactions written here for post processing
+            //     * storage - handles messages sent to the persistence layer
+            APECS = 2;
+        }
+
+        message Topics {
+            // base name, it will get decorated with additional dot notated pieces
+            string name   = 1;
+            // current vs future transition state
+            State state   = 2;
+
+            // current physical topic
+            Topic current = 3;
+
+            // topic we're in the process of migrating to, will be
+            // null unless an active migration is taking place
+            Topic future  = 4;
+
+            // States surrounding current vs future topics and current to future transition
+            enum State {
+                // no future topic exists, everyting using current
+                CURRENT                = 0;
+                // future topic added to app and gets created
+                FUTURE_INIT            = 1;
+                // current to future mirroring starts and gets as caught up as possible
+                FUTURE_MIRROR          = 2;
+                // producers all pause
+                PRODUCER_PAUSE         = 3;
+                // wait until mirror is confirmed on all partitions
+                FUTURE_MIRROR_VALIDATE = 4;
+                // consumers read until end and shutdown
+                CONSUMER_SHUTDOWN      = 5;
+                // new consumers start on future, advanced passed newest
+                CONSUMER_FUTURE_START  = 6;
+                // producers unpause and produce to future
+                PRODUCER_FUTURE_START  = 7;
+                // future becomes current, future is nulled, state set to CURRENT
+                FUTURE_TO_CURRENT      = 8;
+            }
+        }
+
+        message Topic {
+            // incrementing generation id, +1 every time we migrate a logical topic
+            int32 generation      = 1;
+            // kafka cluster topic exists within
+            string cluster_name   = 2;
+            int32 partition_count = 3;
+
+            // How to determine which partiton messages are produced to
+            PartitionStrategy partition_strat = 4;
+        }
+    }
+
+    message Cluster {
+        // unique name of cluster
+        string name              = 1;
+        // kafka bootstrap servers for the cluster
+        string bootstrap_servers = 2;
+    }
+
+
+    // Different types of partitioning mechanisms
+    enum PartitionStrategy {
+        // FNV-1 64 bit has followed by modulus of partition count
+        FNV64_MOD              = 0;
+    }
+
+}

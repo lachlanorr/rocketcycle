@@ -17,7 +17,7 @@ GO_LDFLAGS := "-X github.com/lachlanorr/rocketcycle/version.GitCommit=$(GIT_COMM
 default: all
 
 .PHONY: all
-all: check proto cmd ## build everything
+all: check proto examples ## build everything
 
 .PHONY: check
 check: ## check license headers in files
@@ -26,72 +26,42 @@ check: ## check license headers in files
 .PHONY: clean
 clean: ## remove all build artifacts
 	@rm -rf ./build
+	@rm -rf ./pkg/rkcy/pb/*.pb.go ./pkg/rkcy/pb/*_grpc.pb.go ./pkg/rkcy/pb/*.pb.gw.go
+	@rm -rf ./examples/rpg/pb/*.pb.go ./examples/rpg/pb/*_grpc.pb.go ./examples/rpg/pb/*.pb.gw.go
 
 .PHONY: proto
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
-	@mkdir -p $(BUILD_DIR)
-	@protoc \
-     -I . \
-     -I ./third_party/proto/googleapis \
-     --go_out $(BUILD_DIR) \
-     --go_opt paths=source_relative \
-     proto/admin/platform.proto \
-     proto/process/apecs.proto \
-     proto/storage/rpg.proto
-	@protoc \
-     -I . \
-     -I ./third_party/proto/googleapis \
-     -I ./third_party/proto/grpc-gateway \
-     --go_out $(BUILD_DIR) \
-     --go_opt paths=source_relative \
-     --go-grpc_out $(BUILD_DIR) \
-     --go-grpc_opt paths=source_relative \
-     --grpc-gateway_out $(BUILD_DIR) \
-     --grpc-gateway_opt logtostderr=true \
-     --grpc-gateway_opt paths=source_relative \
-     --grpc-gateway_opt generate_unbound_methods=true \
-     --openapiv2_out $(BUILD_DIR) \
-	 --openapiv2_opt logtostderr=true \
-	 --openapiv2_opt fqn_for_openapi_name=true \
-     proto/admin/api.proto \
-     proto/edge/api.proto
+	@go generate pkg/rkcy/pb/gen.go
+	@go generate examples/rpg/pb/gen.go
 
-.PHONY: cmd
-cmd: rpg rcedge rcsim ## compile all cmds
+.PHONY: examples
+examples: rpg rpg_edge rpg_sim ## compile all examples
 
 .PHONY: rpg
-rpg: ## compile rpg cmd
+rpg: ## compile rpg example
 	@echo "==> Building $@..."
-	@rm -rf ./pkg/rkcy/__static/admin/docs
-	@mkdir -p ./pkg/rkcy/__static/admin/docs
-	@cp -rf ./third_party/swagger-ui/* ./pkg/rkcy/__static/admin/docs
-	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./pkg/rkcy/__static/admin/docs/swagger.json
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rpg \
-	./cmd/rpg
-	@cp ./cmd/rpg/platform.json $(BUILD_BIN_DIR)
+	./examples/rpg/rpg
+	@cp ./examples/rpg/rpg/platform.json $(BUILD_BIN_DIR)
 
-.PHONY: rcedge
-rcedge: ## compile rcedge cmd
-	@echo "==> Building $@..."
-	@rm -rf ./cmd/rcedge/__static/
-	@mkdir -p ./cmd/rcedge/__static/docs
-	@cp -rf ./third_party/swagger-ui/* ./cmd/rcedge/__static/docs
-	@cp -f $(BUILD_DIR)/proto/edge/api.swagger.json ./cmd/rcedge/__static/docs/swagger.json
-	@go build \
-	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcedge \
-    ./cmd/rcedge
-
-.PHONY: rcsim
-rcsim: ## compile rcsim cmd
+.PHONY: rpg_edge
+rpg_edge: ## compile rpg_edge example
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcsim \
-    ./cmd/rcsim
+	-o $(BUILD_BIN_DIR)/rpg_edge \
+    ./examples/rpg/rpg_edge
+
+.PHONY: rpg_sim
+rpg_sim: ## compile rpg_sim cmd
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/rpg_sim \
+    ./examples/rpg/rpg_sim
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help

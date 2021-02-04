@@ -1,0 +1,152 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "edge.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "MmoService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/player/create": {
+      "post": {
+        "operationId": "MmoService_CreatePlayer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+            }
+          }
+        ],
+        "tags": [
+          "MmoService"
+        ]
+      }
+    },
+    "/v1/player/get/{id}": {
+      "get": {
+        "operationId": "MmoService_GetPlayer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "MmoService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "google.protobuf.Any": {
+      "type": "object",
+      "properties": {
+        "typeUrl": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "google.rpc.Status": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/google.protobuf.Any"
+          }
+        }
+      }
+    },
+    "rkcy.examples.rpg.pb.Player": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "mro": {
+          "$ref": "#/definitions/rkcy.pb.MostRecentOffsets"
+        }
+      }
+    },
+    "rkcy.pb.MostRecentOffsets": {
+      "type": "object",
+      "properties": {
+        "processGeneration": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "processOffset": {
+          "type": "string",
+          "format": "int64"
+        },
+        "storageGeneration": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "storageOffset": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    }
+  }
+}
