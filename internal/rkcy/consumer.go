@@ -16,7 +16,7 @@ import (
 )
 
 func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, bootstrapServers string, platformName string) {
-	platformTopic := AdminTopic(platformName)
+	platformTopic := adminTopic(platformName)
 	groupName := "__" + platformTopic + "__non_committed_group"
 
 	slog := log.With().
@@ -61,7 +61,7 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 		{
 			Topic:     &platformTopic,
 			Partition: 0,
-			Offset:    kafka.Offset(Maxi(0, high-1)),
+			Offset:    kafka.Offset(maxi64(0, high-1)),
 		},
 	})
 
@@ -87,8 +87,8 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- admin_pb.Platform, boo
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				plat := admin_pb.Platform{}
-				if val := FindHeader(msg, "type"); val != nil {
-					if string(val) == MsgTypeName(proto.Message(&plat)) {
+				if val := findHeader(msg, "type"); val != nil {
+					if string(val) == msgTypeName(proto.Message(&plat)) {
 						err = proto.Unmarshal(msg.Value, &plat)
 						if err != nil {
 							slog.Error().

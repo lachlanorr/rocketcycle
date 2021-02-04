@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/internal/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 

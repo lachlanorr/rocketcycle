@@ -58,44 +58,20 @@ proto: ## generate protocol buffers
      proto/edge/api.proto
 
 .PHONY: cmd
-cmd: rcadmin rcproc rcstore rcshdo rcedge rcsim ## compile all cmds
+cmd: rpg rcedge rcsim ## compile all cmds
 
-.PHONY: rcadmin
-rcadmin: ## compile rcadmin cmd
+.PHONY: rpg
+rpg: ## compile rpg cmd
 	@echo "==> Building $@..."
-	@rm -rf ./cmd/rcadmin/__static/
-	@mkdir -p ./cmd/rcadmin/__static/docs
-	@cp -rf ./third_party/swagger-ui/* ./cmd/rcadmin/__static/docs
-	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./cmd/rcadmin/__static/docs/swagger.json
+	@rm -rf ./pkg/rkcy/__static/admin/docs
+	@mkdir -p ./pkg/rkcy/__static/admin/docs
+	@cp -rf ./third_party/swagger-ui/* ./pkg/rkcy/__static/admin/docs
+	@cp -f $(BUILD_DIR)/proto/admin/api.swagger.json ./pkg/rkcy/__static/admin/docs/swagger.json
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcadmin \
-	./cmd/rcadmin
-
-.PHONY: rcproc
-rcproc: ## compile rcproc cmd
-	@echo "==> Building $@..."
-	@go build \
-	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcproc \
-	./cmd/rcproc
-
-.PHONY: rcstore
-rcstore: ## compile rcstore cmd
-	@echo "==> Building $@..."
-	@go build \
-	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcstore \
-	./cmd/rcstore
-
-.PHONY: rcshdo
-rcshdo: ## compile rcshdo cmd
-	@echo "==> Building $@..."
-	@go build \
-	-ldflags $(GO_LDFLAGS) \
-	-o $(BUILD_BIN_DIR)/rcshdo \
-    ./cmd/rcshdo
-	@cp ./cmd/rcshdo/platform.json $(BUILD_BIN_DIR)
+	-o $(BUILD_BIN_DIR)/rpg \
+	./cmd/rpg
+	@cp ./cmd/rpg/platform.json $(BUILD_BIN_DIR)
 
 .PHONY: rcedge
 rcedge: ## compile rcedge cmd

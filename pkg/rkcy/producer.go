@@ -8,7 +8,7 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-type Producer struct {
+type producer struct {
 	prod *kafka.Producer
 }
 

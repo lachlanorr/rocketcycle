@@ -2,25 +2,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package main
+package rkcy
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/rs/zerolog/log"
-
-	"github.com/lachlanorr/rocketcycle/internal/rkcy"
-	"github.com/lachlanorr/rocketcycle/version"
+	"github.com/spf13/cobra"
 )
 
-func main() {
-	rkcy.PrepLogging()
-	log.Info().
-		Str("GitCommit", version.GitCommit).
-		Msg("rcproc started")
-
+func storageCommand(cmd *cobra.Command, args []string) {
 	conn, err := pgx.Connect(context.Background(), "postgresql://postgres@127.0.0.1:5432/rpg")
 	if err != nil {
 		log.Fatal().
@@ -40,5 +34,7 @@ func main() {
 
 	log.Info().Msg(fmt.Sprintf("username = %s, active = %t", username, active))
 
-	rkcy.Process()
+	time.Sleep(30 * time.Second)
+
+	log.Info().Msg("rcstore exit")
 }

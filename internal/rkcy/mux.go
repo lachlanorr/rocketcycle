@@ -37,7 +37,7 @@ type ServeMux struct {
 	fsP       *fileSystemPathable
 }
 
-func NewServeMux(
+func newServeMux(
 	staticFs http.FileSystem,
 	staticPattern string,
 	staticReplace string,

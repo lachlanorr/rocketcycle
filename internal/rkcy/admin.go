@@ -2,27 +2,133 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package main
+package rkcy
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/signal"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/internal/rkcy"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
-var exists struct{}
-var oldRtPlat *rkcy.RtPlatform = nil
+//go:embed __static/admin/docs
+var docsFiles embed.FS
+
+func adminServeCommand(cmd *cobra.Command, args []string) {
+	flags.platformName = args[0]
+
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("rcadmin started")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go manageTopics(ctx, flags.bootstrapServers, flags.platformName)
+	go adminServe(ctx, flags.httpAddr, flags.grpcAddr)
+
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	select {
+	case <-interruptCh:
+		return
+	}
+}
+
+func adminGetPlatformCommand(cmd *cobra.Command, args []string) {
+	path := "/v1/platform/get?pretty"
+
+	slog := log.With().
+		Str("Path", path).
+		Logger()
+
+	resp, err := http.Get(flags.adminAddr + path)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to GET")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+	}
+
+	fmt.Println(string(body))
+}
+
+type adminServer struct {
+	admin_pb.UnimplementedAdminServiceServer
+
+	httpAddr string
+	grpcAddr string
+}
+
+func (srv adminServer) HttpAddr() string {
+	return srv.httpAddr
+}
+
+func (srv adminServer) GrpcAddr() string {
+	return srv.grpcAddr
+}
+
+func (adminServer) StaticFiles() http.FileSystem {
+	return http.FS(docsFiles)
+}
+
+func (adminServer) StaticFilesPathPrefix() string {
+	return "/__static/admin/docs"
+}
+
+func (srv adminServer) RegisterServer(srvReg grpc.ServiceRegistrar) {
+	admin_pb.RegisterAdminServiceServer(srvReg, srv)
+}
+
+func (adminServer) RegisterHandlerFromEndpoint(
+	ctx context.Context,
+	mux *runtime.ServeMux,
+	endpoint string,
+	opts []grpc.DialOption,
+) (err error) {
+	return admin_pb.RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
+}
+
+func (adminServer) Platform(ctx context.Context, in *admin_pb.PlatformArgs) (*admin_pb.Platform, error) {
+	if oldRtPlat != nil {
+		return oldRtPlat.Platform, nil
+	}
+	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
+}
+
+func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
+	srv := adminServer{httpAddr: httpAddr, grpcAddr: grpcAddr}
+	ServeGrpcGateway(ctx, srv)
+}
+
+var oldRtPlat *RtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *admin_pb.Platform_Cluster
@@ -36,7 +142,7 @@ func (ci *clusterInfo) Close() {
 }
 
 func createTopic(ci *clusterInfo, name string, numPartitions int) error {
-	replicationFactor := min(3, ci.brokerCount)
+	replicationFactor := mini(3, ci.brokerCount)
 
 	topicSpec := []kafka.TopicSpecification{
 		{
@@ -74,7 +180,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func NewClusterInfo(cluster *admin_pb.Platform_Cluster) (*clusterInfo, error) {
+func newClusterInfo(cluster *admin_pb.Platform_Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
@@ -122,7 +228,7 @@ func buildTopicName(topicNamePrefix string, name string, generation int32) strin
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func FindApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App {
+func findApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App {
 	for _, app := range platform.Apps {
 		if app.Name == appName {
 			return app
@@ -131,7 +237,7 @@ func FindApp(platform *admin_pb.Platform, appName string) *admin_pb.Platform_App
 	return nil
 }
 
-func FindTopic(app *admin_pb.Platform_App, topicName string) *admin_pb.Platform_App_Topics {
+func findTopic(app *admin_pb.Platform_App, topicName string) *admin_pb.Platform_App_Topics {
 	for _, topics := range app.Topics {
 		if topics.Name == topicName {
 			return topics
@@ -140,26 +246,19 @@ func FindTopic(app *admin_pb.Platform_App, topicName string) *admin_pb.Platform_
 	return nil
 }
 
-func CurrentTopicName(platform *admin_pb.Platform, appName string, topicName string) (string, error) {
-	app := FindApp(platform, appName)
+func currentTopicName(platform *admin_pb.Platform, appName string, topicName string) (string, error) {
+	app := findApp(platform, appName)
 	if app == nil {
 		return "", errors.New(fmt.Sprintf("App '%s' not found", appName))
 	}
 
-	topics := FindTopic(app, topicName)
+	topics := findTopic(app, topicName)
 	if topics == nil {
 		return "", errors.New(fmt.Sprintf("Topic '%s' not found in App '%s'", topicName, appName))
 	}
 
 	pref := buildTopicNamePrefix(platform.Name, app.Name, app.Type)
 	return buildTopicName(pref, topics.Name, topics.Current.Generation), nil
-}
-
-func min(x, y int) int {
-	if x <= y {
-		return x
-	}
-	return y
 }
 
 func createMissingTopic(topicName string, topic *admin_pb.Platform_App_Topic, clusterInfos map[string]*clusterInfo) {
@@ -203,11 +302,11 @@ func createMissingTopics(topicNamePrefix string, topics *admin_pb.Platform_App_T
 	}
 }
 
-func updateTopics(rtPlat *rkcy.RtPlatform) {
+func updateTopics(rtPlat *RtPlatform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
 	for _, cluster := range rtPlat.Platform.Clusters {
-		ci, err := NewClusterInfo(cluster)
+		ci, err := newClusterInfo(cluster)
 
 		if err != nil {
 			log.Printf("Unable to connect to cluster '%s', boostrap_servers '%s': %s", cluster.Name, cluster.BootstrapServers, err.Error())
@@ -225,7 +324,7 @@ func updateTopics(rtPlat *rkcy.RtPlatform) {
 	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
 
 	for _, app := range rtPlat.Platform.Apps {
-		if rkcy.Contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
+		if contains(appTypesAutoCreate, admin_pb.Platform_App_Type_name[int32(app.Type)]) {
 			for _, topics := range app.Topics {
 				createMissingTopics(
 					buildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
@@ -238,7 +337,7 @@ func updateTopics(rtPlat *rkcy.RtPlatform) {
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
 	platCh := make(chan admin_pb.Platform)
-	go rkcy.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	go ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -247,7 +346,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				Msg("manageTopics exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := rkcy.NewRtPlatform(&plat)
+			rtPlat, err := NewRtPlatform(&plat)
 			if err != nil {
 				log.Error().
 					Err(err).

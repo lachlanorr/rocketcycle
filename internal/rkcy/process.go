@@ -8,12 +8,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/cobra"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	process_pb "github.com/lachlanorr/rocketcycle/build/proto/process"
 )
 
-func NextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step {
+func nextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step {
 	if txn.Direction == process_pb.ApecsTxn_FORWARD {
 		for i, _ := range txn.ForwardSteps {
 			if txn.ForwardSteps[i].Status == process_pb.ApecsTxn_Step_PENDING {
@@ -30,7 +31,7 @@ func NextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step {
 	return nil
 }
 
-func LastStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
+func lastStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
 	if txn.Direction == process_pb.ApecsTxn_FORWARD {
 		return txn.ForwardSteps[len(txn.ForwardSteps)-1], nil
 	} else { // if txn.Direction == Reverse
@@ -38,7 +39,7 @@ func LastStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
 	}
 }
 
-func HasErrors(txn *process_pb.ApecsTxn) bool {
+func hasErrors(txn *process_pb.ApecsTxn) bool {
 	for i, _ := range txn.ForwardSteps {
 		if txn.ForwardSteps[i].Status == process_pb.ApecsTxn_Step_ERROR {
 			return true
@@ -47,15 +48,15 @@ func HasErrors(txn *process_pb.ApecsTxn) bool {
 	return false
 }
 
-type StepHandler struct {
+type stepHandler struct {
 	AppName string
 	Command int
 	Do      func(txn *process_pb.ApecsTxn) error
 	Undo    func(txn *process_pb.ApecsTxn) error
 }
 
-type Processor struct {
-	Handlers map[int32]StepHandler
+type processor struct {
+	Handlers map[int32]stepHandler
 
 	// exactly one of these will be called per ApecsTxn processed
 	Committed  func(*process_pb.ApecsTxn)
@@ -63,12 +64,12 @@ type Processor struct {
 	Panicked   func(*process_pb.ApecsTxn, error)
 }
 
-type StepRunner interface {
+type stepRunner interface {
 	HandleStep(step *process_pb.ApecsTxn_Step, direction process_pb.ApecsTxn_Dir) error
 	ProcessNextStep(txn *process_pb.ApecsTxn) *process_pb.ApecsTxn_Step
 }
 
-func (proc Processor) AdvanceApecsTxn(step *process_pb.ApecsTxn_Step, direction process_pb.ApecsTxn_Dir) error {
+func (proc processor) advanceApecsTxn(step *process_pb.ApecsTxn_Step, direction process_pb.ApecsTxn_Dir) error {
 	if handler, ok := proc.Handlers[step.Command]; ok {
 		if direction == process_pb.ApecsTxn_FORWARD {
 			return handler.Do(nil) // LORRTODO: fix
@@ -80,14 +81,14 @@ func (proc Processor) AdvanceApecsTxn(step *process_pb.ApecsTxn_Step, direction 
 	}
 }
 
-func (proc Processor) ProcessNextStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
-	step := NextStep(txn)
+func (proc processor) processNextStep(txn *process_pb.ApecsTxn) (*process_pb.ApecsTxn_Step, error) {
+	step := nextStep(txn)
 
 	if step == nil {
 		return nil, nil
 	}
 
-	err := proc.AdvanceApecsTxn(step, txn.Direction)
+	err := proc.advanceApecsTxn(step, txn.Direction)
 	if err == nil {
 		step.Status = process_pb.ApecsTxn_Step_COMPLETE
 	} else {
@@ -103,7 +104,7 @@ func (proc Processor) ProcessNextStep(txn *process_pb.ApecsTxn) (*process_pb.Ape
 	return step, nil
 }
 
-func Process() {
+func process() {
 	// read from kafka message queue
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": "localhost",
@@ -146,4 +147,8 @@ func Process() {
 			return
 		}
 	*/
+}
+
+func procCommand(cmd *cobra.Command, args []string) {
+	process()
 }

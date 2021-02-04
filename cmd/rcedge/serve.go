@@ -16,11 +16,10 @@ import (
 	"google.golang.org/grpc/status"
 
 	admin_pb "github.com/lachlanorr/rocketcycle/build/proto/admin"
-	"github.com/lachlanorr/rocketcycle/build/proto/edge"
 	edge_pb "github.com/lachlanorr/rocketcycle/build/proto/edge"
 	process_pb "github.com/lachlanorr/rocketcycle/build/proto/process"
 	storage_pb "github.com/lachlanorr/rocketcycle/build/proto/storage"
-	"github.com/lachlanorr/rocketcycle/internal/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
 //go:embed __static/docs
@@ -31,7 +30,7 @@ var (
 )
 
 type server struct {
-	edge.UnimplementedMmoServiceServer
+	edge_pb.UnimplementedMmoServiceServer
 
 	httpAddr string
 	grpcAddr string
@@ -49,8 +48,12 @@ func (server) StaticFiles() http.FileSystem {
 	return http.FS(docsFiles)
 }
 
+func (server) StaticFilesPathPrefix() string {
+	return "/__static/docs"
+}
+
 func (srv server) RegisterServer(srvReg grpc.ServiceRegistrar) {
-	edge.RegisterMmoServiceServer(srvReg, srv)
+	edge_pb.RegisterMmoServiceServer(srvReg, srv)
 }
 
 func (server) RegisterHandlerFromEndpoint(
@@ -59,7 +62,7 @@ func (server) RegisterHandlerFromEndpoint(
 	endpoint string,
 	opts []grpc.DialOption,
 ) (err error) {
-	return edge.RegisterMmoServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
+	return edge_pb.RegisterMmoServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
 func (server) GetPlayer(ctx context.Context, in *edge_pb.MmoRequest) (*storage_pb.Player, error) {
@@ -88,30 +91,33 @@ func manageProducers(ctx context.Context, bootstrapServers string, platformName 
 			log.Info().
 				Msg("manageProducers exiting, ctx.Done()")
 			return
-		case plat := <-platCh:
-			rtPlat, err := rkcy.NewRtPlatform(&plat)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to NewRtPlatform")
-				continue
-			}
-			// apply producer changes for apecs apps
-			for _, app := range plat.Apps {
-				if app.Type == admin_pb.Platform_App_APECS {
-					topics := rtPlat.FindTopic(app.Name, "process")
-					if topics == nil {
-						log.Error().
-							Msgf("No process topic in APECS app %s", app.Name)
-						continue
-					}
 
+			/* LORRTODO: create rkcy Producer and use it here, we don't care about platform messages directly
+			case plat := <-platCh:
+
+				rtPlat, err := rkcy.NewRtPlatform(&plat)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("Failed to NewRtPlatform")
+					continue
 				}
-			}
-			// check for changes in apecs production targets
+				// apply producer changes for apecs apps
+				for _, app := range plat.Apps {
+					if app.Type == admin_pb.Platform_App_APECS {
+						topics := rtPlat.FindTopic(app.Name, "process")
+						if topics == nil {
+							log.Error().
+								Msgf("No process topic in APECS app %s", app.Name)
+							continue
+						}
 
-			//		case txn := <-apecsProdCh:
+					}
+				}
+				// check for changes in apecs production targets
 
+				//		case txn := <-apecsProdCh:
+			*/
 		}
 	}
 }
@@ -119,5 +125,5 @@ func manageProducers(ctx context.Context, bootstrapServers string, platformName 
 func serve(ctx context.Context, httpAddr string, grpcAddr string) {
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 
-	rkcy.Serve(ctx, srv)
+	rkcy.ServeGrpcGateway(ctx, srv)
 }

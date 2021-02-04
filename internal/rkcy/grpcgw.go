@@ -20,6 +20,7 @@ type grpcgw interface {
 	GrpcAddr() string
 
 	StaticFiles() http.FileSystem
+	StaticFilesPathPrefix() string
 
 	RegisterServer(s grpc.ServiceRegistrar)
 	RegisterHandlerFromEndpoint(
@@ -63,7 +64,7 @@ func prettyHandler(h http.Handler) http.Handler {
 	})
 }
 
-func Serve(ctx context.Context, srv interface{}) {
+func ServeGrpcGateway(ctx context.Context, srv interface{}) {
 	// Start grpc server
 	go prepareGrpcServer(ctx, srv)
 
@@ -91,7 +92,7 @@ func Serve(ctx context.Context, srv interface{}) {
 	}
 
 	// Create our file system static + grpc mux wrapper
-	mux, err := NewServeMux(srv.(grpcgw).StaticFiles(), "^/docs", "/__static/docs", apiMux)
+	mux, err := newServeMux(srv.(grpcgw).StaticFiles(), "^/docs", srv.(grpcgw).StaticFilesPathPrefix(), apiMux)
 	if err != nil {
 		log.Error().
 			Err(err).

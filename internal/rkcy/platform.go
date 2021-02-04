@@ -83,7 +83,7 @@ func NewRtPlatform(platform *admin_pb.Platform) (*RtPlatform, error) {
 
 		// validate our expected required topics are there
 		for _, req := range requiredTopics[app.Type] {
-			if !Contains(topicNames, req) {
+			if !contains(topicNames, req) {
 				return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
 			}
 		}

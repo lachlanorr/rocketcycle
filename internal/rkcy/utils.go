@@ -17,11 +17,13 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
+var exists struct{}
+
 func PrepLogging() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
 }
 
-func Contains(slice []string, item string) bool {
+func contains(slice []string, item string) bool {
 	for _, val := range slice {
 		if val == item {
 			return true
@@ -30,21 +32,35 @@ func Contains(slice []string, item string) bool {
 	return false
 }
 
-func Maxi(x, y int64) int64 {
+func maxi(x, y int) int {
 	if x < y {
 		return y
 	}
 	return x
 }
 
-func Mini(x, y int64) int64 {
+func mini(x, y int) int {
 	if x > y {
 		return y
 	}
 	return x
 }
 
-func FindHeader(msg *kafka.Message, key string) []byte {
+func maxi64(x, y int64) int64 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func mini64(x, y int64) int64 {
+	if x > y {
+		return y
+	}
+	return x
+}
+
+func findHeader(msg *kafka.Message, key string) []byte {
 	for _, hdr := range msg.Headers {
 		if key == hdr.Key {
 			return hdr.Value
@@ -53,12 +69,12 @@ func FindHeader(msg *kafka.Message, key string) []byte {
 	return nil
 }
 
-func AdminTopic(internalName string) string {
+func adminTopic(internalName string) string {
 	return fmt.Sprintf("rc.%s.admin", internalName)
 }
 
-func CreateAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
-	topicName := AdminTopic(internalName)
+func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
+	topicName := adminTopic(internalName)
 
 	// connect to kafka and make sure we have our platform topic
 	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
@@ -102,12 +118,30 @@ func CreateAdminTopic(ctx context.Context, bootstrapServers string, internalName
 	return topicName, nil
 }
 
-func MsgTypeName(msg proto.Message) string {
+func msgTypeName(msg proto.Message) string {
 	msgR := msg.ProtoReflect()
 	desc := msgR.Descriptor()
 	return string(desc.FullName())
 }
 
-func MsgTypeHeaders(msg proto.Message) []kafka.Header {
-	return []kafka.Header{{Key: "type", Value: []byte(MsgTypeName(msg))}}
+func msgTypeHeaders(msg proto.Message) []kafka.Header {
+	return []kafka.Header{{Key: "type", Value: []byte(msgTypeName(msg))}}
+}
+
+const (
+	colorBlack = iota + 30
+	colorRed
+	colorGreen
+	colorYellow
+	colorBlue
+	colorMagenta
+	colorCyan
+	colorWhite
+
+	colorBold     = 1
+	colorDarkGray = 90
+)
+
+func colorize(s interface{}, c int) string {
+	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", c, s)
 }
