@@ -5,7 +5,7 @@
 syntax = "proto3";
 
 package rkcy.examples.rpg.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
+option go_package = "github.com/lachlanorr/rkcy/examples/rpg/pb";
 
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";

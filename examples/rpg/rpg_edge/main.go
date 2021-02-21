@@ -12,8 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/version"
+	"github.com/lachlanorr/rkcy/pkg/rkcy"
+	"github.com/lachlanorr/rkcy/version"
 )
 
 // Cobra sets these values based on command parsing
@@ -26,7 +26,7 @@ var (
 
 func runCobra() {
 	rootCmd := &cobra.Command{
-		Use:   "rcedge",
+		Use:   "rpg_edge",
 		Short: "Rocketcycle Edge Rest Api",
 		Long:  "Client interaction rest api that provides synchronous access over http",
 	}
@@ -34,7 +34,7 @@ func runCobra() {
 	getCmd := &cobra.Command{
 		Use:       "get resource id",
 		Short:     "get a specific resource from rest api",
-		Run:       rcedgeGetResource,
+		Run:       cmdGetResource,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
@@ -44,7 +44,7 @@ func runCobra() {
 	createCmd := &cobra.Command{
 		Use:       "create resource [key1=val1] [key2=val2]",
 		Short:     "create a resource from provided arguments",
-		Run:       rcedgeCreateResource,
+		Run:       cmdCreateResource,
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"resource"},
 	}
@@ -55,7 +55,7 @@ func runCobra() {
 		Use:       "serve platform",
 		Short:     "Rocketcycle Edge Api Server",
 		Long:      "Provides rest entrypoints into application",
-		Run:       rcedgeServe,
+		Run:       cmdServe,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"platform"},
 	}
@@ -67,7 +67,7 @@ func runCobra() {
 	rootCmd.Execute()
 }
 
-func rcedgeServe(cmd *cobra.Command, args []string) {
+func cmdServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcedge started")
@@ -78,8 +78,7 @@ func rcedgeServe(cmd *cobra.Command, args []string) {
 
 	platformName := args[0]
 
-	go manageProducers(ctx, bootstrapServers, platformName)
-	go serve(ctx, httpAddr, grpcAddr)
+	go serve(ctx, httpAddr, grpcAddr, platformName)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)

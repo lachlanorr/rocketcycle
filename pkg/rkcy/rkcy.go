@@ -7,14 +7,13 @@ package rkcy
 import (
 	"context"
 
-	"github.com/lachlanorr/rocketcycle/internal/rkcy"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/internal/rkcy"
+	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 type System struct {
-	Name string
+	Name    string
+	Handler func(*rkcy_pb.ApecsTxn_Step) *rkcy_pb.ApecsTxn_Step_Error
 }
 
 func Run(sys *System) {
@@ -27,38 +26,4 @@ func ServeGrpcGateway(ctx context.Context, srv interface{}) {
 
 func PrepLogging() {
 	rkcy.PrepLogging()
-}
-
-func ConsumePlatformConfig(ctx context.Context, ch chan<- pb.Platform, bootstrapServers string, platformName string) {
-	rkcy.ConsumePlatformConfig(ctx, ch, bootstrapServers, platformName)
-}
-
-type Producer struct {
-	rkProd *kafka.Producer
-}
-
-func NewProducer(conf *kafka.ConfigMap) (*Producer, error) {
-	rdProd, err := kafka.NewProducer(conf)
-	if err != nil {
-		return nil, err
-	}
-	prod := Producer{
-		rkProd: rdProd,
-	}
-	return &prod, nil
-}
-
-type Consumer struct {
-	rkCons *kafka.Consumer
-}
-
-func NewConsumer(conf *kafka.ConfigMap) (*Consumer, error) {
-	rdCons, err := kafka.NewConsumer(conf)
-	if err != nil {
-		return nil, err
-	}
-	cons := Consumer{
-		rkCons: rdCons,
-	}
-	return &cons, nil
 }

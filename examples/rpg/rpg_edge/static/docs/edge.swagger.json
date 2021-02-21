@@ -130,19 +130,11 @@
     "rkcy.pb.MostRecentOffsets": {
       "type": "object",
       "properties": {
-        "processGeneration": {
+        "generation": {
           "type": "integer",
           "format": "int32"
         },
-        "processOffset": {
-          "type": "string",
-          "format": "int64"
-        },
-        "storageGeneration": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "storageOffset": {
+        "offset": {
           "type": "string",
           "format": "int64"
         }

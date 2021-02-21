@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 func confCommand(cmd *cobra.Command, args []string) {

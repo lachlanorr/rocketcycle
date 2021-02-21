@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 func nextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {

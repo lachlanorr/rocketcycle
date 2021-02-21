@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 func runStorage(ctx context.Context, consumeTopic *pb.Platform_App_Topics) {
@@ -42,7 +42,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
 
-	platCh := make(chan pb.Platform, 10)
+	platCh := make(chan *pb.Platform, 10)
 	go ConsumePlatformConfig(ctx, platCh, flags.bootstrapServers, flags.platformName)
 
 	for {

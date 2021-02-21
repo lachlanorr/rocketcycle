@@ -12,10 +12,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
-func ConsumePlatformConfig(ctx context.Context, ch chan<- pb.Platform, bootstrapServers string, platformName string) {
+func ConsumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
 	platformTopic := adminTopic(platformName)
 	groupName := "__" + platformTopic + "__non_committed_group"
 
@@ -95,7 +95,7 @@ func ConsumePlatformConfig(ctx context.Context, ch chan<- pb.Platform, bootstrap
 								Err(err).
 								Msg("Failed to Unmarshall Platform")
 						} else {
-							ch <- plat
+							ch <- &plat
 						}
 						break
 					}

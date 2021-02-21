@@ -5,7 +5,7 @@
 syntax = "proto3";
 
 package rkcy.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
 
 message Platform {
     string name               = 1;

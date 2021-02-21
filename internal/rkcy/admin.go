@@ -27,8 +27,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
-	"github.com/lachlanorr/rocketcycle/version"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/version"
 )
 
 //go:embed static/admin/docs
@@ -220,45 +220,12 @@ func newClusterInfo(cluster *pb.Platform_Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func buildTopicNamePrefix(platformName string, appName string, appType pb.Platform_App_Type) string {
+func BuildTopicNamePrefix(platformName string, appName string, appType pb.Platform_App_Type) string {
 	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, appName, pb.Platform_App_Type_name[int32(appType)])
 }
 
-func buildTopicName(topicNamePrefix string, name string, generation int32) string {
+func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
-}
-
-func findApp(platform *pb.Platform, appName string) *pb.Platform_App {
-	for _, app := range platform.Apps {
-		if app.Name == appName {
-			return app
-		}
-	}
-	return nil
-}
-
-func findTopic(app *pb.Platform_App, topicName string) *pb.Platform_App_Topics {
-	for _, topics := range app.Topics {
-		if topics.Name == topicName {
-			return topics
-		}
-	}
-	return nil
-}
-
-func currentTopicName(platform *pb.Platform, appName string, topicName string) (string, error) {
-	app := findApp(platform, appName)
-	if app == nil {
-		return "", errors.New(fmt.Sprintf("App '%s' not found", appName))
-	}
-
-	topics := findTopic(app, topicName)
-	if topics == nil {
-		return "", errors.New(fmt.Sprintf("Topic '%s' not found in App '%s'", topicName, appName))
-	}
-
-	pref := buildTopicNamePrefix(platform.Name, app.Name, app.Type)
-	return buildTopicName(pref, topics.Name, topics.Current.Generation), nil
 }
 
 func createMissingTopic(topicName string, topic *pb.Platform_App_Topic, clusterInfos map[string]*clusterInfo) {
@@ -289,13 +256,13 @@ func createMissingTopics(topicNamePrefix string, topics *pb.Platform_App_Topics,
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
-				buildTopicName(topicNamePrefix, topics.Name, topics.Current.Generation),
+				BuildTopicName(topicNamePrefix, topics.Name, topics.Current.Generation),
 				topics.Current,
 				clusterInfos)
 		}
 		if topics.Future != nil {
 			createMissingTopic(
-				buildTopicName(topicNamePrefix, topics.Name, topics.Future.Generation),
+				BuildTopicName(topicNamePrefix, topics.Name, topics.Future.Generation),
 				topics.Future,
 				clusterInfos)
 		}
@@ -327,7 +294,7 @@ func updateTopics(rtPlat *RtPlatform) {
 		if contains(appTypesAutoCreate, pb.Platform_App_Type_name[int32(app.Type)]) {
 			for _, topics := range app.Topics {
 				createMissingTopics(
-					buildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
+					BuildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
 					topics,
 					clusterInfos)
 			}
@@ -336,7 +303,7 @@ func updateTopics(rtPlat *RtPlatform) {
 }
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
-	platCh := make(chan pb.Platform)
+	platCh := make(chan *pb.Platform)
 	go ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
@@ -346,7 +313,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				Msg("manageTopics exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := NewRtPlatform(&plat)
+			rtPlat, err := NewRtPlatform(plat)
 			if err != nil {
 				log.Error().
 					Err(err).

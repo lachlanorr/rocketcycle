@@ -1,6 +1,6 @@
 %syntax-version=1.0.0
 %project=rpg
-%uri=https://github.com/lachlanorr/rocketcycle/db/rpg
+%uri=https://github.com/lachlanorr/rkcy/examples/rpg/db
 
 schema 2020-09-20T00:39:33Z Lachlan Orr <lorr@gaen.org> # rpg schema
 player [schema] 2020-09-20T01:43:11Z Lachlan Orr <lorr@gaen.org> # create player table

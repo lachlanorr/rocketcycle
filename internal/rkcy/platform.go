@@ -13,39 +13,84 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 // Platform pb, with some convenience lookup maps
 type RtPlatform struct {
 	Platform *pb.Platform
 	Hash     string
-	Apps     map[string]*pb.Platform_App
+	Apps     map[string]*RtApp
 	Clusters map[string]*pb.Platform_Cluster
 }
 
-func (rtPlat *RtPlatform) FindTopic(appName string, topicName string) *pb.Platform_App_Topics {
-	app, ok := rtPlat.Apps[appName]
-	if ok {
-		for _, topics := range app.Topics {
-			if topicName == topics.Name {
-				return topics
-			}
+type RtApp struct {
+	App    *pb.Platform_App
+	Topics map[string]*RtTopics
+}
+
+type RtTopics struct {
+	Topics         *pb.Platform_App_Topics
+	CurrentTopic   string
+	CurrentCluster *pb.Platform_Cluster
+	FutureTopic    string
+	FutureCluster  *pb.Platform_Cluster
+}
+
+func newRtApp(rtPlatform *RtPlatform, app *pb.Platform_App) (*RtApp, error) {
+	rtApp := RtApp{
+		App:    app,
+		Topics: make(map[string]*RtTopics),
+	}
+	for _, topics := range app.Topics {
+		// verify topics only appear once
+		if _, ok := rtApp.Topics[topics.Name]; ok {
+			return nil, fmt.Errorf("Topic '%s' appears more than once in App '%s' definition", topics.Name, rtApp.App.Name)
+		}
+		rtTopics, err := newRtTopics(rtPlatform, &rtApp, topics)
+		if err != nil {
+			return nil, err
+		}
+		rtApp.Topics[topics.Name] = rtTopics
+	}
+	return &rtApp, nil
+}
+
+func newRtTopics(rtPlatform *RtPlatform, rtApp *RtApp, topics *pb.Platform_App_Topics) (*RtTopics, error) {
+	rtTopics := RtTopics{
+		Topics: topics,
+	}
+
+	pref := BuildTopicNamePrefix(rtPlatform.Platform.Name, rtApp.App.Name, rtApp.App.Type)
+	var ok bool
+
+	rtTopics.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
+	rtTopics.CurrentCluster, ok = rtPlatform.Clusters[topics.Current.ClusterName]
+	if !ok {
+		return nil, fmt.Errorf("Topic '%s' has invalid Current ClusterName '%s'", topics.Name, topics.Current.ClusterName)
+	}
+
+	if topics.Future != nil {
+		rtTopics.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
+		rtTopics.FutureCluster, ok = rtPlatform.Clusters[topics.Future.ClusterName]
+		if !ok {
+			return nil, fmt.Errorf("Topic '%s' has invalid Future ClusterName '%s'", topics.Name, topics.Future.ClusterName)
 		}
 	}
-	return nil
+	return &rtTopics, nil
 }
 
 func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
-	rtPlat := RtPlatform{}
-
-	rtPlat.Platform = platform
+	rtPlat := RtPlatform{
+		Platform: platform,
+		Apps:     make(map[string]*RtApp),
+		Clusters: make(map[string]*pb.Platform_Cluster),
+	}
 
 	platJson := protojson.Format(proto.Message(rtPlat.Platform))
 	sha256Bytes := sha256.Sum256([]byte(platJson))
 	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
 
-	rtPlat.Clusters = make(map[string]*pb.Platform_Cluster)
 	for idx, cluster := range rtPlat.Platform.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
@@ -66,7 +111,6 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 		pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 
-	rtPlat.Apps = make(map[string]*pb.Platform_App)
 	for idx, app := range rtPlat.Platform.Apps {
 		if app.Name == "" {
 			return nil, fmt.Errorf("App %d missing name field", idx)
@@ -92,7 +136,11 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 		if _, ok := rtPlat.Apps[app.Name]; ok {
 			return nil, fmt.Errorf("App '%s' appears more than once in Platform '%s' definition", app.Name, rtPlat.Platform.Name)
 		}
-		rtPlat.Apps[app.Name] = app
+		rtApp, err := newRtApp(&rtPlat, app)
+		if err != nil {
+			return nil, err
+		}
+		rtPlat.Apps[app.Name] = rtApp
 	}
 
 	return &rtPlat, nil

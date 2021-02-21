@@ -20,10 +20,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
 )
 
-func rcedgeGetResource(cmd *cobra.Command, args []string) {
+func cmdGetResource(cmd *cobra.Command, args []string) {
 	path := fmt.Sprintf("/v1/%s/get/%s?pretty", args[0], args[1])
 
 	slog := log.With().
@@ -111,7 +111,7 @@ var messageFactory = map[string]func() proto.Message{
 	"player": func() proto.Message { return proto.Message(new(rpg_pb.Player)) },
 }
 
-func rcedgeCreateResource(cmd *cobra.Command, args []string) {
+func cmdCreateResource(cmd *cobra.Command, args []string) {
 	path := fmt.Sprintf("/v1/%s/create", args[0])
 
 	slog := log.With().

@@ -7,7 +7,7 @@ syntax = "proto3";
 import "google/protobuf/timestamp.proto";
 
 package rkcy.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
 
 message ApecsTxn {
     string id = 1;           // uuid of txn used for tracing and reporting
@@ -25,11 +25,12 @@ message ApecsTxn {
     message Step {
         string app_name = 1;        // logical persistence model that's used to partition messages
         int32 command   = 2;        // command name, this will map to a piece of code (e.g. function)
-        bytes payload   = 3;        // opaque payload for command
-        Status status   = 4;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
-        google.protobuf.Timestamp processed_time = 5; // actual time this command result was recorded
-        google.protobuf.Timestamp effective_time = 6; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
-        repeated Error errors = 7; // general bucket for error messages that will effectively be the logged errors of this step
+        string key      = 3;        // partition key
+        bytes payload   = 4;        // opaque payload for command
+        Status status   = 5;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
+        google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
+        google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+        repeated Error errors = 8; // general bucket for error messages that will effectively be the logged errors of this step
 
         enum Status {
             PENDING = 0;
@@ -46,8 +47,6 @@ message ApecsTxn {
 }
 
 message MostRecentOffsets {
-    int32 process_generation = 1;
-    int64 process_offset = 2;
-    int32 storage_generation = 3;
-    int64 storage_offset = 4;
+    int32 generation = 1;
+    int64 offset = 2;
 }

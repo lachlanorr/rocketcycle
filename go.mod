@@ -1,6 +1,6 @@
-module github.com/lachlanorr/rocketcycle
+module github.com/lachlanorr/rkcy
 
-go 1.15
+go 1.16
 
 require (
 	github.com/confluentinc/confluent-kafka-go v1.4.2 // indirect

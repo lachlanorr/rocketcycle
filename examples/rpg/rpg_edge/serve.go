@@ -9,23 +9,26 @@ import (
 	"embed"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rkcy/examples/rpg/commands"
+	"github.com/lachlanorr/rkcy/pkg/rkcy"
 
-	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
+	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 //go:embed static/docs
 var docsFiles embed.FS
 
 var (
-	apecsProdCh = make(chan rkcy_pb.ApecsTxn)
+	prods map[string]*rkcy.ApecsProducer
 )
 
 type server struct {
@@ -71,58 +74,60 @@ func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Pla
 }
 
 func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Player, error) {
+	if in.Username == "" {
+		return nil, status.New(codes.InvalidArgument, "missing username in create call").Err()
+	}
+
 	if in.Id != "" {
 		return nil, status.New(codes.InvalidArgument, "id provided in create call").Err()
 	}
-	log.Info().Msg("CreatePlayer " + in.Username)
+	in.Id = uuid.NewString()
+
+	inSer, err := proto.Marshal(in)
+	if err != nil {
+		return nil, status.New(codes.Internal, "failed to marshal Player").Err()
+	}
+
+	prod, ok := prods["player"]
+	if !ok {
+		return nil, status.New(codes.Internal, "no producer for 'player'").Err()
+	}
+
+	txn := rkcy_pb.ApecsTxn{
+		Id:        uuid.NewString(),
+		CanRevert: true,
+		ForwardSteps: []*rkcy_pb.ApecsTxn_Step{
+			{
+				AppName: "player",
+				Command: commands.Create,
+				Key:     in.Username,
+				Payload: inSer,
+			},
+		},
+	}
+	txnSer, err := proto.Marshal(&txn)
+	if err != nil {
+		return nil, status.New(codes.Internal, "failed to marshal ApecsTxn").Err()
+	}
+
+	prod.Process([]byte(txn.ForwardSteps[0].Key), txnSer)
+
 	return in, nil
 }
 
-func manageProducers(ctx context.Context, bootstrapServers string, platformName string) {
-	//producers := make(map[string]*kafka.Producer)
-
-	platCh := make(chan rkcy_pb.Platform)
-	go rkcy.ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().
-				Msg("manageProducers exiting, ctx.Done()")
-			return
-
-			/* LORRTODO: create rkcy Producer and use it here, we don't care about platform messages directly
-			case plat := <-platCh:
-
-				rtPlat, err := rkcy.NewRtPlatform(&plat)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Msg("Failed to NewRtPlatform")
-					continue
-				}
-				// apply producer changes for apecs apps
-				for _, app := range plat.Apps {
-					if app.Type == rkcy_pb.Platform_App_APECS {
-						topics := rtPlat.FindTopic(app.Name, "process")
-						if topics == nil {
-							log.Error().
-								Msgf("No process topic in APECS app %s", app.Name)
-							continue
-						}
-
-					}
-				}
-				// check for changes in apecs production targets
-
-				//		case txn := <-apecsProdCh:
-			*/
-		}
+func enrollProducer(ctx context.Context, platformName string, appName string) {
+	prods[appName] = rkcy.NewApecsProducer(ctx, bootstrapServers, platformName, appName)
+	if prods[appName] == nil {
+		log.Fatal().
+			Msgf("Failure creating producer for '%s'", appName)
 	}
 }
 
-func serve(ctx context.Context, httpAddr string, grpcAddr string) {
-	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
+func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
+	prods = make(map[string]*rkcy.ApecsProducer)
 
+	enrollProducer(ctx, platformName, "player")
+
+	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	rkcy.ServeGrpcGateway(ctx, srv)
 }

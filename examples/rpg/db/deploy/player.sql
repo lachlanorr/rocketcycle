@@ -11,26 +11,20 @@ CREATE TABLE rpg.player (
   active BOOL NOT NULL,
 
   -- rocketcyle annotations for "most recent offsets"
-  mro_process_generation INT NOT NULL,
-  mro_process_offset BIGINT NOT NULL,
-  mro_storage_generation INT NOT NULL,
-  mro_storage_offset BIGINT NOT NULL
+  mro_generation INT NOT NULL,
+  mro_offset BIGINT NOT NULL
 );
 
 INSERT INTO rpg.player (
     id,
     username,
     active,
-    mro_process_generation,
-    mro_process_offset,
-    mro_storage_generation,
-    mro_storage_offset
+    mro_generation,
+    mro_offset
 ) VALUES (
     gen_random_uuid(),
     'sys_holding',
     TRUE,
-    0,
-    0,
     0,
     0
 );
