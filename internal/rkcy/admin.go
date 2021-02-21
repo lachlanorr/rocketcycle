@@ -220,15 +220,15 @@ func newClusterInfo(cluster *pb.Platform_Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func BuildTopicNamePrefix(platformName string, appName string, appType pb.Platform_App_Type) string {
-	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, appName, pb.Platform_App_Type_name[int32(appType)])
+func BuildTopicNamePrefix(platformName string, concern string, concernType pb.Platform_Concern_Type) string {
+	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, concern, pb.Platform_Concern_Type_name[int32(concernType)])
 }
 
 func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func createMissingTopic(topicName string, topic *pb.Platform_App_Topic, clusterInfos map[string]*clusterInfo) {
+func createMissingTopic(topicName string, topic *pb.Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.ClusterName]
 	if !ok {
 		log.Error().
@@ -252,7 +252,7 @@ func createMissingTopic(topicName string, topic *pb.Platform_App_Topic, clusterI
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *pb.Platform_App_Topics, clusterInfos map[string]*clusterInfo) {
+func createMissingTopics(topicNamePrefix string, topics *pb.Platform_Concern_Topics, clusterInfos map[string]*clusterInfo) {
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
@@ -288,13 +288,13 @@ func updateTopics(rtPlat *RtPlatform) {
 			Msg("Connected to cluster")
 	}
 
-	var appTypesAutoCreate = []string{"GENERAL", "APECS"}
+	var concernTypesAutoCreate = []string{"GENERAL", "APECS"}
 
-	for _, app := range rtPlat.Platform.Apps {
-		if contains(appTypesAutoCreate, pb.Platform_App_Type_name[int32(app.Type)]) {
-			for _, topics := range app.Topics {
+	for _, concern := range rtPlat.Platform.Concerns {
+		if contains(concernTypesAutoCreate, pb.Platform_Concern_Type_name[int32(concern.Type)]) {
+			for _, topics := range concern.Topics {
 				createMissingTopics(
-					BuildTopicNamePrefix(rtPlat.Platform.Name, app.Name, app.Type),
+					BuildTopicNamePrefix(rtPlat.Platform.Name, concern.Name, concern.Type),
 					topics,
 					clusterInfos)
 			}

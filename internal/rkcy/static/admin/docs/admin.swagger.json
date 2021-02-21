@@ -76,10 +76,10 @@
         "name": {
           "type": "string"
         },
-        "apps": {
+        "concerns": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.pb.Platform.App"
+            "$ref": "#/definitions/rkcy.pb.Platform.Concern"
           }
         },
         "clusters": {
@@ -96,11 +96,24 @@
         }
       }
     },
-    "rkcy.pb.Platform.App": {
+    "rkcy.pb.Platform.Cluster": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "unique name of cluster"
+        },
+        "bootstrapServers": {
+          "type": "string",
+          "description": "kafka bootstrap servers for the cluster"
+        }
+      }
+    },
+    "rkcy.pb.Platform.Concern": {
       "type": "object",
       "properties": {
         "type": {
-          "$ref": "#/definitions/rkcy.pb.Platform.App.Type"
+          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Type"
         },
         "name": {
           "type": "string"
@@ -108,12 +121,12 @@
         "topics": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.pb.Platform.App.Topics"
+            "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topics"
           }
         }
       }
     },
-    "rkcy.pb.Platform.App.Topic": {
+    "rkcy.pb.Platform.Concern.Topic": {
       "type": "object",
       "properties": {
         "generation": {
@@ -135,7 +148,7 @@
         }
       }
     },
-    "rkcy.pb.Platform.App.Topics": {
+    "rkcy.pb.Platform.Concern.Topics": {
       "type": "object",
       "properties": {
         "name": {
@@ -143,20 +156,20 @@
           "description": "base name, it will get decorated with additional dot notated pieces"
         },
         "state": {
-          "$ref": "#/definitions/rkcy.pb.Platform.App.Topics.State",
+          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topics.State",
           "description": "current vs future transition state"
         },
         "current": {
-          "$ref": "#/definitions/rkcy.pb.Platform.App.Topic",
+          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topic",
           "description": "current physical topic"
         },
         "future": {
-          "$ref": "#/definitions/rkcy.pb.Platform.App.Topic",
+          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topic",
           "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
         }
       }
     },
-    "rkcy.pb.Platform.App.Topics.State": {
+    "rkcy.pb.Platform.Concern.Topics.State": {
       "type": "string",
       "enum": [
         "CURRENT",
@@ -170,9 +183,9 @@
         "FUTURE_TO_CURRENT"
       ],
       "default": "CURRENT",
-      "description": "States surrounding current vs future topics and current to future transition\n\n - CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to app and gets created\n - FUTURE_MIRROR: current to future mirroring starts and gets as caught up as possible\n - PRODUCER_PAUSE: producers all pause\n - FUTURE_MIRROR_VALIDATE: wait until mirror is confirmed on all partitions\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT"
+      "description": "States surrounding current vs future topics and current to future transition\n\n - CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - FUTURE_MIRROR: current to future mirroring starts and gets as caught up as possible\n - PRODUCER_PAUSE: producers all pause\n - FUTURE_MIRROR_VALIDATE: wait until mirror is confirmed on all partitions\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT"
     },
-    "rkcy.pb.Platform.App.Type": {
+    "rkcy.pb.Platform.Concern.Type": {
       "type": "string",
       "enum": [
         "GENERAL",
@@ -180,20 +193,7 @@
         "APECS"
       ],
       "default": "GENERAL",
-      "description": "Type implies what topics will be present\n\n - GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional application specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional application specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer"
-    },
-    "rkcy.pb.Platform.Cluster": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "unique name of cluster"
-        },
-        "bootstrapServers": {
-          "type": "string",
-          "description": "kafka bootstrap servers for the cluster"
-        }
-      }
+      "description": "Type implies what topics will be present\n\n - GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer"
     },
     "rkcy.pb.Platform.PartitionStrategy": {
       "type": "string",

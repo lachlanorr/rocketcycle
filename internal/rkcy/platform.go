@@ -20,48 +20,48 @@ import (
 type RtPlatform struct {
 	Platform *pb.Platform
 	Hash     string
-	Apps     map[string]*RtApp
+	Concerns map[string]*RtConcern
 	Clusters map[string]*pb.Platform_Cluster
 }
 
-type RtApp struct {
-	App    *pb.Platform_App
-	Topics map[string]*RtTopics
+type RtConcern struct {
+	Concern *pb.Platform_Concern
+	Topics  map[string]*RtTopics
 }
 
 type RtTopics struct {
-	Topics         *pb.Platform_App_Topics
+	Topics         *pb.Platform_Concern_Topics
 	CurrentTopic   string
 	CurrentCluster *pb.Platform_Cluster
 	FutureTopic    string
 	FutureCluster  *pb.Platform_Cluster
 }
 
-func newRtApp(rtPlatform *RtPlatform, app *pb.Platform_App) (*RtApp, error) {
-	rtApp := RtApp{
-		App:    app,
-		Topics: make(map[string]*RtTopics),
+func newRtConcern(rtPlatform *RtPlatform, concern *pb.Platform_Concern) (*RtConcern, error) {
+	rtConcern := RtConcern{
+		Concern: concern,
+		Topics:  make(map[string]*RtTopics),
 	}
-	for _, topics := range app.Topics {
+	for _, topics := range concern.Topics {
 		// verify topics only appear once
-		if _, ok := rtApp.Topics[topics.Name]; ok {
-			return nil, fmt.Errorf("Topic '%s' appears more than once in App '%s' definition", topics.Name, rtApp.App.Name)
+		if _, ok := rtConcern.Topics[topics.Name]; ok {
+			return nil, fmt.Errorf("Topic '%s' appears more than once in Concern '%s' definition", topics.Name, rtConcern.Concern.Name)
 		}
-		rtTopics, err := newRtTopics(rtPlatform, &rtApp, topics)
+		rtTopics, err := newRtTopics(rtPlatform, &rtConcern, topics)
 		if err != nil {
 			return nil, err
 		}
-		rtApp.Topics[topics.Name] = rtTopics
+		rtConcern.Topics[topics.Name] = rtTopics
 	}
-	return &rtApp, nil
+	return &rtConcern, nil
 }
 
-func newRtTopics(rtPlatform *RtPlatform, rtApp *RtApp, topics *pb.Platform_App_Topics) (*RtTopics, error) {
+func newRtTopics(rtPlatform *RtPlatform, rtConcern *RtConcern, topics *pb.Platform_Concern_Topics) (*RtTopics, error) {
 	rtTopics := RtTopics{
 		Topics: topics,
 	}
 
-	pref := BuildTopicNamePrefix(rtPlatform.Platform.Name, rtApp.App.Name, rtApp.App.Type)
+	pref := BuildTopicNamePrefix(rtPlatform.Platform.Name, rtConcern.Concern.Name, rtConcern.Concern.Type)
 	var ok bool
 
 	rtTopics.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
@@ -83,7 +83,7 @@ func newRtTopics(rtPlatform *RtPlatform, rtApp *RtApp, topics *pb.Platform_App_T
 func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 	rtPlat := RtPlatform{
 		Platform: platform,
-		Apps:     make(map[string]*RtApp),
+		Concerns: make(map[string]*RtConcern),
 		Clusters: make(map[string]*pb.Platform_Cluster),
 	}
 
@@ -105,48 +105,48 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 		rtPlat.Clusters[cluster.Name] = cluster
 	}
 
-	requiredTopics := map[pb.Platform_App_Type][]string{
-		pb.Platform_App_GENERAL: {"admin", "error"},
-		pb.Platform_App_BATCH:   {"admin", "error"},
-		pb.Platform_App_APECS:   {"admin", "process", "error", "complete", "storage"},
+	requiredTopics := map[pb.Platform_Concern_Type][]string{
+		pb.Platform_Concern_GENERAL: {"admin", "error"},
+		pb.Platform_Concern_BATCH:   {"admin", "error"},
+		pb.Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 
-	for idx, app := range rtPlat.Platform.Apps {
-		if app.Name == "" {
-			return nil, fmt.Errorf("App %d missing name field", idx)
+	for idx, concern := range rtPlat.Platform.Concerns {
+		if concern.Name == "" {
+			return nil, fmt.Errorf("Concern %d missing name field", idx)
 		}
 
 		var topicNames []string
 		// validate all topics definitions
-		for _, topics := range app.Topics {
+		for _, topics := range concern.Topics {
 			topicNames = append(topicNames, topics.Name)
 			if err := validateTopics(topics, rtPlat.Clusters); err != nil {
-				return nil, fmt.Errorf("App '%s' has invalid '%s' Topics: %s", app.Name, topics.Name, err.Error())
+				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, topics.Name, err.Error())
 			}
 		}
 
 		// validate our expected required topics are there
-		for _, req := range requiredTopics[app.Type] {
+		for _, req := range requiredTopics[concern.Type] {
 			if !contains(topicNames, req) {
-				return nil, fmt.Errorf("App '%s' missing required '%s' Topics definition", app.Name, req)
+				return nil, fmt.Errorf("Concern '%s' missing required '%s' Topics definition", concern.Name, req)
 			}
 		}
 
-		// verify apps only appear once
-		if _, ok := rtPlat.Apps[app.Name]; ok {
-			return nil, fmt.Errorf("App '%s' appears more than once in Platform '%s' definition", app.Name, rtPlat.Platform.Name)
+		// verify concerns only appear once
+		if _, ok := rtPlat.Concerns[concern.Name]; ok {
+			return nil, fmt.Errorf("Concern '%s' appears more than once in Platform '%s' definition", concern.Name, rtPlat.Platform.Name)
 		}
-		rtApp, err := newRtApp(&rtPlat, app)
+		rtConcern, err := newRtConcern(&rtPlat, concern)
 		if err != nil {
 			return nil, err
 		}
-		rtPlat.Apps[app.Name] = rtApp
+		rtPlat.Concerns[concern.Name] = rtConcern
 	}
 
 	return &rtPlat, nil
 }
 
-func validateTopics(topics *pb.Platform_App_Topics, clusters map[string]*pb.Platform_Cluster) error {
+func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.Platform_Cluster) error {
 	if topics.Name == "" {
 		return errors.New("Topics missing Name field")
 	}
@@ -165,7 +165,7 @@ func validateTopics(topics *pb.Platform_App_Topics, clusters map[string]*pb.Plat
 	return nil
 }
 
-func validateTopic(topic *pb.Platform_App_Topic, clusters map[string]*pb.Platform_Cluster) error {
+func validateTopic(topic *pb.Platform_Concern_Topic, clusters map[string]*pb.Platform_Cluster) error {
 	if topic.Generation == 0 {
 		return errors.New("Topic missing Generation field")
 	}

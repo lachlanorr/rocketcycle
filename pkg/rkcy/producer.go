@@ -22,7 +22,7 @@ type Producer struct {
 	slog     zerolog.Logger
 
 	platformName string
-	appName      string
+	concernName  string
 	topicName    string
 
 	clusterBrokers string
@@ -46,7 +46,7 @@ func NewProducer(
 	ctx context.Context,
 	bootstrapServers string,
 	platformName string,
-	appName string,
+	concernName string,
 	topicName string,
 ) *Producer {
 
@@ -54,10 +54,10 @@ func NewProducer(
 		constlog: log.With().
 			Str("BootstrapServers", bootstrapServers).
 			Str("Platform", platformName).
-			Str("App", appName).
+			Str("Concern", concernName).
 			Logger(),
 		platformName: platformName,
-		appName:      appName,
+		concernName:  concernName,
 		topicName:    topicName,
 		fnv64:        fnv.New64(),
 	}
@@ -86,14 +86,14 @@ func (prod *Producer) updatePlatform(plat *pb.Platform) {
 		return
 	}
 
-	app, ok := rtPlat.Apps[prod.appName]
+	concern, ok := rtPlat.Concerns[prod.concernName]
 	if !ok {
 		prod.slog.Error().
-			Msg("updatePlatform: Failed to find App")
+			Msg("updatePlatform: Failed to find Concern")
 		return
 	}
 
-	prod.topics, ok = app.Topics[prod.topicName]
+	prod.topics, ok = concern.Topics[prod.topicName]
 	if !ok {
 		prod.slog.Error().
 			Msg("updatePlatform: Failed to find Topics")

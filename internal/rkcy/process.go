@@ -49,10 +49,10 @@ func hasErrors(txn *pb.ApecsTxn) bool {
 }
 
 type stepHandler struct {
-	AppName string
-	Command int
-	Do      func(txn *pb.ApecsTxn) error
-	Undo    func(txn *pb.ApecsTxn) error
+	ConcernName string
+	Command     int
+	Do          func(txn *pb.ApecsTxn) error
+	Undo        func(txn *pb.ApecsTxn) error
 }
 
 type processor struct {

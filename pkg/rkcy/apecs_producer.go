@@ -13,7 +13,7 @@ import (
 
 type ApecsProducer struct {
 	platformName string
-	appName      string
+	concernName  string
 	slog         zerolog.Logger
 
 	process *Producer
@@ -23,20 +23,20 @@ func NewApecsProducer(
 	ctx context.Context,
 	bootstrapServers string,
 	platformName string,
-	appName string,
+	concernName string,
 ) *ApecsProducer {
 
 	prod := ApecsProducer{
 		platformName: platformName,
-		appName:      appName,
+		concernName:  concernName,
 		slog: log.With().
 			Str("BootstrapServers", bootstrapServers).
 			Str("Platform", platformName).
-			Str("App", appName).
+			Str("Concern", concernName).
 			Logger(),
 	}
 
-	prod.process = NewProducer(ctx, bootstrapServers, platformName, appName, "process")
+	prod.process = NewProducer(ctx, bootstrapServers, platformName, concernName, "process")
 	if prod.process == nil {
 		prod.slog.Error().
 			Msg("Failed to create 'process' Producer")

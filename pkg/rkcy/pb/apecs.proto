@@ -23,13 +23,15 @@ message ApecsTxn {
     }
 
     message Step {
-        string app_name = 1;        // logical persistence model that's used to partition messages
-        int32 command   = 2;        // command name, this will map to a piece of code (e.g. function)
-        string key      = 3;        // partition key
-        bytes payload   = 4;        // opaque payload for command
-        Status status   = 5;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
+        string concern_name = 1;        // logical persistence model that's used to partition messages
+        int32 command       = 2;        // command name, this will map to a piece of code (e.g. function)
+        string key          = 3;        // partition key
+        bytes payload       = 4;        // opaque payload for command
+        Status status       = 5;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
+
         google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
         google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+
         repeated Error errors = 8; // general bucket for error messages that will effectively be the logged errors of this step
 
         enum Status {

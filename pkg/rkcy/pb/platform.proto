@@ -9,12 +9,12 @@ option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
 
 message Platform {
     string name               = 1;
-    repeated App apps         = 2;
+    repeated Concern concerns = 2;
     repeated Cluster clusters = 3;
 
     map<string, string> header_aliases = 4;
 
-    message App {
+    message Concern {
         Type type   = 1;
         string name = 2;
 
@@ -25,13 +25,13 @@ message Platform {
             // Required topics:
             //     * admin - handles control messages to coordinate distributed tasks
             //     * error - errors encountered during processing written here
-            //     * ... - additional application specific topics
+            //     * ... - additional concern specific topics
             GENERAL = 0;
 
             // Required topics:
             //     * admin - handles control messages to coordinate distributed tasks
             //     * error - errors encountered during processing written here
-            //     * ... - additional application specific topics for stages of batch processing
+            //     * ... - additional concern specific topics for stages of batch processing
             // For telemetry purposes, stage topics are assumed to be in alphabetical order.
             // Batch jobs topics aren't created by default, but on demand with the timestamp
             // included in the names.
@@ -63,7 +63,7 @@ message Platform {
             enum State {
                 // no future topic exists, everyting using current
                 CURRENT                = 0;
-                // future topic added to app and gets created
+                // future topic added to concern and gets created
                 FUTURE_INIT            = 1;
                 // current to future mirroring starts and gets as caught up as possible
                 FUTURE_MIRROR          = 2;

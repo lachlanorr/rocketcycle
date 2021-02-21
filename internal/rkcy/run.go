@@ -18,7 +18,7 @@ import (
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
-func runStorage(ctx context.Context, consumeTopic *pb.Platform_App_Topics) {
+func runStorage(ctx context.Context, consumeTopic *pb.Platform_Concern_Topics) {
 	cmd := exec.CommandContext(ctx, "./rcstore")
 
 	stderr, _ := cmd.StderrPipe()

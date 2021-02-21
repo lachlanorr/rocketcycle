@@ -98,10 +98,10 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 		CanRevert: true,
 		ForwardSteps: []*rkcy_pb.ApecsTxn_Step{
 			{
-				AppName: "player",
-				Command: commands.Create,
-				Key:     in.Username,
-				Payload: inSer,
+				ConcernName: "player",
+				Command:     commands.Create,
+				Key:         in.Username,
+				Payload:     inSer,
 			},
 		},
 	}
@@ -115,11 +115,11 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 	return in, nil
 }
 
-func enrollProducer(ctx context.Context, platformName string, appName string) {
-	prods[appName] = rkcy.NewApecsProducer(ctx, bootstrapServers, platformName, appName)
-	if prods[appName] == nil {
+func enrollProducer(ctx context.Context, platformName string, concernName string) {
+	prods[concernName] = rkcy.NewApecsProducer(ctx, bootstrapServers, platformName, concernName)
+	if prods[concernName] == nil {
 		log.Fatal().
-			Msgf("Failure creating producer for '%s'", appName)
+			Msgf("Failure creating producer for '%s'", concernName)
 	}
 }
 

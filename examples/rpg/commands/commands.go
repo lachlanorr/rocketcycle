@@ -18,7 +18,7 @@ const (
 func Handler(step *rkcy_pb.ApecsTxn_Step) *rkcy_pb.ApecsTxn_Step_Error {
 	switch step.Command {
 	case Create:
-		fmt.Printf("Create %s\n", step.AppName)
+		fmt.Printf("Create %s\n", step.ConcernName)
 		return nil
 	}
 
