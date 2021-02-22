@@ -6,6 +6,7 @@ package rkcy
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -15,9 +16,13 @@ import (
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
+func UncommittedGroupName(topic string, partition int) string {
+	return fmt.Sprintf("__%s_%d__non_comitted_group", topic, partition)
+}
+
 func ConsumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
 	platformTopic := adminTopic(platformName)
-	groupName := "__" + platformTopic + "__non_committed_group"
+	groupName := UncommittedGroupName(platformTopic, 0)
 
 	slog := log.With().
 		Str("BootstrapServers", bootstrapServers).
