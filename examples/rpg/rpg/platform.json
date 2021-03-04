@@ -7,13 +7,31 @@
 
             "topics": [
                 {
-                    "name": "response"
+                    "name": "response",
+                    "current": {
+                        "partitionCount": 2
+                    }
                 }
             ]
         },
         {
             "type": "APECS",
-            "name": "player"
+            "name": "player",
+
+            "topics": [
+                {
+                    "name": "process",
+                    "current": {
+                        "partitionCount": 4
+                    }
+                },
+                {
+                    "name": "storage",
+                    "current": {
+                        "partitionCount": 2
+                    }
+                }
+            ]
         }
     ],
 
