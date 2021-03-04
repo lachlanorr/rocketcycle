@@ -200,19 +200,29 @@ func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.
 	if topics.Name == "" {
 		return errors.New("Topics missing Name field")
 	}
-	if topics.Current == nil {
-		return errors.New("Topics missing Current Topic")
+	// admin topics are special and have stricter rules
+	if topics.Name == "admin" {
+		if topics.Current == nil || topics.Future != nil {
+			return fmt.Errorf("'admin' Topics only exist as current and not future")
+		}
+		if topics.Current.PartitionCount != 1 {
+			return fmt.Errorf("'admin' Topics must have exactly 1 current partition")
+		}
 	} else {
-		if err := validateTopic(topics.Current, clusters); err != nil {
-			return err
+		if topics.Current == nil {
+			return errors.New("Topics missing Current Topic")
+		} else {
+			if err := validateTopic(topics.Current, clusters); err != nil {
+				return err
+			}
 		}
-	}
-	if topics.Future != nil {
-		if err := validateTopic(topics.Future, clusters); err != nil {
-			return err
-		}
-		if topics.Current.Generation != topics.Future.Generation+1 {
-			return errors.New("Future generation not Current + 1")
+		if topics.Future != nil {
+			if err := validateTopic(topics.Future, clusters); err != nil {
+				return err
+			}
+			if topics.Current.Generation != topics.Future.Generation+1 {
+				return errors.New("Future generation not Current + 1")
+			}
 		}
 	}
 	return nil
