@@ -1,100 +1,19 @@
 {
     "name": "rpg",
-    "apps": [
+    "concerns": [
         {
             "type": "GENERAL",
             "name": "edge",
 
             "topics": [
                 {
-                    "name": "admin",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 1
-                    }
-                },
-                {
-                    "name": "error",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 2
-                    }
-                },
-                {
-                    "name": "response",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 2
-                    }
+                    "name": "response"
                 }
             ]
         },
         {
             "type": "APECS",
-            "name": "player",
-
-            "topics": [
-                {
-                    "name": "admin",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                },
-                {
-                    "name": "prodctrl",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                },
-                {
-                    "name": "process",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                },
-                {
-                    "name": "error",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                },
-                {
-                    "name": "complete",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                },
-                {
-                    "name": "storage",
-                    "state": "CURRENT",
-                    "current": {
-                        "generation": 1,
-                        "cluster_name": "local-dev",
-                        "partition_count": 4
-                    }
-                }
-            ]
+            "name": "player"
         }
     ],
 

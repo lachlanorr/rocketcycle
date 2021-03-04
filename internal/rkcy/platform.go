@@ -80,6 +80,38 @@ func newRtTopics(rtPlatform *RtPlatform, rtConcern *RtConcern, topics *pb.Platfo
 	return &rtTopics, nil
 }
 
+func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Platform_Concern_Topic {
+	if topic == nil {
+		topic = &pb.Platform_Concern_Topic{}
+	}
+
+	if topic.Generation <= 0 {
+		topic.Generation = 1
+	}
+	if topic.ClusterName == "" {
+		topic.ClusterName = defaultCluster
+	}
+	if topic.PartitionCount <= 0 {
+		topic.PartitionCount = 1
+	} else if topic.PartitionCount > 1024 {
+		topic.PartitionCount = 1024
+	}
+
+	return topic
+}
+
+func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string) *pb.Platform_Concern_Topics {
+	if topics == nil {
+		topics = &pb.Platform_Concern_Topics{}
+	}
+
+	topics.Current = initTopic(topics.Current, defaultCluster)
+	if topics.Future != nil {
+		topics.Future = initTopic(topics.Future, defaultCluster)
+	}
+	return topics
+}
+
 func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 	rtPlat := RtPlatform{
 		Platform: platform,
@@ -91,6 +123,9 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 	sha256Bytes := sha256.Sum256([]byte(platJson))
 	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
 
+	if len(rtPlat.Platform.Clusters) <= 0 {
+		return nil, fmt.Errorf("No clusters defined")
+	}
 	for idx, cluster := range rtPlat.Platform.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
@@ -116,19 +151,34 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 			return nil, fmt.Errorf("Concern %d missing name field", idx)
 		}
 
+		defaultCluster := ""
 		var topicNames []string
-		// validate all topics definitions
+		// build list of topicNames for validation steps below
 		for _, topics := range concern.Topics {
 			topicNames = append(topicNames, topics.Name)
-			if err := validateTopics(topics, rtPlat.Clusters); err != nil {
-				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, topics.Name, err.Error())
+			if defaultCluster == "" && topics.Current != nil {
+				defaultCluster = topics.Current.ClusterName
 			}
 		}
 
-		// validate our expected required topics are there
+		// if we still don't have a defaultCluster, choose the first one
+		if defaultCluster == "" {
+			defaultCluster = rtPlat.Platform.Clusters[0].Name
+		}
+
+		// validate our expected required topics are there, add any with defaults if not present
 		for _, req := range requiredTopics[concern.Type] {
 			if !contains(topicNames, req) {
-				return nil, fmt.Errorf("Concern '%s' missing required '%s' Topics definition", concern.Name, req)
+				// conern.Topics will get initialized with reasonable defaults during topic validation below
+				concern.Topics = append(concern.Topics, &pb.Platform_Concern_Topics{Name: req})
+			}
+		}
+
+		// validate all topics definitions
+		for idx, _ := range concern.Topics {
+			concern.Topics[idx] = initTopics(concern.Topics[idx], defaultCluster)
+			if err := validateTopics(concern.Topics[idx], rtPlat.Clusters); err != nil {
+				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, concern.Topics[idx].Name, err.Error())
 			}
 		}
 
@@ -160,6 +210,9 @@ func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.
 	if topics.Future != nil {
 		if err := validateTopic(topics.Future, clusters); err != nil {
 			return err
+		}
+		if topics.Current.Generation != topics.Future.Generation+1 {
+			return errors.New("Future generation not Current + 1")
 		}
 	}
 	return nil
