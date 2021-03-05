@@ -35,8 +35,6 @@ import (
 var docsFiles embed.FS
 
 func adminServeCommand(cmd *cobra.Command, args []string) {
-	flags.PlatformName = args[0]
-
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcadmin started")
@@ -44,8 +42,8 @@ func adminServeCommand(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go manageTopics(ctx, flags.BootstrapServers, flags.PlatformName)
-	go adminServe(ctx, flags.HttpAddr, flags.GrpcAddr)
+	go manageTopics(ctx, settings.BootstrapServers, platformName)
+	go adminServe(ctx, settings.HttpAddr, settings.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -62,7 +60,7 @@ func adminGetPlatformCommand(cmd *cobra.Command, args []string) {
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(flags.AdminAddr + path)
+	resp, err := http.Get(settings.AdminAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -128,7 +126,7 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 	ServeGrpcGateway(ctx, srv)
 }
 
-var oldRtPlat *RtPlatform = nil
+var oldRtPlat *rtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *pb.Platform_Cluster
@@ -220,14 +218,6 @@ func newClusterInfo(cluster *pb.Platform_Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func BuildTopicNamePrefix(platformName string, concern string, concernType pb.Platform_Concern_Type) string {
-	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, concern, pb.Platform_Concern_Type_name[int32(concernType)])
-}
-
-func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
-	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
-}
-
 func createMissingTopic(topicName string, topic *pb.Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.ClusterName]
 	if !ok {
@@ -269,7 +259,7 @@ func createMissingTopics(topicNamePrefix string, topics *pb.Platform_Concern_Top
 	}
 }
 
-func updateTopics(rtPlat *RtPlatform) {
+func updateTopics(rtPlat *rtPlatform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
 	for _, cluster := range rtPlat.Platform.Clusters {
@@ -304,7 +294,7 @@ func updateTopics(rtPlat *RtPlatform) {
 
 func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
 	platCh := make(chan *pb.Platform)
-	go ConsumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	go consumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
 		select {
@@ -313,11 +303,11 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				Msg("manageTopics exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
-			rtPlat, err := NewRtPlatform(plat)
+			rtPlat, err := newRtPlatform(plat)
 			if err != nil {
 				log.Error().
 					Err(err).
-					Msg("Failed to NewRtPlatform")
+					Msg("Failed to newRtPlatform")
 				continue
 			}
 

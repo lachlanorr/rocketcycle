@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rkcy/internal/rkcy"
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
@@ -29,7 +28,7 @@ type Consumer struct {
 	clusterBrokers string
 	kCons          *kafka.Consumer
 	kTopic         string
-	topics         *rkcy.RtTopics
+	topics         *rtTopics
 
 	platformCh chan *pb.Platform
 }
@@ -58,7 +57,7 @@ func NewConsumer(
 
 	cons.slog = cons.constlog.With().Logger()
 
-	go rkcy.ConsumePlatformConfig(ctx, cons.platformCh, bootstrapServers, platformName)
+	go consumePlatformConfig(ctx, cons.platformCh, bootstrapServers, platformName)
 
 	plat := <-cons.platformCh
 	cons.updatePlatform(plat)
@@ -67,11 +66,11 @@ func NewConsumer(
 }
 
 func (cons *Consumer) updatePlatform(plat *pb.Platform) {
-	rtPlat, err := rkcy.NewRtPlatform(plat)
+	rtPlat, err := newRtPlatform(plat)
 	if err != nil {
 		cons.slog.Error().
 			Err(err).
-			Msg("updatePlatform: Failed to NewRtPlatform")
+			Msg("updatePlatform: Failed to newRtPlatform")
 		return
 	}
 

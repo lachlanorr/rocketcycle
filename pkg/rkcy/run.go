@@ -41,7 +41,7 @@ func runCommand(cmd *cobra.Command, args []string) {
 	signal.Notify(interruptCh, os.Interrupt)
 
 	platCh := make(chan *pb.Platform, 10)
-	go ConsumePlatformConfig(ctx, platCh, flags.BootstrapServers, flags.PlatformName)
+	go consumePlatformConfig(ctx, platCh, settings.BootstrapServers, platformName)
 	plat := <-platCh
 
 	log.Info().

@@ -5,10 +5,9 @@
 package rkcy
 
 import (
-	"context"
+	"fmt"
 
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
-	"github.com/lachlanorr/rkcy/internal/rkcy"
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
@@ -28,15 +27,20 @@ type PlatformImpl struct {
 	Handlers map[string]*ConcernHandlers
 }
 
-func Start(handlers *PlatformImpl) {
-	InitPlatformName(handlers.Name)
+func StartPlatform(impl *PlatformImpl) {
+	prepLogging(impl.Name)
+	runCobra(impl.Name)
 }
 
-func InitPlatformName(platformName string) {
-	rkcy.InitPlatformName(platformName)
-	rkcy.PrepLogging()
+func InitAncillary(platformName string) {
+	prepLogging(platformName)
+	initPlatformName(platformName)
 }
 
-func ServeGrpcGateway(ctx context.Context, srv interface{}) {
-	rkcy.ServeGrpcGateway(ctx, srv)
+func BuildTopicNamePrefix(platformName string, concern string, concernType pb.Platform_Concern_Type) string {
+	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, concern, pb.Platform_Concern_Type_name[int32(concernType)])
+}
+
+func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
+	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }

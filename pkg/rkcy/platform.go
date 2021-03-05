@@ -5,13 +5,17 @@
 package rkcy
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
@@ -20,7 +24,7 @@ const undefinedPlatformName string = "__UNDEFINED__"
 
 var platformName string = undefinedPlatformName
 
-func InitPlatformName(name string) {
+func initPlatformName(name string) {
 	if platformName != undefinedPlatformName {
 		panic("Platform can be initialized only once, current name: " + platformName)
 	}
@@ -32,19 +36,19 @@ func PlatformName() string {
 }
 
 // Platform pb, with some convenience lookup maps
-type RtPlatform struct {
+type rtPlatform struct {
 	Platform *pb.Platform
 	Hash     string
-	Concerns map[string]*RtConcern
+	Concerns map[string]*rtConcern
 	Clusters map[string]*pb.Platform_Cluster
 }
 
-type RtConcern struct {
+type rtConcern struct {
 	Concern *pb.Platform_Concern
-	Topics  map[string]*RtTopics
+	Topics  map[string]*rtTopics
 }
 
-type RtTopics struct {
+type rtTopics struct {
 	Topics         *pb.Platform_Concern_Topics
 	CurrentTopic   string
 	CurrentCluster *pb.Platform_Cluster
@@ -52,47 +56,47 @@ type RtTopics struct {
 	FutureCluster  *pb.Platform_Cluster
 }
 
-func newRtConcern(rtPlatform *RtPlatform, concern *pb.Platform_Concern) (*RtConcern, error) {
-	rtConcern := RtConcern{
+func newRtConcern(rtPlat *rtPlatform, concern *pb.Platform_Concern) (*rtConcern, error) {
+	rtConc := rtConcern{
 		Concern: concern,
-		Topics:  make(map[string]*RtTopics),
+		Topics:  make(map[string]*rtTopics),
 	}
 	for _, topics := range concern.Topics {
 		// verify topics only appear once
-		if _, ok := rtConcern.Topics[topics.Name]; ok {
-			return nil, fmt.Errorf("Topic '%s' appears more than once in Concern '%s' definition", topics.Name, rtConcern.Concern.Name)
+		if _, ok := rtConc.Topics[topics.Name]; ok {
+			return nil, fmt.Errorf("Topic '%s' appears more than once in Concern '%s' definition", topics.Name, rtConc.Concern.Name)
 		}
-		rtTopics, err := newRtTopics(rtPlatform, &rtConcern, topics)
+		rtTops, err := newRtTopics(rtPlat, &rtConc, topics)
 		if err != nil {
 			return nil, err
 		}
-		rtConcern.Topics[topics.Name] = rtTopics
+		rtConc.Topics[topics.Name] = rtTops
 	}
-	return &rtConcern, nil
+	return &rtConc, nil
 }
 
-func newRtTopics(rtPlatform *RtPlatform, rtConcern *RtConcern, topics *pb.Platform_Concern_Topics) (*RtTopics, error) {
-	rtTopics := RtTopics{
+func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *pb.Platform_Concern_Topics) (*rtTopics, error) {
+	rtTops := rtTopics{
 		Topics: topics,
 	}
 
-	pref := BuildTopicNamePrefix(rtPlatform.Platform.Name, rtConcern.Concern.Name, rtConcern.Concern.Type)
+	pref := BuildTopicNamePrefix(rtPlat.Platform.Name, rtConc.Concern.Name, rtConc.Concern.Type)
 	var ok bool
 
-	rtTopics.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
-	rtTopics.CurrentCluster, ok = rtPlatform.Clusters[topics.Current.ClusterName]
+	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
+	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.ClusterName]
 	if !ok {
 		return nil, fmt.Errorf("Topic '%s' has invalid Current ClusterName '%s'", topics.Name, topics.Current.ClusterName)
 	}
 
 	if topics.Future != nil {
-		rtTopics.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
-		rtTopics.FutureCluster, ok = rtPlatform.Clusters[topics.Future.ClusterName]
+		rtTops.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
+		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.ClusterName]
 		if !ok {
 			return nil, fmt.Errorf("Topic '%s' has invalid Future ClusterName '%s'", topics.Name, topics.Future.ClusterName)
 		}
 	}
-	return &rtTopics, nil
+	return &rtTops, nil
 }
 
 func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Platform_Concern_Topic {
@@ -138,14 +142,14 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 	return topics
 }
 
-func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
+func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
 	if platform.Name != PlatformName() {
 		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName)
 	}
 
-	rtPlat := RtPlatform{
+	rtPlat := rtPlatform{
 		Platform: platform,
-		Concerns: make(map[string]*RtConcern),
+		Concerns: make(map[string]*rtConcern),
 		Clusters: make(map[string]*pb.Platform_Cluster),
 	}
 
@@ -216,11 +220,11 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 		if _, ok := rtPlat.Concerns[concern.Name]; ok {
 			return nil, fmt.Errorf("Concern '%s' appears more than once in Platform '%s' definition", concern.Name, rtPlat.Platform.Name)
 		}
-		rtConcern, err := newRtConcern(&rtPlat, concern)
+		rtConc, err := newRtConcern(&rtPlat, concern)
 		if err != nil {
 			return nil, err
 		}
-		rtPlat.Concerns[concern.Name] = rtConcern
+		rtPlat.Concerns[concern.Name] = rtConc
 	}
 
 	return &rtPlat, nil
@@ -277,4 +281,101 @@ func validateTopic(topic *pb.Platform_Concern_Topic, clusters map[string]*pb.Pla
 		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)
 	}
 	return nil
+}
+
+func uncommittedGroupName(topic string, partition int) string {
+	return fmt.Sprintf("__%s_%d__non_comitted_group", topic, partition)
+}
+
+func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
+	platformTopic := adminTopic(platformName)
+	groupName := uncommittedGroupName(platformTopic, 0)
+
+	slog := log.With().
+		Str("BootstrapServers", bootstrapServers).
+		Str("Topic", platformTopic).
+		Logger()
+
+	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":  bootstrapServers,
+		"group.id":           groupName,
+		"enable.auto.commit": false,
+	})
+	if err != nil {
+		slog.Error().
+			Err(err).
+			Msg("Failed to NewConsumer")
+		return
+	}
+	defer cons.Close()
+
+	var high int64
+	gotOffsets := false
+	for !gotOffsets {
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Msg("ConsumePlatformConfig exiting, ctx.Done()")
+			return
+		default:
+			_, high, err = cons.QueryWatermarkOffsets(platformTopic, 0, 5000)
+			if err != nil {
+				slog.Error().
+					Err(err).
+					Msg("Failed to QueryWatermarkOffsets, platform topic may not yet exist")
+			} else {
+				gotOffsets = true
+			}
+		}
+	}
+
+	err = cons.Assign([]kafka.TopicPartition{
+		{
+			Topic:     &platformTopic,
+			Partition: 0,
+			Offset:    kafka.Offset(maxi64(0, high-1)),
+		},
+	})
+
+	if err != nil {
+		slog.Error().
+			Err(err).
+			Msg("Failed to Assign")
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Msg("ConsumePlatformConfig exiting, ctx.Done()")
+			return
+		default:
+			msg, err := cons.ReadMessage(time.Second * 5)
+			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
+			if err != nil && !timedOut {
+				slog.Error().
+					Err(err).
+					Msg("Error during ReadMessage")
+			} else if !timedOut && msg != nil {
+				plat := pb.Platform{}
+				if val := findHeader(msg, "type"); val != nil {
+					if string(val) == msgTypeName(proto.Message(&plat)) {
+						err = proto.Unmarshal(msg.Value, &plat)
+						if err != nil {
+							slog.Error().
+								Err(err).
+								Msg("Failed to Unmarshall Platform")
+						} else {
+							ch <- &plat
+						}
+						break
+					}
+				}
+				slog.Error().
+					Err(err).
+					Msg("admin topic message missing type header or header value unexpected")
+			}
+		}
+	}
 }

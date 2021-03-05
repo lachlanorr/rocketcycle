@@ -91,6 +91,6 @@ func cmdServe(cmd *cobra.Command, args []string) {
 }
 
 func main() {
-	rkcy.InitPlatformName(lib.PlatformName)
+	rkcy.InitAncillary(lib.PlatformName)
 	runCobra()
 }

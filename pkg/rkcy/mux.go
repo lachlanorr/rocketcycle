@@ -31,7 +31,7 @@ func (fsP *fileSystemPathable) Open(name string) (http.File, error) {
 
 // Mux wrapper that supprts grpc Mux and http Mux for static files as
 // well on same port
-type ServeMux struct {
+type serveMux struct {
 	staticMux http.Handler
 	apiMux    http.Handler
 	fsP       *fileSystemPathable
@@ -42,7 +42,7 @@ func newServeMux(
 	staticPattern string,
 	staticReplace string,
 	apiMux http.Handler,
-) (*ServeMux, error) {
+) (*serveMux, error) {
 	fsP, err := newFileSystemPathable(staticFs, staticPattern, staticReplace)
 	if err != nil {
 		return nil, err
@@ -50,11 +50,11 @@ func newServeMux(
 	staticMux := http.NewServeMux()
 	staticMux.Handle("/", http.FileServer(fsP))
 
-	mux := ServeMux{staticMux, apiMux, fsP}
+	mux := serveMux{staticMux, apiMux, fsP}
 	return &mux, nil
 }
 
-func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if mux.fsP.re.MatchString(r.URL.Path) {
 		mux.staticMux.ServeHTTP(w, r)
 	} else {

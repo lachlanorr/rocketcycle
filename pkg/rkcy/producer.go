@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rkcy/internal/rkcy"
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
@@ -27,7 +26,7 @@ type Producer struct {
 
 	clusterBrokers string
 	kProd          *kafka.Producer
-	topics         *rkcy.RtTopics
+	topics         *rtTopics
 
 	doneCh     chan struct{}
 	platformCh chan *pb.Platform
@@ -67,7 +66,7 @@ func NewProducer(
 	prod.platformCh = make(chan *pb.Platform)
 	prod.produceCh = make(chan *message)
 
-	go rkcy.ConsumePlatformConfig(ctx, prod.platformCh, bootstrapServers, platformName)
+	go consumePlatformConfig(ctx, prod.platformCh, bootstrapServers, platformName)
 
 	plat := <-prod.platformCh
 	prod.updatePlatform(plat)
@@ -78,11 +77,11 @@ func NewProducer(
 }
 
 func (prod *Producer) updatePlatform(plat *pb.Platform) {
-	rtPlat, err := rkcy.NewRtPlatform(plat)
+	rtPlat, err := newRtPlatform(plat)
 	if err != nil {
 		prod.slog.Error().
 			Err(err).
-			Msg("updatePlatform: Failed to NewRtPlatform")
+			Msg("updatePlatform: Failed to newRtPlatform")
 		return
 	}
 

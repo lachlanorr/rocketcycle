@@ -19,8 +19,11 @@ import (
 
 var exists struct{}
 
-func PrepLogging() {
+func prepLogging(platformName string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
+	log.Logger = log.With().
+		Str("Platform", platformName).
+		Logger()
 }
 
 func contains(slice []string, item string) bool {

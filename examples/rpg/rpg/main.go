@@ -14,5 +14,5 @@ func main() {
 		Name: lib.PlatformName,
 	}
 
-	rkcy.Start(&impl)
+	rkcy.StartPlatform(&impl)
 }

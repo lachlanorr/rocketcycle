@@ -20,12 +20,12 @@ import (
 
 func confCommand(cmd *cobra.Command, args []string) {
 	slog := log.With().
-		Str("BootstrapServers", flags.BootstrapServers).
-		Str("ConfigPath", flags.ConfigFilePath).
+		Str("BootstrapServers", settings.BootstrapServers).
+		Str("ConfigPath", settings.ConfigFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(flags.ConfigFilePath)
+	conf, err := ioutil.ReadFile(settings.ConfigFilePath)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -45,12 +45,12 @@ func confCommand(cmd *cobra.Command, args []string) {
 			Msg("Failed to Marshal platform")
 	}
 
-	// create an RtPlatform so we run the validations that involves
-	rtPlat, err := NewRtPlatform(&plat)
+	// create an rtPlatform so we run the validations that involves
+	rtPlat, err := newRtPlatform(&plat)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
-			Msg("Failed to create RtPlatform")
+			Msg("Failed to create newRtPlatform")
 	}
 	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 	log.Info().
@@ -58,7 +58,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topic
-	adminTopic, err := createAdminTopic(context.Background(), flags.BootstrapServers, plat.Name)
+	adminTopic, err := createAdminTopic(context.Background(), settings.BootstrapServers, plat.Name)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -71,7 +71,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 		Msgf("Created platform admin topic: %s", adminTopic)
 
 	// At this point we are guaranteed to have a platform admin topic
-	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": flags.BootstrapServers})
+	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": settings.BootstrapServers})
 	if err != nil {
 		slog.Fatal().
 			Err(err).
