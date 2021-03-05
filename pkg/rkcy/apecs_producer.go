@@ -30,8 +30,6 @@ func NewApecsProducer(
 		platformName: platformName,
 		concernName:  concernName,
 		slog: log.With().
-			Str("BootstrapServers", bootstrapServers).
-			Str("Platform", platformName).
 			Str("Concern", concernName).
 			Logger(),
 	}

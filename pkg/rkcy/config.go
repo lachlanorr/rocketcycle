@@ -54,7 +54,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 	}
 	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 	log.Info().
-		Str("Platform", string(jsonBytes)).
+		Str("PlatformJson", string(jsonBytes)).
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topic

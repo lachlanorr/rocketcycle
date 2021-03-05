@@ -315,7 +315,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 				oldRtPlat = rtPlat
 				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 				log.Info().
-					Str("Platform", string(jsonBytes)).
+					Str("PlatformJson", string(jsonBytes)).
 					Msg("Platform parsed")
 
 				updateTopics(rtPlat)

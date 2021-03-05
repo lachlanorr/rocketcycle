@@ -93,14 +93,16 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 		return nil, status.New(codes.Internal, "no producer for 'player'").Err()
 	}
 
+	id := uuid.NewString()
+
 	txn := rkcy_pb.ApecsTxn{
-		Id:        uuid.NewString(),
+		Id:        id,
 		CanRevert: true,
 		ForwardSteps: []*rkcy_pb.ApecsTxn_Step{
 			{
 				ConcernName: "player",
 				Command:     commands.Create,
-				Key:         in.Username,
+				Key:         id,
 				Payload:     inSer,
 			},
 		},

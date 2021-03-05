@@ -28,13 +28,12 @@ type PlatformImpl struct {
 }
 
 func StartPlatform(impl *PlatformImpl) {
-	prepLogging(impl.Name)
-	runCobra(impl.Name)
+	runCobra(impl)
 }
 
 func InitAncillary(platformName string) {
-	prepLogging(platformName)
 	initPlatformName(platformName)
+	prepLogging(platformName)
 }
 
 func BuildTopicNamePrefix(platformName string, concern string, concernType pb.Platform_Concern_Type) string {

@@ -5,6 +5,7 @@
 package rkcy
 
 import (
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -18,16 +19,37 @@ type Settings struct {
 	Partition        int32
 }
 
-var settings Settings
+var (
+	settings     Settings = Settings{Partition: -1}
+	platformImpl *PlatformImpl
+)
 
 func GetSettings() Settings {
 	return settings
 }
 
-func runCobra(name string) {
+func preRunCobra(cmd *cobra.Command, args []string) {
+	initPlatformName(platformImpl.Name)
+	prepLogging(platformImpl.Name)
+	if settings.BootstrapServers != "" {
+		log.Logger = log.With().
+			Str("BootstrapServers", settings.BootstrapServers).
+			Logger()
+	}
+	if settings.Partition != -1 {
+		log.Logger = log.With().
+			Int32("Partition", settings.Partition).
+			Logger()
+	}
+}
+
+func runCobra(impl *PlatformImpl) {
+	platformImpl = impl
+
 	rootCmd := &cobra.Command{
-		Use:   name,
-		Short: "Rocketcycle Platform - " + name,
+		Use:              platformName,
+		Short:            "Rocketcycle Platform - " + platformName,
+		PersistentPreRun: preRunCobra,
 	}
 
 	// admin sub command

@@ -51,8 +51,6 @@ func NewProducer(
 
 	prod := Producer{
 		constlog: log.With().
-			Str("BootstrapServers", bootstrapServers).
-			Str("Platform", platformName).
 			Str("Concern", concernName).
 			Logger(),
 		platformName: platformName,
@@ -160,9 +158,10 @@ func (prod *Producer) run(ctx context.Context) {
 			}
 
 			prod.fnv64.Reset()
-			prod.fnv64.Sum(msg.key)
-			partition := int32(prod.fnv64.Sum64() % uint64(prod.topics.Topics.Current.PartitionCount))
-			prod.slog.Info().Msgf("partition: %d", partition)
+			prod.fnv64.Write(msg.key)
+			fnvCalc := prod.fnv64.Sum64()
+			partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
+			prod.slog.Info().Msgf("partition: %d, msg.key=%s, fnvCalc=%d", partition, string(msg.key), fnvCalc)
 
 			kMsg := kafka.Message{
 				TopicPartition: kafka.TopicPartition{

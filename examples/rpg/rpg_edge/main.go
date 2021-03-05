@@ -53,12 +53,10 @@ func runCobra() {
 	rootCmd.AddCommand(createCmd)
 
 	serveCmd := &cobra.Command{
-		Use:       "serve platform",
-		Short:     "Rocketcycle Edge Api Server",
-		Long:      "Provides rest entrypoints into application",
-		Run:       cmdServe,
-		Args:      cobra.ExactArgs(1),
-		ValidArgs: []string{"platform"},
+		Use:   "serve",
+		Short: "Rocketcycle Edge Api Server",
+		Long:  "Provides rest entrypoints into application",
+		Run:   cmdServe,
 	}
 	serveCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	serveCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11372", "Address to host http api")
@@ -77,9 +75,7 @@ func cmdServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	platformName := args[0]
-
-	go serve(ctx, httpAddr, grpcAddr, platformName)
+	go serve(ctx, httpAddr, grpcAddr, rkcy.PlatformName())
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)

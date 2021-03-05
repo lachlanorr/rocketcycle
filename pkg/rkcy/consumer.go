@@ -44,10 +44,7 @@ func NewConsumer(
 
 	cons := Consumer{
 		constlog: log.With().
-			Str("BootstrapServers", bootstrapServers).
-			Str("Platform", platformName).
 			Str("Concern", concernName).
-			Int32("Partition", partition).
 			Logger(),
 		platformName: platformName,
 		concernName:  concernName,
