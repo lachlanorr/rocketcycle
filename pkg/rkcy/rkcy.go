@@ -7,23 +7,36 @@ package rkcy
 import (
 	"context"
 
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/lachlanorr/rkcy/internal/rkcy"
-	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
-type System struct {
-	Name    string
-	Handler func(*rkcy_pb.ApecsTxn_Step) *rkcy_pb.ApecsTxn_Step_Error
+type ConcernHandlerResult struct {
+	Status        pb.ApecsTxn_Step_Status
+	EffectiveTime *timestamp.Timestamp
+	LogEvents     []pb.ApecsTxn_Step_LogEvent
 }
 
-func Run(sys *System) {
-	rkcy.Run(sys.Name)
+type ConcernHandlers struct {
+	ConcernName string
+	Handlers    map[int32]func(payload []byte) *ConcernHandlerResult
+}
+
+type PlatformImpl struct {
+	Name     string
+	Handlers map[string]*ConcernHandlers
+}
+
+func Start(handlers *PlatformImpl) {
+	InitPlatformName(handlers.Name)
+}
+
+func InitPlatformName(platformName string) {
+	rkcy.InitPlatformName(platformName)
+	rkcy.PrepLogging()
 }
 
 func ServeGrpcGateway(ctx context.Context, srv interface{}) {
 	rkcy.ServeGrpcGateway(ctx, srv)
-}
-
-func PrepLogging() {
-	rkcy.PrepLogging()
 }

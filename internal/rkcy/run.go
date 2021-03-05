@@ -34,8 +34,6 @@ func runStorage(ctx context.Context, consumeTopic *pb.Platform_Concern_Topics) {
 }
 
 func runCommand(cmd *cobra.Command, args []string) {
-	flags.platformName = args[0]
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -43,15 +41,9 @@ func runCommand(cmd *cobra.Command, args []string) {
 	signal.Notify(interruptCh, os.Interrupt)
 
 	platCh := make(chan *pb.Platform, 10)
-	go ConsumePlatformConfig(ctx, platCh, flags.bootstrapServers, flags.platformName)
+	go ConsumePlatformConfig(ctx, platCh, flags.BootstrapServers, flags.PlatformName)
+	plat := <-platCh
 
-	for {
-		select {
-		case plat := <-platCh:
-			log.Info().
-				Msgf("platform message read %s", plat.Name)
-		case <-interruptCh:
-			return
-		}
-	}
+	log.Info().
+		Msgf("platform message read %s", plat.Name)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/lachlanorr/rkcy/examples/rpg/lib"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
 	"github.com/lachlanorr/rkcy/version"
 )
@@ -90,6 +91,6 @@ func cmdServe(cmd *cobra.Command, args []string) {
 }
 
 func main() {
-	rkcy.PrepLogging()
+	rkcy.InitPlatformName(lib.PlatformName)
 	runCobra()
 }

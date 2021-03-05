@@ -2,17 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package main
+package codes
 
-import (
-	"github.com/lachlanorr/rkcy/examples/rpg/lib"
-	"github.com/lachlanorr/rkcy/pkg/rkcy"
+const (
+	Ok = 0
+
+	NotImplemented = 1
+	UnknownCommand = 2
 )
-
-func main() {
-	impl := rkcy.PlatformImpl{
-		Name: lib.PlatformName,
-	}
-
-	rkcy.Start(&impl)
-}

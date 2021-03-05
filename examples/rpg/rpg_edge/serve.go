@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/commands"
+	"github.com/lachlanorr/rkcy/examples/rpg/lib/commands"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
 
 	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"

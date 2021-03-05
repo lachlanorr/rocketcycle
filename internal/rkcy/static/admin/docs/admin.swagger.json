@@ -126,6 +126,20 @@
         }
       }
     },
+    "rkcy.pb.Platform.Concern.Program": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "rkcy.pb.Platform.Concern.Topic": {
       "type": "object",
       "properties": {
@@ -166,6 +180,9 @@
         "future": {
           "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topic",
           "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
+        },
+        "consumerProgram": {
+          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Program"
         }
       }
     },

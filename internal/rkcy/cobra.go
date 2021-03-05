@@ -10,14 +10,15 @@ import (
 
 // Cobra sets these values based on command parsing
 type Flags struct {
-	configFilePath   string
-	bootstrapServers string
-	httpAddr         string
-	grpcAddr         string
-	adminAddr        string
+	ConfigFilePath   string
+	BootstrapServers string
+	HttpAddr         string
+	GrpcAddr         string
+	AdminAddr        string
 
 	// positional args, get set here for convenience
-	platformName string
+	PlatformName string
+	Partition    int32
 }
 
 var flags Flags
@@ -39,7 +40,7 @@ func runCobra(name string) {
 		Use:   "get",
 		Short: "get a specific resource from rest api",
 	}
-	getCmd.PersistentFlags().StringVarP(&flags.adminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	getCmd.PersistentFlags().StringVarP(&flags.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
 	adminCmd.AddCommand(getCmd)
 
 	getPlatformCmd := &cobra.Command{
@@ -57,30 +58,32 @@ func runCobra(name string) {
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"platform"},
 	}
-	serveCmd.PersistentFlags().StringVarP(&flags.bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	serveCmd.PersistentFlags().StringVarP(&flags.httpAddr, "http_addr", "", ":11371", "Address to host http api")
-	serveCmd.PersistentFlags().StringVarP(&flags.grpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
+	serveCmd.PersistentFlags().StringVarP(&flags.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	serveCmd.PersistentFlags().StringVarP(&flags.HttpAddr, "http_addr", "", ":11371", "Address to host http api")
+	serveCmd.PersistentFlags().StringVarP(&flags.GrpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
 	adminCmd.AddCommand(serveCmd)
 	// admin sub command (END)
 
 	procCmd := &cobra.Command{
-		Use:       "proc platform partition",
+		Use:       "process platform partition",
 		Short:     "APECS processing mode",
 		Long:      "Runs a proc consumer against the partition specified",
 		Run:       procCommand,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"platform", "partition"},
 	}
+	procCmd.PersistentFlags().StringVarP(&flags.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	rootCmd.AddCommand(procCmd)
 
 	storageCmd := &cobra.Command{
-		Use:       "store platform partition",
+		Use:       "storage platform partition",
 		Short:     "APECS storage mode",
 		Long:      "Runs a storage consumer against the partition specified",
 		Run:       storageCommand,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"platform", "partition"},
 	}
+	storageCmd.PersistentFlags().StringVarP(&flags.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	rootCmd.AddCommand(storageCmd)
 
 	runCmd := &cobra.Command{
@@ -91,25 +94,25 @@ func runCobra(name string) {
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"platform"},
 	}
-	runCmd.PersistentFlags().StringVarP(&flags.bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config and begin all other processes")
+	runCmd.PersistentFlags().StringVarP(&flags.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config and begin all other processes")
 	rootCmd.AddCommand(runCmd)
 
 	confCmd := &cobra.Command{
-		Use:       "conf",
+		Use:       "config",
 		Short:     "Update platform config",
 		Long:      "Publishes contents of platform config file to platform topic. Creates platform topic if it doesn't already exist.",
 		Run:       confCommand,
 		Args:      cobra.MaximumNArgs(1),
 		ValidArgs: []string{"config_path"},
 	}
-	confCmd.PersistentFlags().StringVarP(&flags.bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read metadata and begin all other processes")
-	confCmd.PersistentFlags().StringVarP(&flags.configFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
+	confCmd.PersistentFlags().StringVarP(&flags.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read metadata and begin all other processes")
+	confCmd.PersistentFlags().StringVarP(&flags.ConfigFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
 	rootCmd.AddCommand(confCmd)
 
 	rootCmd.Execute()
 }
 
-func Run(name string) {
+func Start(name string) {
 	PrepLogging()
 	runCobra(name)
 }

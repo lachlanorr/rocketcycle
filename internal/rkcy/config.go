@@ -20,12 +20,12 @@ import (
 
 func confCommand(cmd *cobra.Command, args []string) {
 	slog := log.With().
-		Str("BootstrapServers", flags.bootstrapServers).
-		Str("ConfigPath", flags.configFilePath).
+		Str("BootstrapServers", flags.BootstrapServers).
+		Str("ConfigPath", flags.ConfigFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(flags.configFilePath)
+	conf, err := ioutil.ReadFile(flags.ConfigFilePath)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -58,7 +58,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topic
-	adminTopic, err := createAdminTopic(context.Background(), flags.bootstrapServers, plat.Name)
+	adminTopic, err := createAdminTopic(context.Background(), flags.BootstrapServers, plat.Name)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -71,7 +71,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 		Msgf("Created platform admin topic: %s", adminTopic)
 
 	// At this point we are guaranteed to have a platform admin topic
-	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": flags.bootstrapServers})
+	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": flags.BootstrapServers})
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -98,13 +98,13 @@ func confCommand(cmd *cobra.Command, args []string) {
 
 	// check channel for delivery event
 	timer := time.NewTimer(10 * time.Second)
-	produceComplete := false
-	for !produceComplete {
+Loop:
+	for {
 		select {
 		case <-timer.C:
 			slog.Fatal().
 				Msg("Timeout producing platform message")
-			produceComplete = true
+			break Loop
 		case ev := <-prod.Events():
 			msgEv, ok := ev.(*kafka.Message)
 			if !ok {
@@ -120,7 +120,7 @@ func confCommand(cmd *cobra.Command, args []string) {
 				} else {
 					slog.Info().
 						Msg("Platform config successfully produced")
-					produceComplete = true
+					break Loop
 				}
 			}
 		}

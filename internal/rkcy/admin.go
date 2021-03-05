@@ -35,7 +35,7 @@ import (
 var docsFiles embed.FS
 
 func adminServeCommand(cmd *cobra.Command, args []string) {
-	flags.platformName = args[0]
+	flags.PlatformName = args[0]
 
 	log.Info().
 		Str("GitCommit", version.GitCommit).
@@ -44,8 +44,8 @@ func adminServeCommand(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go manageTopics(ctx, flags.bootstrapServers, flags.platformName)
-	go adminServe(ctx, flags.httpAddr, flags.grpcAddr)
+	go manageTopics(ctx, flags.BootstrapServers, flags.PlatformName)
+	go adminServe(ctx, flags.HttpAddr, flags.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -62,7 +62,7 @@ func adminGetPlatformCommand(cmd *cobra.Command, args []string) {
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(flags.adminAddr + path)
+	resp, err := http.Get(flags.AdminAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).

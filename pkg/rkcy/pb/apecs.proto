@@ -32,7 +32,7 @@ message ApecsTxn {
         google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
         google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
 
-        repeated Error errors = 8; // general bucket for error messages that will effectively be the logged errors of this step
+        repeated LogEvent logEvents = 8; // general bucket for log events during a processed event
 
         enum Status {
             PENDING = 0;
@@ -41,7 +41,7 @@ message ApecsTxn {
             ERROR = 3;
         }
 
-        message Error {
+        message LogEvent {
             int32 code = 1;
             string msg = 2;
         }

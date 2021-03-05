@@ -16,6 +16,21 @@ import (
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
+const undefinedPlatformName string = "__UNDEFINED__"
+
+var platformName string = undefinedPlatformName
+
+func InitPlatformName(name string) {
+	if platformName != undefinedPlatformName {
+		panic("Platform can be initialized only once, current name: " + platformName)
+	}
+	platformName = name
+}
+
+func PlatformName() string {
+	return platformName
+}
+
 // Platform pb, with some convenience lookup maps
 type RtPlatform struct {
 	Platform *pb.Platform
@@ -100,7 +115,7 @@ func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Plat
 	return topic
 }
 
-func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string) *pb.Platform_Concern_Topics {
+func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, concernType pb.Platform_Concern_Type) *pb.Platform_Concern_Topics {
 	if topics == nil {
 		topics = &pb.Platform_Concern_Topics{}
 	}
@@ -109,10 +124,25 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string) *pb.P
 	if topics.Future != nil {
 		topics.Future = initTopic(topics.Future, defaultCluster)
 	}
+
+	/*	if concernType == pb.Platform_Concern_APECS {
+		if topics.Command == nil {
+			switch topics.Name {
+			case "process":
+
+			if topics.Name == "process" {
+			}
+		}
+	}*/
+
 	return topics
 }
 
 func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
+	if platform.Name != PlatformName() {
+		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName)
+	}
+
 	rtPlat := RtPlatform{
 		Platform: platform,
 		Concerns: make(map[string]*RtConcern),
@@ -176,7 +206,7 @@ func NewRtPlatform(platform *pb.Platform) (*RtPlatform, error) {
 
 		// validate all topics definitions
 		for idx, _ := range concern.Topics {
-			concern.Topics[idx] = initTopics(concern.Topics[idx], defaultCluster)
+			concern.Topics[idx] = initTopics(concern.Topics[idx], defaultCluster, concern.Type)
 			if err := validateTopics(concern.Topics[idx], rtPlat.Clusters); err != nil {
 				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, concern.Topics[idx].Name, err.Error())
 			}
@@ -223,6 +253,11 @@ func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.
 			if topics.Current.Generation != topics.Future.Generation+1 {
 				return errors.New("Future generation not Current + 1")
 			}
+		}
+	}
+	if topics.ConsumerProgram != nil {
+		if topics.ConsumerProgram.Name == "" {
+			return errors.New("Command cannot have blank Name")
 		}
 	}
 	return nil

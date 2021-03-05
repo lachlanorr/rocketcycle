@@ -59,6 +59,8 @@ message Platform {
             // null unless an active migration is taking place
             Topic future  = 4;
 
+            Program consumer_program = 5;
+
             // States surrounding current vs future topics and current to future transition
             enum State {
                 // no future topic exists, everyting using current
@@ -91,6 +93,11 @@ message Platform {
 
             // How to determine which partiton messages are produced to
             PartitionStrategy partition_strat = 4;
+        }
+
+        message Program {
+            string name = 1;
+            repeated string args = 2;
         }
     }
 

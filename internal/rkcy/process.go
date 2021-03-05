@@ -14,6 +14,10 @@ import (
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
+func processDefaultCommand() (string, []string) {
+	return "{{.PlatformName}}", nil
+}
+
 func nextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {
 	if txn.Direction == pb.ApecsTxn_FORWARD {
 		for i, _ := range txn.ForwardSteps {
@@ -92,7 +96,7 @@ func (proc processor) processNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, erro
 	if err == nil {
 		step.Status = pb.ApecsTxn_Step_COMPLETE
 	} else {
-		step.Errors = nil // LORRTODO: fix this //append(step.Errors, err.Error())
+		step.LogEvents = nil // LORRTODO: fix this //append(step.Errors, err.Error())
 		step.Status = pb.ApecsTxn_Step_ERROR
 		if txn.Direction == pb.ApecsTxn_FORWARD && txn.CanRevert {
 			txn.Direction = pb.ApecsTxn_FORWARD
