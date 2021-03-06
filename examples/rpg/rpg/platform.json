@@ -10,6 +10,10 @@
                     "name": "response",
                     "current": {
                         "partitionCount": 2
+                    },
+                    "consumerProgram": {
+                        "name": "rpg_edge",
+                        "args": ["serve", "-t", "@topic", "-p", "@partition"]
                     }
                 }
             ]

@@ -5,16 +5,11 @@
 package main
 
 import (
-	"context"
-	"os"
-	"os/signal"
-
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rkcy/examples/rpg/lib"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
-	"github.com/lachlanorr/rkcy/version"
 )
 
 // Cobra sets these values based on command parsing
@@ -23,6 +18,9 @@ var (
 	httpAddr         string
 	grpcAddr         string
 	edgeAddr         string
+
+	topic     string
+	partition int32
 )
 
 func runCobra() {
@@ -35,7 +33,7 @@ func runCobra() {
 	getCmd := &cobra.Command{
 		Use:       "get resource id",
 		Short:     "get a specific resource from rest api",
-		Run:       cmdGetResource,
+		Run:       cobraGetResource,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
@@ -45,7 +43,7 @@ func runCobra() {
 	createCmd := &cobra.Command{
 		Use:       "create resource [key1=val1] [key2=val2]",
 		Short:     "create a resource from provided arguments",
-		Run:       cmdCreateResource,
+		Run:       cobraCreateResource,
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"resource"},
 	}
@@ -56,33 +54,30 @@ func runCobra() {
 		Use:   "serve",
 		Short: "Rocketcycle Edge Api Server",
 		Long:  "Provides rest entrypoints into application",
-		Run:   cmdServe,
+		Run:   cobraServe,
 	}
 	serveCmd.PersistentFlags().StringVarP(&bootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	serveCmd.PersistentFlags().StringVarP(&httpAddr, "http_addr", "", ":11372", "Address to host http api")
 	serveCmd.PersistentFlags().StringVarP(&grpcAddr, "grpc_addr", "", ":11382", "Address to host grpc api")
+	serveCmd.PersistentFlags().StringVarP(&topic, "topic", "t", "", "Topic to consume")
+	serveCmd.MarkPersistentFlagRequired("topic")
+	serveCmd.PersistentFlags().Int32VarP(&partition, "parition", "p", -1, "Partition index to consume")
+	serveCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(serveCmd)
 
 	rootCmd.Execute()
 }
 
-func cmdServe(cmd *cobra.Command, args []string) {
-	log.Info().
-		Str("GitCommit", version.GitCommit).
-		Msg("rcedge started")
-
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	go serve(ctx, httpAddr, grpcAddr, rkcy.PlatformName())
-
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
-	select {
-	case <-interruptCh:
-		cancel()
-		return
+func prepLogging() {
+	if topic != "" {
+		log.Logger = log.With().
+			Str("Topic", topic).
+			Logger()
+	}
+	if partition != -1 {
+		log.Logger = log.With().
+			Int32("Partition", partition).
+			Logger()
 	}
 }
 

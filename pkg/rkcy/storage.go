@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func storageCommand(cmd *cobra.Command, args []string) {
+func cobraStorage(cmd *cobra.Command, args []string) {
 	conn, err := pgx.Connect(context.Background(), "postgresql://postgres@127.0.0.1:5432/rpg")
 	if err != nil {
 		log.Fatal().

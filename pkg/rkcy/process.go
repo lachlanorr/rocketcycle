@@ -153,6 +153,6 @@ func process() {
 	*/
 }
 
-func procCommand(cmd *cobra.Command, args []string) {
+func cobraProcess(cmd *cobra.Command, args []string) {
 	process()
 }

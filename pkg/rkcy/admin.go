@@ -34,7 +34,7 @@ import (
 //go:embed static/admin/docs
 var docsFiles embed.FS
 
-func adminServeCommand(cmd *cobra.Command, args []string) {
+func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("rcadmin started")
@@ -53,7 +53,7 @@ func adminServeCommand(cmd *cobra.Command, args []string) {
 	}
 }
 
-func adminGetPlatformCommand(cmd *cobra.Command, args []string) {
+func cobraAdminGetPlatform(cmd *cobra.Command, args []string) {
 	path := "/v1/platform/get?pretty"
 
 	slog := log.With().

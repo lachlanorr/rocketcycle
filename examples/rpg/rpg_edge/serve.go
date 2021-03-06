@@ -8,10 +8,13 @@ import (
 	"context"
 	"embed"
 	"net/http"
+	"os"
+	"os/signal"
 
 	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,6 +25,7 @@ import (
 
 	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
 	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/version"
 )
 
 //go:embed static/docs
@@ -132,4 +136,24 @@ func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName s
 
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	rkcy.ServeGrpcGateway(ctx, srv)
+}
+
+func cobraServe(cmd *cobra.Command, args []string) {
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("rcedge started")
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go serve(ctx, httpAddr, grpcAddr, rkcy.PlatformName())
+
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	select {
+	case <-interruptCh:
+		cancel()
+		return
+	}
 }
