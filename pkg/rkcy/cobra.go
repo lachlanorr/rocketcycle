@@ -32,8 +32,6 @@ func GetSettings() Settings {
 }
 
 func preRunCobra(cmd *cobra.Command, args []string) {
-	initPlatformName(platformImpl.Name)
-	prepLogging(platformImpl.Name)
 	if settings.BootstrapServers != "" {
 		log.Logger = log.With().
 			Str("BootstrapServers", settings.BootstrapServers).
@@ -53,6 +51,8 @@ func preRunCobra(cmd *cobra.Command, args []string) {
 
 func runCobra(impl *PlatformImpl) {
 	platformImpl = impl
+	initPlatformName(platformImpl.Name)
+	prepLogging(platformImpl.Name)
 
 	rootCmd := &cobra.Command{
 		Use:              platformName,
