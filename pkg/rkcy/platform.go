@@ -368,22 +368,18 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstra
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				plat := pb.Platform{}
-				if val := findHeader(msg, "type"); val != nil {
-					if string(val) == msgTypeName(proto.Message(&plat)) {
-						err = proto.Unmarshal(msg.Value, &plat)
-						if err != nil {
-							slog.Error().
-								Err(err).
-								Msg("Failed to Unmarshall Platform")
-						} else {
-							ch <- &plat
-						}
-						break
+
+				if directive := getDirective(msg); directive == pb.Directive_PLATFORM {
+					err = proto.Unmarshal(msg.Value, &plat)
+					if err != nil {
+						slog.Error().
+							Err(err).
+							Msg("Failed to Unmarshall Platform")
+					} else {
+						ch <- &plat
 					}
+					break
 				}
-				slog.Error().
-					Err(err).
-					Msg("admin topic message missing type header or header value unexpected")
 			}
 		}
 	}
@@ -453,7 +449,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        msgTypeHeaders(proto.Message(&plat)),
+		Headers:        directiveHeaders(pb.Directive_PLATFORM),
 	}
 
 	produce := func() {

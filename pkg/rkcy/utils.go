@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 var exists struct{}
@@ -71,6 +73,15 @@ func findHeader(msg *kafka.Message, key string) []byte {
 		}
 	}
 	return nil
+}
+
+func getDirective(msg *kafka.Message) pb.Directive {
+	val := findHeader(msg, directiveHeader)
+	if val != nil {
+		return pb.Directive(BytesToInt(val))
+	} else {
+		return pb.Directive_UNSPECIFIED
+	}
 }
 
 func adminTopic(internalName string) string {
@@ -130,6 +141,15 @@ func msgTypeName(msg proto.Message) string {
 
 func msgTypeHeaders(msg proto.Message) []kafka.Header {
 	return []kafka.Header{{Key: "type", Value: []byte(msgTypeName(msg))}}
+}
+
+func directiveHeaders(directive pb.Directive) []kafka.Header {
+	return []kafka.Header{
+		{
+			Key:   directiveHeader,
+			Value: IntToBytes(int(directive)),
+		},
+	}
 }
 
 const (

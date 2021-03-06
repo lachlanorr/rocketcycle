@@ -174,13 +174,8 @@ func (prod *Producer) run(ctx context.Context) {
 					Topic:     &prod.topics.CurrentTopic,
 					Partition: partition,
 				},
-				Value: msg.value,
-				Headers: []kafka.Header{
-					{
-						Key:   directiveHeader,
-						Value: IntToBytes(int(msg.directive)),
-					},
-				},
+				Value:   msg.value,
+				Headers: directiveHeaders(msg.directive),
 			}
 
 			err := prod.kProd.Produce(&kMsg, msg.deliveryCh)
