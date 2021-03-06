@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package main
+package edge
 
 import (
 	"context"
@@ -121,7 +121,7 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 }
 
 func enrollProducer(ctx context.Context, platformName string, concernName string) {
-	prods[concernName] = rkcy.NewApecsProducer(ctx, bootstrapServers, platformName, concernName)
+	prods[concernName] = rkcy.NewApecsProducer(ctx, settings.BootstrapServers, platformName, concernName)
 	if prods[concernName] == nil {
 		log.Fatal().
 			Msgf("Failure creating producer for '%s'", concernName)
@@ -146,7 +146,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go serve(ctx, httpAddr, grpcAddr, rkcy.PlatformName())
+	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName())
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package main
+package edge
 
 import (
 	"bytes"
@@ -30,7 +30,7 @@ func cobraGetResource(cmd *cobra.Command, args []string) {
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(edgeAddr + path)
+	resp, err := http.Get(settings.EdgeAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -140,7 +140,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(edgeAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
 			Err(err).

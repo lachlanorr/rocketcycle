@@ -8,6 +8,8 @@ import (
 	"fmt"
 
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/spf13/cobra"
+
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
@@ -23,8 +25,9 @@ type ConcernHandlers struct {
 }
 
 type PlatformImpl struct {
-	Name     string
-	Handlers map[string]*ConcernHandlers
+	Name          string
+	CobraCommands []*cobra.Command
+	Handlers      map[string]*ConcernHandlers
 }
 
 func StartPlatform(impl *PlatformImpl) {

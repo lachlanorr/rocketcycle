@@ -5,13 +5,23 @@
 package main
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/lachlanorr/rkcy/examples/rpg/lib"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
+
+	"github.com/lachlanorr/rkcy/examples/rpg/lib/edge"
+	"github.com/lachlanorr/rkcy/examples/rpg/lib/sim"
 )
 
 func main() {
 	impl := rkcy.PlatformImpl{
 		Name: lib.PlatformName,
+
+		CobraCommands: []*cobra.Command{
+			edge.CobraCommand(),
+			sim.CobraCommand(),
+		},
 	}
 
 	rkcy.StartPlatform(&impl)

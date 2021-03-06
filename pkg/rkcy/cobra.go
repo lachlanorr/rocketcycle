@@ -102,7 +102,7 @@ func runCobra(impl *PlatformImpl) {
 	procCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	procCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	procCmd.MarkPersistentFlagRequired("topic")
-	procCmd.PersistentFlags().Int32VarP(&settings.Partition, "parition", "p", -1, "Partition to consume")
+	procCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")
 	procCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(procCmd)
 
@@ -115,7 +115,7 @@ func runCobra(impl *PlatformImpl) {
 	storageCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	storageCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	storageCmd.MarkPersistentFlagRequired("topic")
-	storageCmd.PersistentFlags().Int32VarP(&settings.Partition, "parition", "p", -1, "Partition to consume")
+	storageCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")
 	storageCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(storageCmd)
 
@@ -145,6 +145,10 @@ func runCobra(impl *PlatformImpl) {
 	platUpdateCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read metadata and begin all other processes")
 	platUpdateCmd.PersistentFlags().StringVarP(&settings.ConfigFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platUpdateCmd)
+
+	for _, addtlCmd := range platformImpl.CobraCommands {
+		rootCmd.AddCommand(addtlCmd)
+	}
 
 	rootCmd.Execute()
 }
