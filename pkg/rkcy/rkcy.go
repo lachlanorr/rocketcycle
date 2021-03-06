@@ -37,7 +37,7 @@ func InitAncillary(platformName string) {
 }
 
 func BuildTopicNamePrefix(platformName string, concernName string, concernType pb.Platform_Concern_Type) string {
-	return fmt.Sprintf("rkcy.%s.%s.%s", platformName, concernName, pb.Platform_Concern_Type_name[int32(concernType)])
+	return fmt.Sprintf("%s.%s.%s.%s", rkcy, platformName, concernName, pb.Platform_Concern_Type_name[int32(concernType)])
 }
 
 func BuildTopicName(topicNamePrefix string, name string, generation int32) string {

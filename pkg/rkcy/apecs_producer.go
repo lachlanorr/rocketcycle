@@ -6,9 +6,13 @@ package rkcy
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
 type ApecsProducer struct {
@@ -48,6 +52,17 @@ func (prod *ApecsProducer) Close() {
 	prod.process.Close()
 }
 
-func (prod *ApecsProducer) Process(key []byte, value []byte) {
-	prod.process.Produce(key, value, nil)
+func (prod *ApecsProducer) Process(txn *pb.ApecsTxn) error {
+	step := nextStep(txn)
+	if step == nil {
+		return errors.New("No 'next' step in ApecsTxn to process")
+	}
+
+	txnSer, err := proto.Marshal(txn)
+	if err != nil {
+		return err
+	}
+
+	prod.process.Produce(pb.Directive_APECS_TXN, []byte(step.Key), txnSer, nil)
+	return nil
 }

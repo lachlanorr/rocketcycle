@@ -111,12 +111,11 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 			},
 		},
 	}
-	txnSer, err := proto.Marshal(&txn)
-	if err != nil {
-		return nil, status.New(codes.Internal, "failed to marshal ApecsTxn").Err()
-	}
 
-	prod.Process([]byte(txn.ForwardSteps[0].Key), txnSer)
+	err = prod.Process(&txn)
+	if err != nil {
+		return nil, status.New(codes.Internal, "failed to produce ApecsTxn").Err()
+	}
 
 	return in, nil
 }

@@ -1,0 +1,41 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+syntax = "proto3";
+
+package rkcy.pb;
+option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
+
+// Type implies what topics will be present
+enum Directive {
+    UNSPECIFIED = 0;
+
+    PLATFORM               =  8;
+
+    ADMIN_PRODUCER         = 16;
+    ADMIN_PRODUCER_STOP    = 17;
+    ADMIN_PRODUCER_STOPPED = 18;
+    ADMIN_PRODUCER_START   = 19;
+    ADMIN_PRODUCER_STARTED = 20;
+
+    ADMIN_CONSUMER         = 32;
+    ADMIN_CONSUMER_STOP    = 33;
+    ADMIN_CONSUMER_STOPPED = 34;
+    ADMIN_CONSUMER_START   = 35;
+    ADMIN_CONSUMER_STARTED = 36;
+
+    APECS_TXN              = 64;
+}
+
+message AdminProducerDirective {
+    string concern   = 1;
+    string topic     = 2;
+    int32 generation = 3;
+    int32 partition  = 4;
+}
+
+message AdminConsumerDirective {
+    string full_topic   = 1;
+    int32 partition     = 4;
+}

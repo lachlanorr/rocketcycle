@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"unsafe"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -73,7 +74,7 @@ func findHeader(msg *kafka.Message, key string) []byte {
 }
 
 func adminTopic(internalName string) string {
-	return fmt.Sprintf("rkcy.%s.admin", internalName)
+	return fmt.Sprintf("%s.%s.admin", rkcy, internalName)
 }
 
 func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
@@ -147,4 +148,22 @@ const (
 
 func colorize(s interface{}, c int) string {
 	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", c, s)
+}
+
+func IntToBytes(num int) []byte {
+	arr := make([]byte, 4)
+	arr[0] = *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&num)) + uintptr(0)))
+	arr[1] = *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&num)) + uintptr(1)))
+	arr[2] = *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&num)) + uintptr(2)))
+	arr[3] = *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&num)) + uintptr(3)))
+	return arr
+}
+
+func BytesToInt(arr []byte) int {
+	var val int
+	*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(0))) = arr[0]
+	*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(1))) = arr[1]
+	*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(2))) = arr[2]
+	*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(3))) = arr[3]
+	return val
 }
