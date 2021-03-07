@@ -44,8 +44,8 @@ rpg: ## compile rpg example
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rpg \
-	./examples/rpg/rpg
-	@cp ./examples/rpg/rpg/platform.json $(BUILD_BIN_DIR)
+	./examples/rpg
+	@cp ./examples/rpg/platform.json $(BUILD_BIN_DIR)
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help
