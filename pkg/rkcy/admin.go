@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -319,7 +320,41 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 					Msg("Platform parsed")
 
 				updateTopics(rtPlat)
+				updateRunner(rtPlat)
 			}
 		}
 	}
+}
+
+func updateRunner(rtPlat *rtPlatform) {
+	progs := make([]*pb.Platform_Concern_Program, 1)
+	for _, concern := range rtPlat.Platform.Concerns {
+		for _, topics := range concern.Topics {
+			if topics.ConsumerProgram != nil {
+				progs = append(progs, expandProgs(concern, topics)...)
+			}
+		}
+	}
+}
+
+func substStr(s string, topicName string, partition int32) string {
+	s = strings.ReplaceAll(s, "@platform", platformName)
+	s = strings.ReplaceAll(s, "@topic", topicName)
+	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
+	return s
+}
+
+func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics) []*pb.Platform_Concern_Program {
+	progs := make([]*pb.Platform_Concern_Program, topics.Current.PartitionCount)
+	for i := int32(0); i < topics.Current.PartitionCount; i++ {
+		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+		progs[i] = &pb.Platform_Concern_Program{
+			Name: substStr(topics.ConsumerProgram.Name, topicName, i),
+			Args: make([]string, len(topics.ConsumerProgram.Args)),
+		}
+		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], topicName, i)
+		}
+	}
+	return progs
 }

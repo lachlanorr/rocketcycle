@@ -136,13 +136,15 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 			switch topics.Name {
 			case "process":
 				topics.ConsumerProgram = &pb.Platform_Concern_Program{
-					Name: "@platform",
-					Args: []string{"process", "-t", "@topic", "-p", "@partition"},
+					Name:   "./@platform",
+					Args:   []string{"process", "-t", "@topic", "-p", "@partition"},
+					Abbrev: "process/@topic/@partition",
 				}
 			case "storage":
 				topics.ConsumerProgram = &pb.Platform_Concern_Program{
-					Name: "@platform",
-					Args: []string{"storage", "-t", "@topic", "-p", "@partition"},
+					Name:   "./@platform",
+					Args:   []string{"storage", "-t", "@topic", "-p", "@partition"},
+					Abbrev: "storage/@topic/@partition",
 				}
 			}
 		}
@@ -272,6 +274,9 @@ func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.
 		if topics.ConsumerProgram.Name == "" {
 			return errors.New("Command cannot have blank Name")
 		}
+		if topics.ConsumerProgram.Abbrev == "" {
+			return errors.New("Command cannot have blank Abbrev")
+		}
 	}
 	return nil
 }
@@ -296,12 +301,22 @@ func uncommittedGroupName(topic string, partition int) string {
 	return fmt.Sprintf("__%s_%d__non_comitted_group", topic, partition)
 }
 
-func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
+type rkcyMessage struct {
+	Directive pb.Directive
+	Value     []byte
+}
+
+func consumePlatformAdminTopic(
+	ctx context.Context,
+	ch chan<- *rkcyMessage,
+	bootstrapServers string,
+	platformName string,
+	mask pb.Directive,
+) {
 	platformTopic := adminTopic(platformName)
 	groupName := uncommittedGroupName(platformTopic, 0)
 
 	slog := log.With().
-		Str("BootstrapServers", bootstrapServers).
 		Str("Topic", platformTopic).
 		Logger()
 
@@ -324,7 +339,7 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstra
 		select {
 		case <-ctx.Done():
 			log.Info().
-				Msg("ConsumePlatformConfig exiting, ctx.Done()")
+				Msg("consumePlatformAdminTopic exiting, ctx.Done()")
 			return
 		default:
 			_, high, err = cons.QueryWatermarkOffsets(platformTopic, 0, 5000)
@@ -367,19 +382,39 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstra
 					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
-				plat := pb.Platform{}
-
-				if directive := getDirective(msg); directive == pb.Directive_PLATFORM {
-					err = proto.Unmarshal(msg.Value, &plat)
-					if err != nil {
-						slog.Error().
-							Err(err).
-							Msg("Failed to Unmarshall Platform")
-					} else {
-						ch <- &plat
+				directive := getDirective(msg)
+				if (directive & mask) != pb.Directive(0) {
+					ch <- &rkcyMessage{
+						Directive: directive,
+						Value:     msg.Value,
 					}
-					break
 				}
+			}
+		}
+	}
+}
+
+func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
+	rkcyCh := make(chan *rkcyMessage, 1)
+
+	go consumePlatformAdminTopic(ctx, rkcyCh, bootstrapServers, platformName, pb.Directive_PLATFORM)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Msg("ConsumePlatformConfig exiting, ctx.Done()")
+			return
+		case rkcyMsg := <-rkcyCh:
+			plat := pb.Platform{}
+
+			err := proto.Unmarshal(rkcyMsg.Value, &plat)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msg("Failed to Unmarshal Platform")
+			} else {
+				ch <- &plat
 			}
 		}
 	}

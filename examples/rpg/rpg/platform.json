@@ -12,8 +12,9 @@
                         "partitionCount": 2
                     },
                     "consumerProgram": {
-                        "name": "rpg_edge",
-                        "args": ["serve", "-t", "@topic", "-p", "@partition"]
+                        "name": "./@platform",
+                        "args": ["serve", "-t", "@topic", "-p", "@partition"],
+                        "abbrev": "edge/@partition"
                     }
                 }
             ]

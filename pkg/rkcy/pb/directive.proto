@@ -7,6 +7,8 @@ syntax = "proto3";
 package rkcy.pb;
 option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
 
+import "platform.proto";
+
 // Type implies what topics will be present
 enum Directive {
     UNSPECIFIED = 0;
@@ -26,6 +28,8 @@ enum Directive {
     ADMIN_CONSUMER_STARTED = 36;
 
     APECS_TXN              = 64;
+
+    ALL = -1;
 }
 
 message AdminProducerDirective {
@@ -36,6 +40,5 @@ message AdminProducerDirective {
 }
 
 message AdminConsumerDirective {
-    string full_topic   = 1;
-    int32 partition     = 4;
+    rkcy.pb.Platform.Concern.Program program = 1;
 }

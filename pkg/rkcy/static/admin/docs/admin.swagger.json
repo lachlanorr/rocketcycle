@@ -137,6 +137,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "abbrev": {
+          "type": "string"
         }
       }
     },

@@ -35,6 +35,7 @@ func prepareGrpcServer(ctx context.Context, srv interface{}) {
 	lis, err := net.Listen("tcp", srv.(grpcgw).GrpcAddr())
 	if err != nil {
 		log.Error().
+			Err(err).
 			Msg("Unable to create grpc listener on tcp port 11372")
 		return
 	}

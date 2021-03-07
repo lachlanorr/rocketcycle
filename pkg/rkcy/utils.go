@@ -166,8 +166,17 @@ const (
 	colorDarkGray = 90
 )
 
+// reasonable list of colors that change greatly each time
+var colors []int = []int{
+	11, 27, 43, 59, 75, 91, 107, 123, 139, 155, 171, 187, 203, 219,
+	12, 28, 44, 60, 76, 92, 108, 124, 140, 156, 172, 188, 204, 220,
+	13, 29, 45, 61, 77, 93, 109, 125, 141, 157, 173, 189, 205, 221,
+	10, 26, 42, 58, 74, 90, 106, 122, 138, 154, 170, 186, 202, 218,
+	9, 25, 41, 57, 73, 89, 105, 121, 137, 153, 169, 185, 201, 217,
+}
+
 func colorize(s interface{}, c int) string {
-	return fmt.Sprintf("\x1b[%dm%v\x1b[0m", c, s)
+	return fmt.Sprintf("\x1b[38;5;%dm%v\x1b[0m", c, s)
 }
 
 func IntToBytes(num int) []byte {

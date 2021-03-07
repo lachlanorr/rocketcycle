@@ -98,6 +98,7 @@ message Platform {
         message Program {
             string name = 1;
             repeated string args = 2;
+            string abbrev = 3;
         }
     }
 
