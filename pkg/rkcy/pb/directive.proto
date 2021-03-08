@@ -40,5 +40,5 @@ message AdminProducerDirective {
 }
 
 message AdminConsumerDirective {
-    rkcy.pb.Platform.Concern.Program program = 1;
+    rkcy.pb.Program program = 1;
 }

@@ -94,12 +94,6 @@ message Platform {
             // How to determine which partiton messages are produced to
             PartitionStrategy partition_strat = 4;
         }
-
-        message Program {
-            string name = 1;
-            repeated string args = 2;
-            string abbrev = 3;
-        }
     }
 
     message Cluster {
@@ -116,4 +110,10 @@ message Platform {
         FNV64_MOD              = 0;
     }
 
+}
+
+message Program {
+    string name = 1;
+    repeated string args = 2;
+    string abbrev = 3;
 }

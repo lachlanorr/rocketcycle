@@ -24,7 +24,7 @@ import (
 )
 
 type rtProgram struct {
-	program     *pb.Platform_Concern_Program
+	program     *pb.Program
 	key         string
 	color       int
 	abbrev      string
@@ -38,7 +38,7 @@ type rtProgram struct {
 
 var currColorIdx int = 0
 
-func newRtProgram(program *pb.Platform_Concern_Program, key string) *rtProgram {
+func newRtProgram(program *pb.Program, key string) *rtProgram {
 	rtProg := &rtProgram{
 		program: program,
 		key:     key,
@@ -65,7 +65,7 @@ func runStorage(ctx context.Context, consumeTopic *pb.Platform_Concern_Topics) {
 	log.Info().Msg("runStorage exit")
 }
 
-func progKey(prog *pb.Platform_Concern_Program) string {
+func progKey(prog *pb.Program) string {
 	// Combine name and args to a string for key lookup
 	if prog == nil {
 		return "NIL"
@@ -237,7 +237,7 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 		running,
 		pb.Directive_ADMIN_CONSUMER_START,
 		&pb.AdminConsumerDirective{
-			Program: &pb.Platform_Concern_Program{
+			Program: &pb.Program{
 				Name:   "./" + platformName,
 				Args:   []string{"admin", "serve"},
 				Abbrev: "admin",
@@ -249,7 +249,7 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 
 func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 	rkcyCh := make(chan *rkcyMessage, 1)
-	go consumePlatformAdminTopic(ctx, rkcyCh, settings.BootstrapServers, platformName, pb.Directive_ADMIN_CONSUMER)
+	go consumePlatformAdminTopic(ctx, rkcyCh, settings.BootstrapServers, platformName, pb.Directive_ADMIN_CONSUMER, pb.Directive_ALL)
 
 	running := map[string]*rtProgram{}
 
@@ -275,8 +275,13 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 					Err(err).
 					Msg("Failed to Unmarshal AdminProducerDirective")
 			} else {
-				log.Info().
-					Msgf("runConsumerPrograms: %s %s", rkcyMsg.Directive.String(), progKey(acd.Program))
+				updateRunning(
+					ctx,
+					running,
+					pb.Directive_ADMIN_CONSUMER_START,
+					&acd,
+					printCh,
+				)
 			}
 		}
 	}

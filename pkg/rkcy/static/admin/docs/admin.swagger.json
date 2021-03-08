@@ -126,23 +126,6 @@
         }
       }
     },
-    "rkcy.pb.Platform.Concern.Program": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "abbrev": {
-          "type": "string"
-        }
-      }
-    },
     "rkcy.pb.Platform.Concern.Topic": {
       "type": "object",
       "properties": {
@@ -185,7 +168,7 @@
           "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
         },
         "consumerProgram": {
-          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Program"
+          "$ref": "#/definitions/rkcy.pb.Program"
         }
       }
     },
@@ -222,6 +205,23 @@
       ],
       "default": "FNV64_MOD",
       "description": "Different types of partitioning mechanisms\n\n - FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count"
+    },
+    "rkcy.pb.Program": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "abbrev": {
+          "type": "string"
+        }
+      }
     }
   }
 }

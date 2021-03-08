@@ -38,12 +38,12 @@ var docsFiles embed.FS
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("rcadmin started")
+		Msg("admin serve started")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go manageTopics(ctx, settings.BootstrapServers, platformName)
+	go managePlatform(ctx, settings.BootstrapServers, platformName)
 	go adminServe(ctx, settings.HttpAddr, settings.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
@@ -293,7 +293,29 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func manageTopics(ctx context.Context, bootstrapServers string, platformName string) {
+func managePlatform(ctx context.Context, bootstrapServers string, platformName string) {
+	adminTopic := AdminTopic(platformName)
+	adminProd, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": bootstrapServers,
+	})
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("failed to kafka.NewProducer for admin messages")
+		return
+	}
+	defer adminProd.Close()
+	go func() {
+		for e := range adminProd.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
+				}
+			}
+		}
+	}()
+
 	platCh := make(chan *pb.Platform)
 	go consumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
@@ -301,7 +323,7 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 		select {
 		case <-ctx.Done():
 			log.Info().
-				Msg("manageTopics exiting, ctx.Done()")
+				Msg("managePlatform exiting, ctx.Done()")
 			return
 		case plat := <-platCh:
 			rtPlat, err := newRtPlatform(plat)
@@ -313,47 +335,67 @@ func manageTopics(ctx context.Context, bootstrapServers string, platformName str
 			}
 
 			if oldRtPlat == nil || rtPlat.Hash != oldRtPlat.Hash {
-				oldRtPlat = rtPlat
 				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 				log.Info().
 					Str("PlatformJson", string(jsonBytes)).
 					Msg("Platform parsed")
 
+				platDiff := rtPlat.diff(oldRtPlat)
+
 				updateTopics(rtPlat)
-				updateRunner(rtPlat)
+				updateRunner(adminProd, adminTopic, platDiff)
+				oldRtPlat = rtPlat
 			}
 		}
 	}
 }
 
-func updateRunner(rtPlat *rtPlatform) {
-	progs := make([]*pb.Platform_Concern_Program, 1)
-	for _, concern := range rtPlat.Platform.Concerns {
-		for _, topics := range concern.Topics {
-			if topics.ConsumerProgram != nil {
-				progs = append(progs, expandProgs(concern, topics)...)
-			}
+func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+	for _, p := range platDiff.progsToStop {
+		acd := &pb.AdminConsumerDirective{Program: p}
+		acdSer, err := proto.Marshal(acd)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to marshal pb.AdminConsumerDirective")
 		}
+		adminProd.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
+			Value:          acdSer,
+			Headers:        directiveHeaders(pb.Directive_ADMIN_CONSUMER_STOP),
+		}, nil)
+	}
+	for _, p := range platDiff.progsToStart {
+		acd := &pb.AdminConsumerDirective{Program: p}
+		acdSer, err := proto.Marshal(acd)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to marshal pb.AdminConsumerDirective")
+		}
+		adminProd.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
+			Value:          acdSer,
+			Headers:        directiveHeaders(pb.Directive_ADMIN_CONSUMER_START),
+		}, nil)
 	}
 }
 
-func substStr(s string, topicName string, partition int32) string {
+func substStr(s string, concernName string, topicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", platformName)
+	s = strings.ReplaceAll(s, "@concern", concernName)
 	s = strings.ReplaceAll(s, "@topic", topicName)
 	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
 	return s
 }
 
-func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics) []*pb.Platform_Concern_Program {
-	progs := make([]*pb.Platform_Concern_Program, topics.Current.PartitionCount)
+func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics) []*pb.Program {
+	progs := make([]*pb.Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
-		progs[i] = &pb.Platform_Concern_Program{
-			Name: substStr(topics.ConsumerProgram.Name, topicName, i),
-			Args: make([]string, len(topics.ConsumerProgram.Args)),
+		progs[i] = &pb.Program{
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, topicName, i),
+			Args:   make([]string, len(topics.ConsumerProgram.Args)),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, topicName, i),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, topicName, i)
 		}
 	}
 	return progs

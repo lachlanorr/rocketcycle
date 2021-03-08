@@ -8,10 +8,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	"github.com/lachlanorr/rkcy/version"
 )
 
 func processDefaultCommand() (string, []string) {
@@ -109,6 +111,10 @@ func (proc processor) processNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, erro
 }
 
 func process() {
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Msg("process started")
+
 	// read from kafka message queue
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": "localhost",

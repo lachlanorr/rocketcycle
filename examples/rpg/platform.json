@@ -13,7 +13,7 @@
                     },
                     "consumerProgram": {
                         "name": "./@platform",
-                        "args": ["serve", "-t", "@topic", "-p", "@partition"],
+                        "args": ["edge", "serve", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
                         "abbrev": "edge/@partition"
                     }
                 }

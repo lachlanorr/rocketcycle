@@ -135,16 +135,16 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 		if topics.ConsumerProgram == nil {
 			switch topics.Name {
 			case "process":
-				topics.ConsumerProgram = &pb.Platform_Concern_Program{
+				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"process", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "process/@topic/@partition",
+					Abbrev: "pr/@concern/@partition",
 				}
 			case "storage":
-				topics.ConsumerProgram = &pb.Platform_Concern_Program{
+				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"storage", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "storage/@topic/@partition",
+					Abbrev: "st/@concern/@partition",
 				}
 			}
 		}
@@ -312,13 +312,27 @@ func consumePlatformAdminTopic(
 	bootstrapServers string,
 	platformName string,
 	mask pb.Directive,
+	mroMatch pb.Directive,
 ) {
-	platformTopic := adminTopic(platformName)
+	platformTopic := AdminTopic(platformName)
 	groupName := uncommittedGroupName(platformTopic, 0)
 
 	slog := log.With().
 		Str("Topic", platformTopic).
 		Logger()
+
+	_, lastPlatformOff, err := FindMostRecentMatching(
+		bootstrapServers,
+		platformTopic,
+		0,
+		mroMatch,
+	)
+	if err != nil {
+		slog.Error().
+			Err(err).
+			Msg("Failed to FindMostRecentOffset")
+		return
+	}
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  bootstrapServers,
@@ -333,31 +347,11 @@ func consumePlatformAdminTopic(
 	}
 	defer cons.Close()
 
-	var high int64
-	gotOffsets := false
-	for !gotOffsets {
-		select {
-		case <-ctx.Done():
-			log.Info().
-				Msg("consumePlatformAdminTopic exiting, ctx.Done()")
-			return
-		default:
-			_, high, err = cons.QueryWatermarkOffsets(platformTopic, 0, 5000)
-			if err != nil {
-				slog.Error().
-					Err(err).
-					Msg("Failed to QueryWatermarkOffsets, platform topic may not yet exist")
-			} else {
-				gotOffsets = true
-			}
-		}
-	}
-
 	err = cons.Assign([]kafka.TopicPartition{
 		{
 			Topic:     &platformTopic,
 			Partition: 0,
-			Offset:    kafka.Offset(maxi64(0, high-1)),
+			Offset:    kafka.Offset(lastPlatformOff),
 		},
 	})
 
@@ -372,7 +366,7 @@ func consumePlatformAdminTopic(
 		select {
 		case <-ctx.Done():
 			log.Info().
-				Msg("ConsumePlatformConfig exiting, ctx.Done()")
+				Msg("consumePlatformAdminTopic exiting, ctx.Done()")
 			return
 		default:
 			msg, err := cons.ReadMessage(time.Second * 5)
@@ -397,7 +391,7 @@ func consumePlatformAdminTopic(
 func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
 	rkcyCh := make(chan *rkcyMessage, 1)
 
-	go consumePlatformAdminTopic(ctx, rkcyCh, bootstrapServers, platformName, pb.Directive_PLATFORM)
+	go consumePlatformAdminTopic(ctx, rkcyCh, bootstrapServers, platformName, pb.Directive_PLATFORM, pb.Directive_PLATFORM)
 
 	for {
 		select {
