@@ -100,6 +100,7 @@ func runCobra(impl *PlatformImpl) {
 		Run:   cobraProcess,
 	}
 	procCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	procCmd.MarkPersistentFlagRequired("bootstrap_servers")
 	procCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	procCmd.MarkPersistentFlagRequired("topic")
 	procCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")
@@ -113,6 +114,7 @@ func runCobra(impl *PlatformImpl) {
 		Run:   cobraStorage,
 	}
 	storageCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	storageCmd.MarkPersistentFlagRequired("bootstrap_servers")
 	storageCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	storageCmd.MarkPersistentFlagRequired("topic")
 	storageCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")

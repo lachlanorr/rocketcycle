@@ -19,7 +19,7 @@ func (rtPlat *rtPlatform) getAllProgs() map[string]*pb.Program {
 		for _, concern := range rtPlat.Platform.Concerns {
 			for _, topics := range concern.Topics {
 				if topics.ConsumerProgram != nil {
-					exProgs := expandProgs(concern, topics)
+					exProgs := expandProgs(concern, topics, rtPlat.Clusters)
 					for _, p := range exProgs {
 						progs[progKey(p)] = p
 					}

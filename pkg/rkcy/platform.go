@@ -137,13 +137,13 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 			case "process":
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
-					Args:   []string{"process", "-t", "@topic", "-p", "@partition"},
+					Args:   []string{"process", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "pr/@concern/@partition",
 				}
 			case "storage":
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
-					Args:   []string{"storage", "-t", "@topic", "-p", "@partition"},
+					Args:   []string{"storage", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "st/@concern/@partition",
 				}
 			}
@@ -311,8 +311,8 @@ func consumePlatformAdminTopic(
 	ch chan<- *rkcyMessage,
 	bootstrapServers string,
 	platformName string,
-	mask pb.Directive,
-	mroMatch pb.Directive,
+	match pb.Directive,
+	matchLoc MatchLoc,
 ) {
 	platformTopic := AdminTopic(platformName)
 	groupName := uncommittedGroupName(platformTopic, 0)
@@ -325,7 +325,8 @@ func consumePlatformAdminTopic(
 		bootstrapServers,
 		platformTopic,
 		0,
-		mroMatch,
+		match,
+		matchLoc,
 	)
 	if err != nil {
 		slog.Error().
@@ -377,7 +378,7 @@ func consumePlatformAdminTopic(
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				directive := getDirective(msg)
-				if (directive & mask) != pb.Directive(0) {
+				if (directive & match) == match {
 					ch <- &rkcyMessage{
 						Directive: directive,
 						Value:     msg.Value,
@@ -391,7 +392,14 @@ func consumePlatformAdminTopic(
 func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
 	rkcyCh := make(chan *rkcyMessage, 1)
 
-	go consumePlatformAdminTopic(ctx, rkcyCh, bootstrapServers, platformName, pb.Directive_PLATFORM, pb.Directive_PLATFORM)
+	go consumePlatformAdminTopic(
+		ctx,
+		rkcyCh,
+		bootstrapServers,
+		platformName,
+		pb.Directive_PLATFORM,
+		AtLastMatch,
+	)
 
 	for {
 		select {

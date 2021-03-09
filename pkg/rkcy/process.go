@@ -5,12 +5,15 @@
 package rkcy
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	//	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 	"github.com/lachlanorr/rkcy/version"
@@ -23,13 +26,13 @@ func processDefaultCommand() (string, []string) {
 func nextStep(txn *pb.ApecsTxn) *pb.ApecsTxn_Step {
 	if txn.Direction == pb.ApecsTxn_FORWARD {
 		for i, _ := range txn.ForwardSteps {
-			if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_PENDING {
+			if txn.ForwardSteps[i].Status == pb.Status_PENDING {
 				return txn.ForwardSteps[i]
 			}
 		}
 	} else if txn.CanRevert { // txn.Direction == Reverse
 		for i := len(txn.ForwardSteps) - 1; i >= 0; i-- {
-			if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_COMPLETE {
+			if txn.ForwardSteps[i].Status == pb.Status_COMPLETE {
 				return txn.ForwardSteps[i]
 			}
 		}
@@ -47,7 +50,7 @@ func lastStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, error) {
 
 func hasErrors(txn *pb.ApecsTxn) bool {
 	for i, _ := range txn.ForwardSteps {
-		if txn.ForwardSteps[i].Status == pb.ApecsTxn_Step_ERROR {
+		if txn.ForwardSteps[i].Status == pb.Status_ERROR {
 			return true
 		}
 	}
@@ -96,10 +99,10 @@ func (proc processor) processNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, erro
 
 	err := proc.advanceApecsTxn(step, txn.Direction)
 	if err == nil {
-		step.Status = pb.ApecsTxn_Step_COMPLETE
+		step.Status = pb.Status_COMPLETE
 	} else {
 		step.LogEvents = nil // LORRTODO: fix this //append(step.Errors, err.Error())
-		step.Status = pb.ApecsTxn_Step_ERROR
+		step.Status = pb.Status_ERROR
 		if txn.Direction == pb.ApecsTxn_FORWARD && txn.CanRevert {
 			txn.Direction = pb.ApecsTxn_FORWARD
 		} else {
@@ -113,32 +116,51 @@ func (proc processor) processNextStep(txn *pb.ApecsTxn) (*pb.ApecsTxn_Step, erro
 func process() {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("process started")
+		Msg("APECS process consumer started")
 
-	// read from kafka message queue
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": "localhost",
-		"group.id":          "myGroup",
-		"auto.offset.reset": "earliest",
-	})
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	if err != nil {
-		panic(err)
+	//	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName())
+
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	select {
+	case <-interruptCh:
+		log.Info().
+			Msg("APECS process consumer stopped")
+		cancel()
+		return
 	}
 
-	c.SubscribeTopics([]string{"myTopic", "^aRegex.*[Tt]opic"}, nil)
+	/*
+		// read from kafka message queue
+		c, err := kafka.NewConsumer(&kafka.ConfigMap{
+			"bootstrap.servers": "localhost",
+			"group.id":          "myGroup",
+			"auto.offset.reset": "earliest",
+		})
 
-	for {
-		msg, err := c.ReadMessage(-1)
-		if err == nil {
-			fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
-		} else {
-			// The client will automatically try to recover from all errors.
-			fmt.Printf("Consumer error: %v (%v)\n", err, msg)
+		if err != nil {
+			panic(err)
 		}
-	}
 
-	c.Close()
+		c.SubscribeTopics([]string{"myTopic", "^aRegex.*[Tt]opic"}, nil)
+
+		for {
+			msg, err := c.ReadMessage(-1)
+			if err == nil {
+				fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
+			} else {
+				// The client will automatically try to recover from all errors.
+				fmt.Printf("Consumer error: %v (%v)\n", err, msg)
+			}
+		}
+
+		c.Close()
+
+	*/
 
 	/*
 		// Check if last step

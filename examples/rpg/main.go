@@ -7,20 +7,25 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/lib"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/lib/edge"
-	"github.com/lachlanorr/rkcy/examples/rpg/lib/sim"
+	"github.com/lachlanorr/rkcy/examples/rpg/consts"
+	"github.com/lachlanorr/rkcy/examples/rpg/edge"
+	"github.com/lachlanorr/rkcy/examples/rpg/sim"
+	"github.com/lachlanorr/rkcy/examples/rpg/storage"
 )
 
 func main() {
 	impl := rkcy.PlatformImpl{
-		Name: lib.PlatformName,
+		Name: consts.Platform,
 
 		CobraCommands: []*cobra.Command{
 			edge.CobraCommand(),
 			sim.CobraCommand(),
+		},
+
+		StorageHandlers: map[string]rkcy.StorageHandler{
+			consts.Player: &storage.Player{},
 		},
 	}
 

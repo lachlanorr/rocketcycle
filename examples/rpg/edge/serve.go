@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/lib/commands"
+	"github.com/lachlanorr/rkcy/examples/rpg/consts"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
 
 	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
@@ -87,34 +87,34 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 	}
 	in.Id = uuid.NewString()
 
+	log.Info().Msg("CreatePlayer " + in.Id)
+
 	inSer, err := proto.Marshal(in)
 	if err != nil {
 		return nil, status.New(codes.Internal, "failed to marshal Player").Err()
 	}
 
-	prod, ok := prods["player"]
+	prod, ok := prods[consts.Player]
 	if !ok {
 		return nil, status.New(codes.Internal, "no producer for 'player'").Err()
 	}
 
-	id := uuid.NewString()
+	req := rkcy_pb.ApecsStorageRequest{
+		Uid:         uuid.NewString(),
+		ConcernName: consts.Player,
+		Op:          rkcy_pb.ApecsStorageRequest_CREATE,
+		Key:         in.Id,
+		Payload:     inSer,
 
-	txn := rkcy_pb.ApecsTxn{
-		Id:        id,
-		CanRevert: true,
-		ForwardSteps: []*rkcy_pb.ApecsTxn_Step{
-			{
-				ConcernName: "player",
-				Command:     commands.Create,
-				Key:         id,
-				Payload:     inSer,
-			},
+		ResponseTarget: &rkcy_pb.ResponseTarget{
+			TopicName: settings.Topic,
+			Partition: settings.Partition,
 		},
 	}
 
-	err = prod.Process(&txn)
+	err = prod.Storage(&req)
 	if err != nil {
-		return nil, status.New(codes.Internal, "failed to produce ApecsTxn").Err()
+		return nil, status.New(codes.Internal, "failed to produce ApecsStorageRequest").Err()
 	}
 
 	return in, nil
@@ -131,7 +131,7 @@ func enrollProducer(ctx context.Context, platformName string, concernName string
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
 	prods = make(map[string]*rkcy.ApecsProducer)
 
-	enrollProducer(ctx, platformName, "player")
+	enrollProducer(ctx, platformName, consts.Player)
 
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	rkcy.ServeGrpcGateway(ctx, srv)
@@ -140,7 +140,7 @@ func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName s
 func cobraServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("rcedge started")
+		Msg("edge server started")
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -152,6 +152,8 @@ func cobraServe(cmd *cobra.Command, args []string) {
 	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
+		log.Info().
+			Msg("edge server stopped")
 		cancel()
 		return
 	}

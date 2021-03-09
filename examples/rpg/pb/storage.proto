@@ -7,12 +7,8 @@ syntax = "proto3";
 package rkcy.examples.rpg.pb;
 option go_package = "github.com/lachlanorr/rkcy/examples/rpg/pb";
 
-import "pkg/rkcy/pb/apecs.proto";
-
 message Player {
     string id = 1;
     string username = 2;
     bool active = 3;
-
-    rkcy.pb.MostRecentOffsets mro = 4;
 }

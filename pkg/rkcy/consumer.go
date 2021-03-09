@@ -135,7 +135,6 @@ func (cons *Consumer) updatePlatform(plat *pb.Platform) {
 				Msg("Failed to Assign")
 			return
 		}
-
 	}
 }
 
@@ -149,11 +148,19 @@ func (cons *Consumer) ReadMessage(timeout time.Duration) (*kafka.Message, error)
 	return cons.kCons.ReadMessage(timeout)
 }
 
+type MatchLoc int
+
+const (
+	PastLastMatch MatchLoc = 0
+	AtLastMatch   MatchLoc = 1
+)
+
 func findMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	mroMatch pb.Directive,
+	match pb.Directive,
+	matchLoc MatchLoc,
 	delta int64,
 ) (bool, int64, error) {
 	groupName := uncommittedGroupName(topic, int(partition))
@@ -176,8 +183,16 @@ func findMostRecentMatching(
 		return true, 0, nil
 	}
 
-	if mroMatch == pb.Directive_ALL {
+	if matchLoc == PastLastMatch {
 		return true, high, nil
+	}
+
+	if match == pb.Directive_ALL {
+		matchingOffset := high
+		if matchLoc == AtLastMatch {
+			matchingOffset = maxi64(0, matchingOffset-1)
+		}
+		return true, matchingOffset, nil
 	}
 
 	err = cons.Assign([]kafka.TopicPartition{
@@ -189,7 +204,7 @@ func findMostRecentMatching(
 	})
 
 	lastRead := int64(0)
-	matching := int64(-1)
+	matchingOffset := int64(-1)
 	for lastRead < high-1 {
 		msg, err := cons.ReadMessage(time.Second * 5)
 		timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
@@ -201,15 +216,18 @@ func findMostRecentMatching(
 		}
 		if !timedOut && msg != nil {
 			lastRead = int64(msg.TopicPartition.Offset)
-			direc := getDirective(msg)
-			if direc == mroMatch {
-				matching = int64(msg.TopicPartition.Offset)
+			directive := getDirective(msg)
+			if (directive & match) == match {
+				matchingOffset = int64(msg.TopicPartition.Offset)
 			}
 		}
 	}
 
-	if matching != -1 {
-		return true, matching, nil
+	if matchingOffset != -1 {
+		if matchLoc == PastLastMatch {
+			matchingOffset++
+		}
+		return true, matchingOffset, nil
 	} else {
 		// if we didn't find it, return high
 		return false, high, nil
@@ -220,7 +238,8 @@ func FindMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	mroMatch pb.Directive,
+	match pb.Directive,
+	matchLoc MatchLoc,
 ) (bool, int64, error) {
 	const maxDelta int64 = 100000
 	delta := int64(100)
@@ -235,7 +254,8 @@ func FindMostRecentMatching(
 			bootstrapServers,
 			topic,
 			partition,
-			mroMatch,
+			match,
+			matchLoc,
 			delta,
 		)
 		if err != nil {

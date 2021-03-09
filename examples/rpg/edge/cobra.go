@@ -57,7 +57,7 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
-	getCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "rcedge_addr", "", "http://localhost:11372", "Address against which to make client requests")
+	getCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(getCmd)
 
 	createCmd := &cobra.Command{
@@ -67,7 +67,7 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"resource"},
 	}
-	createCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "rcedge_addr", "", "http://localhost:11372", "Address against which to make client requests")
+	createCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(createCmd)
 
 	serveCmd := &cobra.Command{
@@ -77,8 +77,8 @@ func CobraCommand() *cobra.Command {
 		Run:   cobraServe,
 	}
 	serveCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	serveCmd.PersistentFlags().StringVarP(&settings.HttpAddr, "http_addr", "", ":11372", "Address to host http api")
-	serveCmd.PersistentFlags().StringVarP(&settings.GrpcAddr, "grpc_addr", "", ":11382", "Address to host grpc api")
+	serveCmd.PersistentFlags().StringVarP(&settings.HttpAddr, "http_addr", "", ":11350", "Address to host http api")
+	serveCmd.PersistentFlags().StringVarP(&settings.GrpcAddr, "grpc_addr", "", ":11360", "Address to host grpc api")
 	serveCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	serveCmd.MarkPersistentFlagRequired("topic")
 	serveCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition index to consume")

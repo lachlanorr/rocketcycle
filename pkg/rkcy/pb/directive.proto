@@ -13,30 +13,34 @@ import "platform.proto";
 enum Directive {
     UNSPECIFIED = 0;
 
-    PLATFORM               =  8;
+    PLATFORM               = 0x00010000;
 
-    ADMIN_PRODUCER         = 16;
-    ADMIN_PRODUCER_STOP    = 17;
-    ADMIN_PRODUCER_STOPPED = 18;
-    ADMIN_PRODUCER_START   = 19;
-    ADMIN_PRODUCER_STARTED = 20;
+    ADMIN_PRODUCER         = 0x00020000;
+    ADMIN_PRODUCER_STOP    = 0x00020001;
+    ADMIN_PRODUCER_STOPPED = 0x00020002;
+    ADMIN_PRODUCER_START   = 0x00020004;
+    ADMIN_PRODUCER_STARTED = 0x00020008;
 
-    ADMIN_CONSUMER         = 32;
-    ADMIN_CONSUMER_STOP    = 33;
-    ADMIN_CONSUMER_STOPPED = 34;
-    ADMIN_CONSUMER_START   = 35;
-    ADMIN_CONSUMER_STARTED = 36;
+    ADMIN_CONSUMER         = 0x00040000;
+    ADMIN_CONSUMER_STOP    = 0x00040001;
+    ADMIN_CONSUMER_STOPPED = 0x00040002;
+    ADMIN_CONSUMER_START   = 0x00040004;
+    ADMIN_CONSUMER_STARTED = 0x00040008;
 
-    APECS_TXN              = 64;
+    APECS_TXN              = 0x00080000;
+
+    APECS_STORAGE_REQUEST  = 0x00100000;
+
+    APECS_RESULT           = 0x00200000;
 
     ALL = -1;
 }
 
 message AdminProducerDirective {
-    string concern   = 1;
-    string topic     = 2;
-    int32 generation = 3;
-    int32 partition  = 4;
+    string concern_name = 1;
+    string topic_name   = 2;
+    int32 generation    = 3;
+    int32 partition     = 4;
 }
 
 message AdminConsumerDirective {

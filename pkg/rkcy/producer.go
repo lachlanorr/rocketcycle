@@ -167,7 +167,6 @@ func (prod *Producer) run(ctx context.Context) {
 			prod.fnv64.Write(msg.key)
 			fnvCalc := prod.fnv64.Sum64()
 			partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
-			prod.slog.Info().Msgf("partition: %d, msg.key=%s, fnvCalc=%d", partition, string(msg.key), fnvCalc)
 
 			kMsg := kafka.Message{
 				TopicPartition: kafka.TopicPartition{

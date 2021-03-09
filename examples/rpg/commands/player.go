@@ -5,12 +5,12 @@
 package commands
 
 import (
-	"github.com/lachlanorr/rkcy/examples/rpg/lib/codes"
+	"github.com/lachlanorr/rkcy/examples/rpg/codes"
 	"github.com/lachlanorr/rkcy/pkg/rkcy"
 )
 
-func PlayerCreate(payload []byte) *rkcy.ConcernHandlerResult {
-	return &rkcy.ConcernHandlerResult{
+func PlayerCreate(payload []byte) *rkcy.ProcessHandlerResult {
+	return &rkcy.ProcessHandlerResult{
 		Status: codes.NotImplemented,
 	}
 }

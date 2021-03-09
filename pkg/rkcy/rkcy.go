@@ -7,27 +7,28 @@ package rkcy
 import (
 	"fmt"
 
-	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
 )
 
-type ConcernHandlerResult struct {
-	Status        pb.ApecsTxn_Step_Status
-	EffectiveTime *timestamp.Timestamp
-	LogEvents     []pb.ApecsTxn_Step_LogEvent
+type StorageHandler interface {
+	Get(uid string, key string) *pb.ApecsStorageResult
+	Create(uid string, key string, payload []byte, mro *pb.MostRecentOffset) *pb.ApecsStorageResult
+	Update(uid string, key string, payload []byte, mro *pb.MostRecentOffset) *pb.ApecsStorageResult
+	Delete(uid string, key string, mro *pb.MostRecentOffset) *pb.ApecsStorageResult
 }
 
-type ConcernHandlers struct {
+type ProcessHandlers struct {
 	ConcernName string
-	Handlers    map[int32]func(payload []byte) *ConcernHandlerResult
+	Handlers    map[int32]func(payload []byte) *pb.ApecsTxnResult
 }
 
 type PlatformImpl struct {
-	Name          string
-	CobraCommands []*cobra.Command
-	Handlers      map[string]*ConcernHandlers
+	Name            string
+	CobraCommands   []*cobra.Command
+	ProcessHandlers map[string]*ProcessHandlers
+	StorageHandlers map[string]StorageHandler
 }
 
 func StartPlatform(impl *PlatformImpl) {

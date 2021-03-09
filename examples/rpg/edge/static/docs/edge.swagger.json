@@ -121,22 +121,6 @@
         },
         "active": {
           "type": "boolean"
-        },
-        "mro": {
-          "$ref": "#/definitions/rkcy.pb.MostRecentOffsets"
-        }
-      }
-    },
-    "rkcy.pb.MostRecentOffsets": {
-      "type": "object",
-      "properties": {
-        "generation": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "offset": {
-          "type": "string",
-          "format": "int64"
         }
       }
     }

@@ -75,11 +75,29 @@ func progKey(prog *pb.Program) string {
 }
 
 func (rtProg *rtProgram) kill() bool {
+	// try to 'kill' gracefully
+	stopped := rtProg.stop()
+
+	if !stopped {
+		if rtProg.cmd != nil && rtProg.cmd.Process != nil && rtProg.cmd.Process.Pid != 0 {
+			proc, err := os.FindProcess(rtProg.cmd.Process.Pid)
+			if err != nil {
+				proc.Kill()
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (rtProg *rtProgram) stop() bool {
 	if rtProg.cmd != nil && rtProg.cmd.Process != nil && rtProg.cmd.Process.Pid != 0 {
 		proc, err := os.FindProcess(rtProg.cmd.Process.Pid)
-		if err != nil {
-			proc.Kill()
-			return true
+		if err == nil && proc != nil {
+			err = proc.Signal(syscall.SIGINT)
+			if err == nil {
+				return true
+			}
 		}
 	}
 	return false
@@ -172,7 +190,7 @@ func updateRunning(
 		rtProg, ok = running[key]
 		if ok {
 			log.Warn().
-				Msg("Program already running, doing nothing: " + key)
+				Msg("Program already running: " + key)
 			return
 		}
 		rtProg = newRtProgram(acd.Program, key)
@@ -188,8 +206,11 @@ func updateRunning(
 	case pb.Directive_ADMIN_CONSUMER_STOP:
 		rtProg, ok = running[key]
 		if !ok {
-			log.Warn().Msg("Program not running running, doing nothing: " + key)
+			log.Warn().Msg("Program not running running, cannot stop: " + key)
 			return
+		} else {
+			delete(running, key)
+			rtProg.kill()
 		}
 	}
 }
@@ -213,14 +234,6 @@ func readOutput(printCh chan<- string, rdr io.ReadCloser, key string, abbrev str
 	for scanner.Scan() {
 		printCh <- abbrev + scanner.Text()
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Error().
-			Err(err).
-			Msg("io error reading: " + key)
-	}
-
-	log.Info().Msg("readOutput exiting")
 }
 
 func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
@@ -249,7 +262,14 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 
 func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 	rkcyCh := make(chan *rkcyMessage, 1)
-	go consumePlatformAdminTopic(ctx, rkcyCh, settings.BootstrapServers, platformName, pb.Directive_ADMIN_CONSUMER, pb.Directive_ALL)
+	go consumePlatformAdminTopic(
+		ctx,
+		rkcyCh,
+		settings.BootstrapServers,
+		platformName,
+		pb.Directive_ADMIN_CONSUMER,
+		PastLastMatch,
+	)
 
 	running := map[string]*rtProgram{}
 
@@ -278,7 +298,7 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 				updateRunning(
 					ctx,
 					running,
-					pb.Directive_ADMIN_CONSUMER_START,
+					rkcyMsg.Directive,
 					&acd,
 					printCh,
 				)

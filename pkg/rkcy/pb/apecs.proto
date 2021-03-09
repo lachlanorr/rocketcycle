@@ -10,12 +10,14 @@ package rkcy.pb;
 option go_package = "github.com/lachlanorr/rkcy/pkg/rkcy/pb";
 
 message ApecsTxn {
-    string id = 1;           // uuid of txn used for tracing and reporting
+    string uid = 1;       // uuid of txn used for tracing and reporting
     Dir direction = 2;       // starts in forward, can potentially go to reverse if the transaction is reversible
     bool can_revert = 3;     // whether or not this transaction can be rolled back.
 
     repeated Step forward_steps = 4;  // filled upon creation with forward steps
     repeated Step reverse_steps = 5;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
+
+    ResponseTarget response_target = 6;
 
     enum Dir {
         FORWARD = 0;
@@ -34,21 +36,68 @@ message ApecsTxn {
 
         repeated LogEvent logEvents = 8; // general bucket for log events during a processed event
 
-        enum Status {
-            PENDING = 0;
-            COMPLETE = 1;
-            REVERTED = 2;
-            ERROR = 3;
-        }
-
-        message LogEvent {
-            int32 code = 1;
-            string msg = 2;
-        }
     }
 }
 
-message MostRecentOffsets {
+enum Status {
+    PENDING = 0;
+    COMPLETE = 1;
+    REVERTED = 2;
+    ERROR = 3;
+}
+
+message LogEvent {
+    int32 code = 1;
+    string msg = 2;
+}
+
+message MostRecentOffset {
     int32 generation = 1;
     int64 offset = 2;
+}
+
+message ApecsStorageRequest {
+    string uid       = 1;
+    string concern_name = 2;
+    Op op               = 3;
+    string key          = 4;
+    bytes payload       = 5;
+
+    ResponseTarget response_target = 6;
+
+    enum Op {
+        GET    = 0;
+        CREATE = 1;
+        UPDATE = 2;
+        DELETE = 3;
+    }
+}
+
+message ApecsStorageResult {
+    string uid           = 1;
+    Code code            = 2;
+    bytes payload        = 3;
+    MostRecentOffset mro = 4;
+
+    enum Code {
+        SUCCESS = 0;
+        INTERNAL = 1;
+        MARSHAL_FAILED = 2;
+        NOT_FOUND = 3;
+        CONNECTION = 4;
+    }
+}
+
+message ResponseTarget {
+    string concern_name = 1;
+    string topic_name   = 2;
+    int32 partition     = 3;
+}
+
+message ApecsTxnResult {
+    string uid                               = 1;
+    Status status                            = 2;
+    google.protobuf.Timestamp processed_time = 3;
+    google.protobuf.Timestamp effective_time = 4;
+    repeated LogEvent logEvents              = 5;
 }

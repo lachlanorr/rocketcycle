@@ -377,25 +377,27 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 	}
 }
 
-func substStr(s string, concernName string, topicName string, partition int32) string {
+func substStr(s string, concernName string, clusterBootstrap string, topicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", platformName)
+	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
 	s = strings.ReplaceAll(s, "@concern", concernName)
 	s = strings.ReplaceAll(s, "@topic", topicName)
 	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
 	return s
 }
 
-func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics) []*pb.Program {
+func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics, clusters map[string]*pb.Platform_Cluster) []*pb.Program {
 	progs := make([]*pb.Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+		cluster := clusters[topics.Current.ClusterName]
 		progs[i] = &pb.Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, topicName, i),
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, topicName, i),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topicName, i),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topicName, i)
 		}
 	}
 	return progs
