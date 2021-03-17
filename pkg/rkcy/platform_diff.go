@@ -5,7 +5,7 @@
 package rkcy
 
 import (
-	"github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type platformDiff struct {

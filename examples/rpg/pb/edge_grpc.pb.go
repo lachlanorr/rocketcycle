@@ -31,7 +31,7 @@ func NewMmoServiceClient(cc grpc.ClientConnInterface) MmoServiceClient {
 
 func (c *mmoServiceClient) GetPlayer(ctx context.Context, in *MmoRequest, opts ...grpc.CallOption) (*Player, error) {
 	out := new(Player)
-	err := c.cc.Invoke(ctx, "/rkcy.examples.rpg.pb.MmoService/GetPlayer", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (c *mmoServiceClient) GetPlayer(ctx context.Context, in *MmoRequest, opts .
 
 func (c *mmoServiceClient) CreatePlayer(ctx context.Context, in *Player, opts ...grpc.CallOption) (*Player, error) {
 	out := new(Player)
-	err := c.cc.Invoke(ctx, "/rkcy.examples.rpg.pb.MmoService/CreatePlayer", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func _MmoService_GetPlayer_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rkcy.examples.rpg.pb.MmoService/GetPlayer",
+		FullMethod: "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MmoServiceServer).GetPlayer(ctx, req.(*MmoRequest))
@@ -107,7 +107,7 @@ func _MmoService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rkcy.examples.rpg.pb.MmoService/CreatePlayer",
+		FullMethod: "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MmoServiceServer).CreatePlayer(ctx, req.(*Player))
@@ -116,7 +116,7 @@ func _MmoService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec 
 }
 
 var _MmoService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "rkcy.examples.rpg.pb.MmoService",
+	ServiceName: "rocketcycle.examples.rpg.pb.MmoService",
 	HandlerType: (*MmoServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

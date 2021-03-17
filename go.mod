@@ -1,4 +1,4 @@
-module github.com/lachlanorr/rkcy
+module github.com/lachlanorr/rocketcycle
 
 go 1.16
 

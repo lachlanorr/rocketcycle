@@ -4,8 +4,8 @@
 
 syntax = "proto3";
 
-package rkcy.examples.rpg.pb;
-option go_package = "github.com/lachlanorr/rkcy/examples/rpg/pb";
+package rocketcycle.examples.rpg.pb;
+option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
 message Player {
     string id = 1;

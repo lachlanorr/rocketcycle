@@ -23,7 +23,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
             }
           },
           "default": {
@@ -39,7 +39,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
             }
           }
         ],
@@ -55,7 +55,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rkcy.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
             }
           },
           "default": {
@@ -110,7 +110,7 @@
         }
       }
     },
-    "rkcy.examples.rpg.pb.Player": {
+    "rocketcycle.examples.rpg.pb.Player": {
       "type": "object",
       "properties": {
         "id": {

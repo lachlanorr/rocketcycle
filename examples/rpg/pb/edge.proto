@@ -4,8 +4,8 @@
 
 syntax = "proto3";
 
-package rkcy.examples.rpg.pb;
-option go_package = "github.com/lachlanorr/rkcy/examples/rpg/pb";
+package rocketcycle.examples.rpg.pb;
+option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
@@ -17,12 +17,12 @@ message MmoRequest {
 }
 
 service MmoService {
-    rpc GetPlayer(MmoRequest) returns (rkcy.examples.rpg.pb.Player) {
+    rpc GetPlayer(MmoRequest) returns (rocketcycle.examples.rpg.pb.Player) {
         option (google.api.http) = {
             get: "/v1/player/get/{id}"
         };
     }
-    rpc CreatePlayer(rkcy.examples.rpg.pb.Player) returns (rkcy.examples.rpg.pb.Player) {
+    rpc CreatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
         option (google.api.http) = {
             post: "/v1/player/create"
             body: "*"

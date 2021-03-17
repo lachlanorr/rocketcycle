@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
+	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 func cobraGetResource(cmd *cobra.Command, args []string) {

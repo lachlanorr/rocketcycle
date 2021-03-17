@@ -5,8 +5,8 @@
 package commands
 
 import (
-	"github.com/lachlanorr/rkcy/examples/rpg/codes"
-	"github.com/lachlanorr/rkcy/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/codes"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
 func PlayerCreate(payload []byte) *rkcy.ProcessHandlerResult {

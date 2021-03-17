@@ -11,8 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 
-	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
+	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 func connect() (*pgx.Conn, error) {

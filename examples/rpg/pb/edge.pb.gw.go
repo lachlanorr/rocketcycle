@@ -129,7 +129,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.examples.rpg.pb.MmoService/GetPlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -152,7 +152,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.examples.rpg.pb.MmoService/CreatePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -214,7 +214,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.examples.rpg.pb.MmoService/GetPlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -234,7 +234,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.examples.rpg.pb.MmoService/CreatePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

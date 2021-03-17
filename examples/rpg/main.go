@@ -7,12 +7,12 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rkcy/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/consts"
-	"github.com/lachlanorr/rkcy/examples/rpg/edge"
-	"github.com/lachlanorr/rkcy/examples/rpg/sim"
-	"github.com/lachlanorr/rkcy/examples/rpg/storage"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
 func main() {

@@ -20,12 +20,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/lachlanorr/rkcy/examples/rpg/consts"
-	"github.com/lachlanorr/rkcy/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	rpg_pb "github.com/lachlanorr/rkcy/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rkcy/pkg/rkcy/pb"
-	"github.com/lachlanorr/rkcy/version"
+	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
 //go:embed static/docs
