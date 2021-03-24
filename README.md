@@ -5,6 +5,12 @@
 $> make
 ```
 
+## Docker build the rocketcycle-kafka image
+```
+$> cd docker/images
+$> ./build.sh kafka
+```
+
 ## Run the docker compose stuff to get the infrastructure up
 ```
 $> cd docker/compose/kafka_pg
