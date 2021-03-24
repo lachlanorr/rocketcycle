@@ -22,6 +22,12 @@ $> docker-compose up
 $> ./examples/rpg/db/init.sh
 ```
 
+## Update the platform config
+```
+$> cd build/bin
+$> ./rpg platform update
+```
+
 ## Run all the server stuff... lots of stuff
 ```
 $> cd build/bin
