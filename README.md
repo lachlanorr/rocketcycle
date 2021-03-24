@@ -5,7 +5,7 @@
 $> make
 ```
 
-## (In a new terminal) Run the docker compose stuff to get the infrastructure up
+## Run the docker compose stuff to get the infrastructure up
 ```
 $> cd docker/compose/kafka_pg
 $> docker-compose up
@@ -16,13 +16,13 @@ $> docker-compose up
 $> ./examples/rpg/db/init.sh
 ```
 
-## (In a new terminal) Run all the server stuff... lots of stuff
+## Run all the server stuff... lots of stuff
 ```
 $> cd build/bin
 $> ./rpg all
 ```
 
-## (In a new terminal) Run the edge client to create a player
+## Run the edge client to create a player
 ```
 $> cd build/bin
 $> ./rpg edge create player username=brock01
