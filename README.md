@@ -11,6 +11,11 @@ $> cd docker/compose/kafka_pg
 $> docker-compose up
 ```
 
+## Create the database schmae
+```
+$> ./examples/rpg/db/init.sh
+```
+
 ## (In a new terminal) Run all the server stuff... lots of stuff
 ```
 $> cd build/bin
