@@ -11,7 +11,7 @@ $> cd docker/compose/kafka_pg
 $> docker-compose up
 ```
 
-## Create the database schmae
+## Create the database schema
 ```
 $> ./examples/rpg/db/init.sh
 ```
