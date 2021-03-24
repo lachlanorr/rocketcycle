@@ -4,9 +4,10 @@
 
 package codes
 
-const (
-	Ok = 0
+import (
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+)
 
-	NotImplemented = 1
-	UnknownCommand = 2
+const (
+	Code_NOT_IMPLEMENTEDD rkcy_pb.Code = rkcy_pb.Code_RKCY_INTERNAL_MAX_CODE + 1
 )

@@ -87,12 +87,6 @@
           "items": {
             "$ref": "#/definitions/rkcy.pb.Platform.Cluster"
           }
-        },
-        "headerAliases": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
         }
       }
     },
@@ -117,6 +111,9 @@
         },
         "name": {
           "type": "string"
+        },
+        "logLevel": {
+          "$ref": "#/definitions/rkcy.pb.Severity"
         },
         "topics": {
           "type": "array",
@@ -222,6 +219,16 @@
           "type": "string"
         }
       }
+    },
+    "rkcy.pb.Severity": {
+      "type": "string",
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARN",
+        "ERROR"
+      ],
+      "default": "DEBUG"
     }
   }
 }

@@ -5,12 +5,20 @@
 package commands
 
 import (
-	"github.com/lachlanorr/rocketcycle/examples/rpg/codes"
+	"context"
+
+	"github.com/rs/zerolog/log"
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	//"github.com/lachlanorr/rocketcycle/examples/rpg/codes"
 )
 
-func PlayerCreate(payload []byte) *rkcy.ProcessHandlerResult {
-	return &rkcy.ProcessHandlerResult{
-		Status: codes.NotImplemented,
-	}
+func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
+	rslt := rkcy.StepResult{}
+	log.Info().Msgf("PlayerValidate ReqId=%s Key=%s", stepArgs.ReqId, stepArgs.Key)
+
+	rslt.Code = rkcy_pb.Code_OK
+	rslt.Payload = stepArgs.Payload
+	return &rslt
 }

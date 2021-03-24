@@ -7,18 +7,19 @@ syntax = "proto3";
 package rkcy.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
 
+import "apecs.proto";
+
 message Platform {
     string name               = 1;
     repeated Concern concerns = 2;
     repeated Cluster clusters = 3;
 
-    map<string, string> header_aliases = 4;
-
     message Concern {
-        Type type   = 1;
-        string name = 2;
+        Type type              = 1;
+        string name            = 2;
+        Severity log_level     = 3;
 
-        repeated Topics topics = 3;
+        repeated Topics topics = 4;
 
         // Type implies what topics will be present
         enum Type {

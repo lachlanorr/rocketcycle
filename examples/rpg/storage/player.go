@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+
 	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
@@ -23,37 +25,36 @@ func connect() (*pgx.Conn, error) {
 type Player struct {
 }
 
-func (player *Player) Get(uid string, id string) *rkcy_pb.ApecsStorageResult {
+func (player *Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	log.Info().
+		Msg("storage/player.go/Read")
 	return nil
 }
 
-func (player *Player) Create(uid string, id string, payload []byte, mro *rkcy_pb.MostRecentOffset) *rkcy_pb.ApecsStorageResult {
+func (player *Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	log.Info().
+		Msg("storage/player.go/Create")
+
+	rslt := rkcy.StepResult{}
+
 	mdl := rpg_pb.Player{}
-	err := proto.Unmarshal(payload, &mdl)
+	err := proto.Unmarshal(args.Payload, &mdl)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("Failed to Unmarshal Player")
-		return &rkcy_pb.ApecsStorageResult{
-			Uid:  uid,
-			Code: rkcy_pb.ApecsStorageResult_MARSHAL_FAILED,
-		}
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		return &rslt
 	}
 
 	conn, err := connect()
 	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("Unable to connect to database")
-		return &rkcy_pb.ApecsStorageResult{
-			Uid:  uid,
-			Code: rkcy_pb.ApecsStorageResult_CONNECTION,
-		}
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_CONNECTION
+		return &rslt
 	}
 	defer conn.Close(context.Background())
 
-	stmt := `INSERT INTO rpg.player (id, username, active, mro_generation, mro_offset)
-             VALUES ($1, $2, $3, $4, $5)
+	stmt := `INSERT INTO rpg.player (id, username, active, mro_generation, mro_partition, mro_offset)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id`
 
 	retid := ""
@@ -63,42 +64,35 @@ func (player *Player) Create(uid string, id string, payload []byte, mro *rkcy_pb
 		mdl.Id,
 		mdl.Username,
 		mdl.Active,
-		mro.Generation,
-		mro.Offset,
+		args.Offset.Generation,
+		args.Offset.Partition,
+		args.Offset.Offset,
 	).Scan(&retid)
 
 	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("Unable to create rpg.player")
-		return &rkcy_pb.ApecsStorageResult{
-			Uid:  uid,
-			Code: rkcy_pb.ApecsStorageResult_INTERNAL,
-		}
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_INTERNAL
+		return &rslt
 	}
 
-	mdlSer, err := proto.Marshal(&mdl)
+	rslt.Payload, err = proto.Marshal(&mdl)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("Failed to Marshal Player")
-		return &rkcy_pb.ApecsStorageResult{
-			Uid:  uid,
-			Code: rkcy_pb.ApecsStorageResult_MARSHAL_FAILED,
-		}
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		return &rslt
 	}
 
-	return &rkcy_pb.ApecsStorageResult{
-		Uid:     uid,
-		Code:    rkcy_pb.ApecsStorageResult_SUCCESS,
-		Payload: mdlSer,
-	}
+	return &rslt
 }
 
-func (player *Player) Update(uid string, id string, payload []byte, mro *rkcy_pb.MostRecentOffset) *rkcy_pb.ApecsStorageResult {
+func (player *Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	log.Info().
+		Msg("storage/player.go/Update")
 	return nil
 }
 
-func (player *Player) Delete(uid string, id string, mro *rkcy_pb.MostRecentOffset) *rkcy_pb.ApecsStorageResult {
+func (player *Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	log.Info().
+		Msg("storage/player.go/Delete")
 	return nil
 }

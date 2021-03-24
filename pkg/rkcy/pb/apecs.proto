@@ -10,54 +10,105 @@ package rkcy.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
 
 message ApecsTxn {
-    string uid = 1;       // uuid of txn used for tracing and reporting
-    Dir direction = 2;       // starts in forward, can potentially go to reverse if the transaction is reversible
-    bool can_revert = 3;     // whether or not this transaction can be rolled back.
+    string req_id = 1;       // uuid of txn used for tracing and reporting
+    ResponseTarget response_target = 2;
 
-    repeated Step forward_steps = 4;  // filled upon creation with forward steps
-    repeated Step reverse_steps = 5;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
+    int32 current_step_idx = 3;
+    Direction direction = 4; // starts in forward, can potentially go to reverse if the transaction is reversible
+    bool can_revert = 5;     // whether or not this transaction can be rolled back.
 
-    ResponseTarget response_target = 6;
+    repeated Step forward_steps = 6;  // filled upon creation with forward steps
+    repeated Step reverse_steps = 7;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
+}
 
-    enum Dir {
-        FORWARD = 0;
-        REVERSE = 1;
-    }
+enum Direction {
+    FORWARD = 0;
+    REVERSE = 1;
+}
 
-    message Step {
-        string concern_name = 1;        // logical persistence model that's used to partition messages
-        int32 command       = 2;        // command name, this will map to a piece of code (e.g. function)
-        string key          = 3;        // partition key
-        bytes payload       = 4;        // opaque payload for command
-        Status status       = 5;        // status of this step, all start at pending, and can transition to complete, error, and rolled back
+message Step {
+    System system       = 1; // Whether to queue step into Process or Storage code
+    string concern_name = 2; // logical persistence model that's used to partition messages
+    Command command     = 3; // command name, this will map to a piece of code (e.g. function)
+    string key          = 4; // instance key used as the partition key
+    bytes payload       = 5; // opaque payload for command
 
-        google.protobuf.Timestamp processed_time = 6; // actual time this command result was recorded
-        google.protobuf.Timestamp effective_time = 7; // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+    Result result   = 6; // Result returned from step handler
 
-        repeated LogEvent logEvents = 8; // general bucket for log events during a processed event
+    message Result {
+        // Result code of step, generally one of "Code" enum below but users can define their own codes greater than RKCY_INTERNAL_MAX
+        Code code = 1;
 
+        // actual time this command result was recorded
+        google.protobuf.Timestamp processed_time = 2;
+
+        // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+        google.protobuf.Timestamp effective_time = 3;
+
+        // general bucket for log events during a processed event
+        repeated LogEvent logEvents = 4;
     }
 }
 
-enum Status {
-    PENDING = 0;
-    COMPLETE = 1;
-    REVERTED = 2;
-    ERROR = 3;
+enum System {
+    NO_SYSTEM = 0;
+    PROCESS = 1;
+    STORAGE = 2;
+}
+
+enum Command {
+    NO_COMMAND = 0;
+
+    CREATE = 1;
+    READ   = 2;
+    UPDATE = 3;
+    DELETE = 4;
+
+    VALIDATE = 5;
+
+    // User defined commands should be greater than RKCY_INTERNAL_MAX
+    RKCY_INTERNAL_MAX_COMMAND = 16;
+}
+
+message ResponseTarget {
+    string topic_name = 1;
+    int32 partition = 2;
 }
 
 message LogEvent {
-    int32 code = 1;
+    Severity sev = 1;
     string msg = 2;
 }
 
-message MostRecentOffset {
-    int32 generation = 1;
-    int64 offset = 2;
+enum Severity {
+    DEBUG = 0;
+    INFO = 1;
+    WARN = 2;
+    ERROR = 3;
 }
 
+enum Code {
+    OK = 0;
+    INTERNAL = 1;
+    MARSHAL_FAILED = 2;
+    NOT_FOUND = 3;
+    CONNECTION = 4;
+    FAILED_CONSTRAINT = 5;
+	UNKNOWN_COMMAND = 6;
+
+    // User defined codes should be greater than RKCY_INTERNAL_MAX
+    RKCY_INTERNAL_MAX_CODE = 32;
+}
+
+message Offset {
+    int32 generation = 1;
+    int32 partition  = 2;
+    int64 offset     = 3;
+}
+
+/*
 message ApecsStorageRequest {
-    string uid       = 1;
+    string req_id       = 1;
     string concern_name = 2;
     Op op               = 3;
     string key          = 4;
@@ -74,30 +125,10 @@ message ApecsStorageRequest {
 }
 
 message ApecsStorageResult {
-    string uid           = 1;
+    string req_id        = 1;
     Code code            = 2;
     bytes payload        = 3;
     MostRecentOffset mro = 4;
 
-    enum Code {
-        SUCCESS = 0;
-        INTERNAL = 1;
-        MARSHAL_FAILED = 2;
-        NOT_FOUND = 3;
-        CONNECTION = 4;
-    }
 }
-
-message ResponseTarget {
-    string concern_name = 1;
-    string topic_name   = 2;
-    int32 partition     = 3;
-}
-
-message ApecsTxnResult {
-    string uid                               = 1;
-    Status status                            = 2;
-    google.protobuf.Timestamp processed_time = 3;
-    google.protobuf.Timestamp effective_time = 4;
-    repeated LogEvent logEvents              = 5;
-}
+*/

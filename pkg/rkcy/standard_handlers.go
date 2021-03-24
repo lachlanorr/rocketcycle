@@ -4,7 +4,12 @@
 
 package rkcy
 
-const (
-	rkcy            string = "rkcy"
-	directiveHeader string = "rkcy.directive"
+import (
+//"github.com/spf13/cobra"
+
+//"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
+
+//func standardProcessCreate(concernName string, instCache *InstanceCache) Handler {
+
+//}

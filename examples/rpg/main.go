@@ -8,7 +8,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 
+	"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
@@ -24,8 +26,13 @@ func main() {
 			sim.CobraCommand(),
 		},
 
-		StorageHandlers: map[string]rkcy.StorageHandler{
-			consts.Player: &storage.Player{},
+		Handlers: map[string]rkcy.ConcernHandlers{
+			consts.Player: {
+				Handlers: map[rkcy_pb.Command]rkcy.Handler{
+					rkcy_pb.Command_VALIDATE: commands.PlayerValidate,
+				},
+				CrudHandlers: &storage.Player{},
+			},
 		},
 	}
 

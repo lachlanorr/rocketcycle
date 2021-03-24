@@ -178,7 +178,6 @@ func updateRunning(
 	printCh chan<- string,
 ) {
 	key := progKey(acd.Program)
-
 	var (
 		rtProg *rtProgram
 		ok     bool
@@ -260,6 +259,22 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 	)
 }
 
+func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+	updateRunning(
+		ctx,
+		running,
+		pb.Directive_ADMIN_CONSUMER_START,
+		&pb.AdminConsumerDirective{
+			Program: &pb.Program{
+				Name:   "./" + platformName,
+				Args:   []string{"watch"},
+				Abbrev: "watch",
+			},
+		},
+		printCh,
+	)
+}
+
 func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 	rkcyCh := make(chan *rkcyMessage, 1)
 	go consumePlatformAdminTopic(
@@ -276,6 +291,7 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 	printCh := make(chan string, 100)
 	go printer(ctx, printCh)
 	startAdminServer(ctx, running, printCh)
+	startWatch(ctx, running, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 

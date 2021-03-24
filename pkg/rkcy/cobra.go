@@ -7,6 +7,8 @@ package rkcy
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 // Cobra sets these values based on command parsing
@@ -20,39 +22,81 @@ type Settings struct {
 
 	Topic     string
 	Partition int32
+
+	WatchError    bool
+	WatchComplete bool
 }
 
 var (
-	settings     Settings = Settings{Partition: -1}
-	platformImpl *PlatformImpl
+	settings         Settings = Settings{Partition: -1}
+	platformImpl     *PlatformImpl
+	platformHandlers PlatformHandlers
 )
 
 func GetSettings() Settings {
 	return settings
 }
 
-func preRunCobra(cmd *cobra.Command, args []string) {
-	if settings.BootstrapServers != "" {
-		log.Logger = log.With().
-			Str("BootstrapServers", settings.BootstrapServers).
-			Logger()
+func prepPlatformImpl(impl *PlatformImpl) {
+	if impl.Name == "" {
+		log.Fatal().
+			Msg("No PlatformImpl.Name specificed")
 	}
-	if settings.Topic != "" {
-		log.Logger = log.With().
-			Str("Topic", settings.Topic).
-			Logger()
+
+	platformImpl = impl
+	initPlatformName(impl.Name)
+	prepLogging(impl.Name)
+
+	platformHandlers = make(map[string]map[pb.System]map[pb.Command]Handler)
+
+	if impl.Handlers == nil {
+		log.Fatal().
+			Msg("No PlatformImpl.Handlers specificed")
 	}
-	if settings.Partition != -1 {
-		log.Logger = log.With().
-			Int32("Partition", settings.Partition).
-			Logger()
+	for concernName, concernHandlers := range impl.Handlers {
+		platformHandlers[concernName] = make(map[pb.System]map[pb.Command]Handler)
+		if concernHandlers.CrudHandlers == nil {
+			log.Fatal().
+				Str("Concern", concernName).
+				Msg("No CrudHandlers for concern")
+		}
+		if concernHandlers.Handlers == nil || len(concernHandlers.Handlers) == 0 {
+			log.Fatal().
+				Str("Concern", concernName).
+				Msg("No ProcessHandlers specified for concern")
+		}
+		platformHandlers[concernName][pb.System_PROCESS] = concernHandlers.Handlers
+		// Apply CrudHandlers into storage handlers
+		platformHandlers[concernName][pb.System_STORAGE] = make(map[pb.Command]Handler)
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_CREATE] = concernHandlers.CrudHandlers.Create
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_READ] = concernHandlers.CrudHandlers.Read
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_UPDATE] = concernHandlers.CrudHandlers.Update
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_DELETE] = concernHandlers.CrudHandlers.Delete
 	}
 }
 
+func preRunCobra(cmd *cobra.Command, args []string) {
+	/*
+		if settings.BootstrapServers != "" {
+			log.Logger = log.With().
+				Str("BootstrapServers", settings.BootstrapServers).
+				Logger()
+		}
+		if settings.Topic != "" {
+			log.Logger = log.With().
+				Str("Topic", settings.Topic).
+				Logger()
+		}
+		if settings.Partition != -1 {
+			log.Logger = log.With().
+				Int32("Partition", settings.Partition).
+				Logger()
+		}
+	*/
+}
+
 func runCobra(impl *PlatformImpl) {
-	platformImpl = impl
-	initPlatformName(platformImpl.Name)
-	prepLogging(platformImpl.Name)
+	prepPlatformImpl(impl)
 
 	rootCmd := &cobra.Command{
 		Use:              platformName,
@@ -121,6 +165,17 @@ func runCobra(impl *PlatformImpl) {
 	storageCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(storageCmd)
 
+	watchCmd := &cobra.Command{
+		Use:   "watch",
+		Short: "APECS watch mode",
+		Long:  "Runs a watch consumer against all error/complete topics",
+		Run:   cobraWatch,
+	}
+	watchCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	watchCmd.PersistentFlags().BoolVarP(&settings.WatchError, "error", "e", true, "Whether to watch error topics")
+	watchCmd.PersistentFlags().BoolVarP(&settings.WatchComplete, "complete", "c", true, "Whether to watch complete topics")
+	rootCmd.AddCommand(watchCmd)
+
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run all topic consumer programs",
@@ -151,6 +206,5 @@ func runCobra(impl *PlatformImpl) {
 	for _, addtlCmd := range platformImpl.CobraCommands {
 		rootCmd.AddCommand(addtlCmd)
 	}
-
 	rootCmd.Execute()
 }

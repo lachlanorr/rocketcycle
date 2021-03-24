@@ -13,12 +13,14 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
@@ -114,8 +116,8 @@ func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Plat
 	}
 	if topic.PartitionCount <= 0 {
 		topic.PartitionCount = 1
-	} else if topic.PartitionCount > 1024 {
-		topic.PartitionCount = 1024
+	} else if topic.PartitionCount > consts.MaxPartition {
+		topic.PartitionCount = consts.MaxPartition
 	}
 
 	return topic
@@ -138,13 +140,13 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"process", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "pr/@concern/@partition",
+					Abbrev: "proc/@concern/@partition",
 				}
 			case "storage":
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"storage", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "st/@concern/@partition",
+					Abbrev: "stor/@concern/@partition",
 				}
 			}
 		}
@@ -291,7 +293,7 @@ func validateTopic(topic *pb.Platform_Concern_Topic, clusters map[string]*pb.Pla
 	if _, ok := clusters[topic.ClusterName]; !ok {
 		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.ClusterName)
 	}
-	if topic.PartitionCount < 1 || topic.PartitionCount > 1024 {
+	if topic.PartitionCount < 1 || topic.PartitionCount > consts.MaxPartition {
 		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)
 	}
 	return nil
@@ -486,7 +488,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        directiveHeaders(pb.Directive_PLATFORM),
+		Headers:        standardHeaders(pb.Directive_PLATFORM, uuid.NewString()),
 	}
 
 	produce := func() {
@@ -508,7 +510,6 @@ Loop:
 		case <-timer.C:
 			slog.Fatal().
 				Msg("Timeout producing platform message")
-			break Loop
 		case ev := <-prod.Events():
 			msgEv, ok := ev.(*kafka.Message)
 			if !ok {

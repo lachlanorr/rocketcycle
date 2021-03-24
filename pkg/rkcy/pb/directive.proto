@@ -29,10 +29,6 @@ enum Directive {
 
     APECS_TXN              = 0x00080000;
 
-    APECS_STORAGE_REQUEST  = 0x00100000;
-
-    APECS_RESULT           = 0x00200000;
-
     ALL = -1;
 }
 

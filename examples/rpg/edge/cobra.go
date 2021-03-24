@@ -5,7 +5,7 @@
 package edge
 
 import (
-	"github.com/rs/zerolog/log"
+	//	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -25,21 +25,23 @@ var (
 )
 
 func preRunCobra(cmd *cobra.Command, args []string) {
-	if settings.BootstrapServers != "" {
-		log.Logger = log.With().
-			Str("BootstrapServers", settings.BootstrapServers).
-			Logger()
-	}
-	if settings.Topic != "" {
-		log.Logger = log.With().
-			Str("Topic", settings.Topic).
-			Logger()
-	}
-	if settings.Partition != -1 {
-		log.Logger = log.With().
-			Int32("Partition", settings.Partition).
-			Logger()
-	}
+	/*
+		if settings.BootstrapServers != "" {
+			log.Logger = log.With().
+				Str("BootstrapServers", settings.BootstrapServers).
+				Logger()
+		}
+		if settings.Topic != "" {
+			log.Logger = log.With().
+				Str("Topic", settings.Topic).
+				Logger()
+		}
+		if settings.Partition != -1 {
+			log.Logger = log.With().
+				Int32("Partition", settings.Partition).
+				Logger()
+		}
+	*/
 }
 
 func CobraCommand() *cobra.Command {

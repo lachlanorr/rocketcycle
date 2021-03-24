@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -38,7 +39,7 @@ var docsFiles embed.FS
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("admin serve started")
+		Msg("admin server started")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -302,7 +303,6 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 		log.Fatal().
 			Err(err).
 			Msg("failed to kafka.NewProducer for admin messages")
-		return
 	}
 	defer adminProd.Close()
 	go func() {
@@ -360,7 +360,7 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        directiveHeaders(pb.Directive_ADMIN_CONSUMER_STOP),
+			Headers:        standardHeaders(pb.Directive_ADMIN_CONSUMER_STOP, uuid.NewString()),
 		}, nil)
 	}
 	for _, p := range platDiff.progsToStart {
@@ -372,7 +372,7 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        directiveHeaders(pb.Directive_ADMIN_CONSUMER_START),
+			Headers:        standardHeaders(pb.Directive_ADMIN_CONSUMER_START, uuid.NewString()),
 		}, nil)
 	}
 }

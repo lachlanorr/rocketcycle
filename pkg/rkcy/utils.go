@@ -14,9 +14,9 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
@@ -24,9 +24,11 @@ var exists struct{}
 
 func prepLogging(platformName string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
-	log.Logger = log.With().
-		Str("Platform", platformName).
-		Logger()
+	/*
+		log.Logger = log.With().
+			Str("Platform", platformName).
+			Logger()
+	*/
 }
 
 func contains(slice []string, item string) bool {
@@ -76,7 +78,7 @@ func findHeader(msg *kafka.Message, key string) []byte {
 }
 
 func getDirective(msg *kafka.Message) pb.Directive {
-	val := findHeader(msg, directiveHeader)
+	val := findHeader(msg, consts.DirectiveHeader)
 	if val != nil {
 		return pb.Directive(BytesToInt(val))
 	} else {
@@ -84,8 +86,16 @@ func getDirective(msg *kafka.Message) pb.Directive {
 	}
 }
 
+func getReqId(msg *kafka.Message) string {
+	val := findHeader(msg, consts.ReqIdHeader)
+	if val != nil {
+		return string(val)
+	}
+	return ""
+}
+
 func AdminTopic(platformName string) string {
-	return fmt.Sprintf("%s.%s.admin", rkcy, platformName)
+	return fmt.Sprintf("%s.%s.admin", consts.Rkcy, platformName)
 }
 
 func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
@@ -115,7 +125,7 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 					ReplicationFactor: len(md.Brokers),
 					Config: map[string]string{
 						"retention.ms":    "-1",
-						"retention.bytes": strconv.Itoa(10 * 1024 * 1024),
+						"retention.bytes": strconv.Itoa(int(consts.PlatformAdminRetentionBytes)),
 					},
 				},
 			},
@@ -133,21 +143,15 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 	return topicName, nil
 }
 
-func msgTypeName(msg proto.Message) string {
-	msgR := msg.ProtoReflect()
-	desc := msgR.Descriptor()
-	return string(desc.FullName())
-}
-
-func msgTypeHeaders(msg proto.Message) []kafka.Header {
-	return []kafka.Header{{Key: "type", Value: []byte(msgTypeName(msg))}}
-}
-
-func directiveHeaders(directive pb.Directive) []kafka.Header {
+func standardHeaders(directive pb.Directive, reqId string) []kafka.Header {
 	return []kafka.Header{
 		{
-			Key:   directiveHeader,
+			Key:   consts.DirectiveHeader,
 			Value: IntToBytes(int(directive)),
+		},
+		{
+			Key:   consts.ReqIdHeader,
+			Value: []byte(reqId),
 		},
 	}
 }

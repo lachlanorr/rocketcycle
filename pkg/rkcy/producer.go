@@ -37,6 +37,7 @@ type Producer struct {
 
 type message struct {
 	directive  pb.Directive
+	reqId      string
 	key        []byte
 	value      []byte
 	deliveryCh chan kafka.Event
@@ -123,11 +124,19 @@ func (prod *Producer) updatePlatform(plat *pb.Platform) {
 
 func (prod *Producer) Produce(
 	directive pb.Directive,
+	reqId string,
 	key []byte,
 	value []byte,
 	deliveryChan chan kafka.Event,
 ) {
-	prod.produceCh <- &message{directive: directive, key: key, value: value, deliveryCh: deliveryChan}
+	log.Info().Msgf("Produce %08x %s %s", directive, reqId, string(key))
+	prod.produceCh <- &message{
+		directive:  directive,
+		reqId:      reqId,
+		key:        key,
+		value:      value,
+		deliveryCh: deliveryChan,
+	}
 }
 
 func (prod *Producer) closeKProd() {
@@ -174,7 +183,7 @@ func (prod *Producer) run(ctx context.Context) {
 					Partition: partition,
 				},
 				Value:   msg.value,
-				Headers: directiveHeaders(msg.directive),
+				Headers: standardHeaders(msg.directive, msg.reqId),
 			}
 
 			err := prod.kProd.Produce(&kMsg, msg.deliveryCh)

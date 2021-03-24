@@ -7,9 +7,11 @@ package edge
 import (
 	"context"
 	"embed"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -18,13 +20,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	//"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 
 	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -32,7 +36,7 @@ import (
 var docsFiles embed.FS
 
 var (
-	prods map[string]*rkcy.ApecsProducer
+	aprod *rkcy.ApecsProducer
 )
 
 type server struct {
@@ -87,52 +91,62 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 	}
 	in.Id = uuid.NewString()
 
-	log.Info().Msg("CreatePlayer " + in.Id)
-
 	inSer, err := proto.Marshal(in)
 	if err != nil {
 		return nil, status.New(codes.Internal, "failed to marshal Player").Err()
 	}
 
-	prod, ok := prods[consts.Player]
-	if !ok {
-		return nil, status.New(codes.Internal, "no producer for 'player'").Err()
-	}
-
-	req := rkcy_pb.ApecsStorageRequest{
-		Uid:         uuid.NewString(),
-		ConcernName: consts.Player,
-		Op:          rkcy_pb.ApecsStorageRequest_CREATE,
-		Key:         in.Id,
-		Payload:     inSer,
-
-		ResponseTarget: &rkcy_pb.ResponseTarget{
-			TopicName: settings.Topic,
-			Partition: settings.Partition,
+	reqId, err := aprod.ExecuteTxn(
+		settings.Topic,
+		settings.Partition,
+		false,
+		inSer,
+		[]rkcy.Step{
+			{
+				ConcernName: consts.Player,
+				Command:     rkcy_pb.Command_VALIDATE,
+				Key:         in.Id,
+			},
+			{
+				ConcernName: consts.Player,
+				Command:     rkcy_pb.Command_CREATE,
+				Key:         in.Id,
+			},
 		},
-	}
-
-	err = prod.Storage(&req)
+	)
 	if err != nil {
-		return nil, status.New(codes.Internal, "failed to produce ApecsStorageRequest").Err()
+		log.Error().
+			Err(err).
+			Msg("failed to ExecuteTxn")
+		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
 	}
 
-	return in, nil
-}
+	log.Info().
+		Str("ReqId", reqId).
+		Msg("CreatePlayer")
 
-func enrollProducer(ctx context.Context, platformName string, concernName string) {
-	prods[concernName] = rkcy.NewApecsProducer(ctx, settings.BootstrapServers, platformName, concernName)
-	if prods[concernName] == nil {
-		log.Fatal().
-			Msgf("Failure creating producer for '%s'", concernName)
+	rspCh := make(chan *rkcy_pb.ApecsTxn)
+	timer := time.NewTimer(2 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Msg("edge server request exiting, ctx.Done()")
+			return nil, status.New(codes.Internal, "context closed").Err()
+		case <-timer.C:
+			log.Fatal().
+				Msg("edge server request exiting, ctx.Done()")
+			return nil, status.New(codes.DeadlineExceeded, "time out waiting on response").Err()
+		case txn := <-rspCh:
+			txnJson := protojson.Format(proto.Message(txn))
+			fmt.Println(txnJson)
+			return in, nil
+		}
 	}
+
 }
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
-	prods = make(map[string]*rkcy.ApecsProducer)
-
-	enrollProducer(ctx, platformName, consts.Player)
-
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	rkcy.ServeGrpcGateway(ctx, srv)
 }
@@ -145,6 +159,12 @@ func cobraServe(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	aprod = rkcy.NewApecsProducer(ctx, settings.BootstrapServers, rkcy.PlatformName())
+	if aprod == nil {
+		log.Fatal().
+			Msg("Failed to NewApecsProducer")
+	}
 
 	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName())
 
