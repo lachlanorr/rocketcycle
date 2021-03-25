@@ -7,16 +7,30 @@ package commands
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+
+	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
-	//"github.com/lachlanorr/rocketcycle/examples/rpg/codes"
 )
 
 func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
-	log.Info().Msgf("PlayerValidate ReqId=%s Key=%s", stepArgs.ReqId, stepArgs.Key)
+
+	player := rpg_pb.Player{}
+	err := proto.Unmarshal(stepArgs.Payload, &player)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_FAILED_CONSTRAINT
+		return &rslt
+	}
+
+	if len(player.Username) < 4 {
+		rslt.LogError("Username too short")
+		rslt.Code = rkcy_pb.Code_FAILED_CONSTRAINT
+		return &rslt
+	}
 
 	rslt.Code = rkcy_pb.Code_OK
 	rslt.Payload = stepArgs.Payload

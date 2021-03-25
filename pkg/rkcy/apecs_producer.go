@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
@@ -23,10 +24,11 @@ type Step struct {
 }
 
 type ApecsProducer struct {
-	ctx              context.Context
-	bootstrapServers string
-	platformName     string
-	producers        map[string]map[consts.StandardTopicName]*Producer
+	ctx               context.Context
+	bootstrapServers  string
+	platformName      string
+	producers         map[string]map[consts.StandardTopicName]*Producer
+	responseProducers map[string]*kafka.Producer
 }
 
 func NewApecsProducer(
@@ -36,10 +38,11 @@ func NewApecsProducer(
 ) *ApecsProducer {
 
 	return &ApecsProducer{
-		ctx:              ctx,
-		bootstrapServers: bootstrapServers,
-		platformName:     platformName,
-		producers:        make(map[string]map[consts.StandardTopicName]*Producer),
+		ctx:               ctx,
+		bootstrapServers:  bootstrapServers,
+		platformName:      platformName,
+		producers:         make(map[string]map[consts.StandardTopicName]*Producer),
+		responseProducers: make(map[string]*kafka.Producer),
 	}
 }
 
@@ -70,6 +73,48 @@ func (aprod *ApecsProducer) getProducer(
 	return pdc, nil
 }
 
+func (aprod *ApecsProducer) produceResponse(txn *pb.ApecsTxn) error {
+	if txn.ResponseTarget == nil {
+		return nil
+	}
+
+	rspTgt := txn.ResponseTarget
+
+	txnSer, err := proto.Marshal(txn)
+	if err != nil {
+		return err
+	}
+
+	kProd, ok := aprod.responseProducers[rspTgt.BootstrapServers]
+	if !ok {
+		var err error
+		kProd, err = kafka.NewProducer(&kafka.ConfigMap{
+			"bootstrap.servers": rspTgt.BootstrapServers,
+		})
+		if err != nil {
+			return err
+		}
+
+		aprod.responseProducers[rspTgt.BootstrapServers] = kProd
+	}
+
+	kMsg := kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &rspTgt.TopicName,
+			Partition: rspTgt.Partition,
+		},
+		Value:   txnSer,
+		Headers: standardHeaders(pb.Directive_APECS_TXN, txn.ReqId),
+	}
+
+	err = kProd.Produce(&kMsg, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (aprod *ApecsProducer) Close() {
 	for _, concernProds := range aprod.producers {
 		for _, pdc := range concernProds {
@@ -77,16 +122,20 @@ func (aprod *ApecsProducer) Close() {
 		}
 	}
 
+	for _, responseProd := range aprod.responseProducers {
+		responseProd.Close()
+	}
+
 	aprod.producers = make(map[string]map[consts.StandardTopicName]*Producer)
 }
 
 func (aprod *ApecsProducer) ExecuteTxn(
-	responseTopic string,
-	responsePartition int32,
+	reqId string,
+	rspTgt *pb.ResponseTarget,
 	canRevert bool,
 	payload []byte,
 	steps []Step,
-) (string, error) {
+) error {
 	stepsPb := make([]pb.Step, len(steps))
 	for i, step := range steps {
 		stepsPb[i] = pb.Step{
@@ -100,26 +149,25 @@ func (aprod *ApecsProducer) ExecuteTxn(
 		stepsPb[0].Payload = payload
 	}
 	return aprod.executeTxn(
-		&pb.ResponseTarget{
-			TopicName: responseTopic,
-			Partition: responsePartition,
-		},
+		reqId,
+		rspTgt,
 		canRevert,
 		stepsPb,
 	)
 }
 
 func (aprod *ApecsProducer) executeTxn(
-	responseTarget *pb.ResponseTarget,
+	reqId string,
+	rspTgt *pb.ResponseTarget,
 	canRevert bool,
 	steps []pb.Step,
-) (string, error) {
-	txn, err := newApecsTxn(responseTarget, canRevert, steps)
+) error {
+	txn, err := newApecsTxn(reqId, rspTgt, canRevert, steps)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return txn.ReqId, aprod.produceCurrentStep(txn)
+	return aprod.produceCurrentStep(txn)
 }
 
 var systemToTopic = map[pb.System]consts.StandardTopicName{
@@ -127,7 +175,7 @@ var systemToTopic = map[pb.System]consts.StandardTopicName{
 	pb.System_STORAGE: consts.Storage,
 }
 
-func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code pb.Code, msg string) error {
+func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code pb.Code, logToResult bool, msg string) error {
 	if step == nil {
 		step := rtxn.firstForwardStep()
 		if step == nil {
@@ -145,13 +193,15 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code p
 		}
 	}
 
-	step.Result.LogEvents = append(
-		step.Result.LogEvents,
-		&pb.LogEvent{
-			Sev: pb.Severity_ERROR,
-			Msg: msg,
-		},
-	)
+	if logToResult {
+		step.Result.LogEvents = append(
+			step.Result.LogEvents,
+			&pb.LogEvent{
+				Sev: pb.Severity_ERROR,
+				Msg: msg,
+			},
+		)
+	}
 
 	prd, err := aprod.getProducer(step.ConcernName, consts.Error)
 	if err != nil {
@@ -164,6 +214,12 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code p
 	}
 
 	prd.Produce(pb.Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+
+	err = aprod.produceResponse(rtxn.txn)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -186,6 +242,12 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 	}
 
 	prd.Produce(pb.Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+
+	err = aprod.produceResponse(rtxn.txn)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

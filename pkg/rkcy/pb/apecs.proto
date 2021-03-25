@@ -47,6 +47,8 @@ message Step {
 
         // general bucket for log events during a processed event
         repeated LogEvent logEvents = 4;
+
+        bytes payload = 5; // opaque payload returned from command
     }
 }
 
@@ -71,8 +73,9 @@ enum Command {
 }
 
 message ResponseTarget {
-    string topic_name = 1;
-    int32 partition = 2;
+    string bootstrap_servers = 1;
+    string topic_name = 2;
+    int32 partition = 3;
 }
 
 message LogEvent {

@@ -71,8 +71,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				log.WithLevel(wt.logLevel).
-					Str("Directive", fmt.Sprintf("0x%08X", int(getDirective(msg)))).
-					Str("ReqId", getReqId(msg)).
+					Str("Directive", fmt.Sprintf("0x%08X", int(GetDirective(msg)))).
+					Str("ReqId", GetReqId(msg)).
 					Msg(wt.topicName)
 				txn := pb.ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)
@@ -83,7 +83,6 @@ func (wt *watchTopic) consume(ctx context.Context) {
 			}
 		}
 	}
-
 }
 
 func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {

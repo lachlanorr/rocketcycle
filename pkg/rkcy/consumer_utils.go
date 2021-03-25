@@ -83,7 +83,7 @@ func findMostRecentMatching(
 		}
 		if !timedOut && msg != nil {
 			lastRead = int64(msg.TopicPartition.Offset)
-			directive := getDirective(msg)
+			directive := GetDirective(msg)
 			if (directive & match) == match {
 				matchingOffset = int64(msg.TopicPartition.Offset)
 			}

@@ -7,8 +7,6 @@ package rkcy
 import (
 	"fmt"
 
-	"github.com/google/uuid"
-
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
@@ -16,16 +14,14 @@ type rtApecsTxn struct {
 	txn *pb.ApecsTxn
 }
 
-func newApecsTxn(responseTarget *pb.ResponseTarget, canRevert bool, steps []pb.Step) (*pb.ApecsTxn, error) {
-	reqId := uuid.NewString()
-
-	if responseTarget != nil && (responseTarget.TopicName == "" || responseTarget.Partition < 0) {
-		return nil, fmt.Errorf("NewApecsTxn ReqId=%s ResponseTarget=%+v: Invalid ResponseTarget", reqId, responseTarget)
+func newApecsTxn(reqId string, rspTgt *pb.ResponseTarget, canRevert bool, steps []pb.Step) (*pb.ApecsTxn, error) {
+	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
+		return nil, fmt.Errorf("NewApecsTxn ReqId=%s ResponseTarget=%+v: Invalid ResponseTarget", reqId, rspTgt)
 	}
 
 	txn := pb.ApecsTxn{
 		ReqId:          reqId,
-		ResponseTarget: responseTarget,
+		ResponseTarget: rspTgt,
 		CurrentStepIdx: 0,
 		Direction:      pb.Direction_FORWARD,
 		CanRevert:      canRevert,
@@ -58,6 +54,15 @@ func newRtApecsTxn(txn *pb.ApecsTxn) (*rtApecsTxn, error) {
 	}
 
 	return &rtxn, nil
+}
+
+func ApecsTxnResult(txn *pb.ApecsTxn) (bool, *pb.Step_Result) {
+	step := ApecsTxnCurrentStep(txn)
+	success := txn.Direction == pb.Direction_FORWARD &&
+		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
+		step.Result != nil &&
+		step.Result.Code == pb.Code_OK
+	return success, step.Result
 }
 
 func (rtxn *rtApecsTxn) firstForwardStep() *pb.Step {
@@ -94,10 +99,14 @@ func (rtxn *rtApecsTxn) previousStep() *pb.Step {
 }
 
 func (rtxn *rtApecsTxn) currentStep() *pb.Step {
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
-		return rtxn.txn.ForwardSteps[rtxn.txn.CurrentStepIdx]
+	return ApecsTxnCurrentStep(rtxn.txn)
+}
+
+func ApecsTxnCurrentStep(txn *pb.ApecsTxn) *pb.Step {
+	if txn.Direction == pb.Direction_FORWARD {
+		return txn.ForwardSteps[txn.CurrentStepIdx]
 	} else { // txn.Direction == Reverse
-		return rtxn.txn.ReverseSteps[rtxn.txn.CurrentStepIdx]
+		return txn.ReverseSteps[txn.CurrentStepIdx]
 	}
 }
 

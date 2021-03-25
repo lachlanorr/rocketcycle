@@ -156,7 +156,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 	}
 
 	if len(body) > 0 {
-		fmt.Println(string(body))
+		fmt.Printf("%d %s\n", resp.StatusCode, string(body))
 	}
 
 	if resp.StatusCode != 200 {

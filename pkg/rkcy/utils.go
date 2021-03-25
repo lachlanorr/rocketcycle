@@ -77,7 +77,7 @@ func findHeader(msg *kafka.Message, key string) []byte {
 	return nil
 }
 
-func getDirective(msg *kafka.Message) pb.Directive {
+func GetDirective(msg *kafka.Message) pb.Directive {
 	val := findHeader(msg, consts.DirectiveHeader)
 	if val != nil {
 		return pb.Directive(BytesToInt(val))
@@ -86,7 +86,7 @@ func getDirective(msg *kafka.Message) pb.Directive {
 	}
 }
 
-func getReqId(msg *kafka.Message) string {
+func GetReqId(msg *kafka.Message) string {
 	val := findHeader(msg, consts.ReqIdHeader)
 	if val != nil {
 		return string(val)
@@ -172,7 +172,7 @@ const (
 
 // reasonable list of colors that change greatly each time
 var colors []int = []int{
-	11, 12, 13, 14, 10, 9,
+	11, 12, /*13, 14, 10,*/ /*9,*/
 	31 /*47,*/ /*63,*/, 79, 95 /*111,*/, 127, 143, 159, 175, 191, 207, 223,
 	25, 41, 57, 73, 89, 105, 121, 137, 153, 169, 185, 201, 217,
 	26, 42, 58, 74, 90, 106, 122, 138, 154, 170, 186, 202, 218,

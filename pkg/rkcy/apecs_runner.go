@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -26,6 +27,7 @@ func produceApecsTxnError(
 	step *pb.Step,
 	aprod *ApecsProducer,
 	code pb.Code,
+	logToResult bool,
 	format string,
 	args ...interface{},
 ) {
@@ -35,7 +37,7 @@ func produceApecsTxnError(
 		Str("ReqId", rtxn.txn.ReqId).
 		Msg(logMsg)
 
-	err := aprod.produceError(rtxn, step, code, logMsg)
+	err := aprod.produceError(rtxn, step, code, logToResult, logMsg)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -55,23 +57,23 @@ func advanceApecsTxn(
 	step := rtxn.currentStep()
 
 	if step.Result != nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
 		return
 	}
 
 	if step.ConcernName != tp.ConcernName {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
 		return
 	}
 
 	hndlr, ok := handlers[step.Command]
 	if !ok {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, "advanceApecsTxn Command=%d: No handler for command", step.Command)
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
 		return
 	}
 
 	if step.Key == "" {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn: No key in step")
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: No key in step")
 		return
 	}
 
@@ -81,10 +83,10 @@ func advanceApecsTxn(
 
 		expectingNil := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
 		if inst == nil && !expectingNil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn Key=%s: No Instance found in cache in non CREATE/VALIDATE command", step.Key)
+			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: No Instance found in cache in non CREATE/VALIDATE command", step.Key)
 			return
 		} else if inst != nil && expectingNil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE/VALIDATE command", step.Key)
+			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE/VALIDATE command", step.Key)
 			return
 		}
 	}
@@ -112,10 +114,11 @@ func advanceApecsTxn(
 		ProcessedTime: now,
 		EffectiveTime: effectiveTime,
 		LogEvents:     rslt.LogEvents,
+		Payload:       rslt.Payload,
 	}
 
 	if step.Result.Code != pb.Code_OK {
-		produceApecsTxnError(rtxn, step, aprod, step.Result.Code, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
+		produceApecsTxnError(rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return
 	}
 
@@ -123,7 +126,8 @@ func advanceApecsTxn(
 		if rslt.Instance != nil {
 			// Instance has changed in handler, update the
 			// storage system
-			_, err := aprod.executeTxn(
+			err := aprod.executeTxn(
+				uuid.NewString(),
 				nil,
 				false,
 				[]pb.Step{
@@ -137,7 +141,7 @@ func advanceApecsTxn(
 				},
 			)
 			if err != nil {
-				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 				return
 			}
 			instanceCache.Set(step.Key, rslt.Instance)
@@ -150,13 +154,13 @@ func advanceApecsTxn(
 		nextStep.Payload = rslt.Payload
 		err := aprod.produceCurrentStep(rtxn.txn)
 		if err != nil {
-			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
 		err := aprod.produceComplete(rtxn)
 		if err != nil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, "advanceApecsTxn error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
@@ -216,7 +220,7 @@ func consumeApecsTopic(
 			}
 
 			if !timedOut && msg != nil {
-				directive := getDirective(msg)
+				directive := GetDirective(msg)
 				if directive == pb.Directive_APECS_TXN {
 					txn := pb.ApecsTxn{}
 					err := proto.Unmarshal(msg.Value, &txn)
@@ -265,6 +269,23 @@ func consumeApecsTopic(
 
 type PlatformHandlers map[string]map[pb.System]map[pb.Command]Handler
 
+func processHandlerCreate(ctx context.Context, stepInfo *StepArgs) *StepResult {
+	instanceCache.Set(stepInfo.Key, stepInfo.Payload)
+	return &StepResult{
+		Code:    pb.Code_OK,
+		Payload: stepInfo.Payload,
+	}
+}
+
+func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
+	_, ok := handlers[pb.Command_CREATE]
+	if ok {
+		log.Warn().
+			Msg("Overriding Command_CREATE handler")
+	}
+	handlers[pb.Command_CREATE] = processHandlerCreate
+}
+
 func startApecsRunner(
 	ctx context.Context,
 	platHndlrs PlatformHandlers,
@@ -299,6 +320,9 @@ func startApecsRunner(
 	var handlers map[pb.Command]Handler
 	if tp.System == pb.System_PROCESS {
 		handlers = concernHandlers[pb.System_PROCESS]
+
+		// Insert handlers for process CRUD ops
+		registerProcessCrudHandlers(handlers)
 	} else if tp.System == pb.System_STORAGE {
 		handlers = concernHandlers[pb.System_STORAGE]
 	} else {

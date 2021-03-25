@@ -379,7 +379,7 @@ func consumePlatformAdminTopic(
 					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
-				directive := getDirective(msg)
+				directive := GetDirective(msg)
 				if (directive & match) == match {
 					ch <- &rkcyMessage{
 						Directive: directive,
