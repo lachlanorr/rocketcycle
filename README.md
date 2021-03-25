@@ -6,7 +6,7 @@ The following should be installed as appropriate for your platform:
 - [Go](https://golang.org/doc/install) - 1.16.x
 - [Protobuf and gRPC compilers with Go support](https://grpc.io/docs/languages/go/quickstart/)
 - [gRPC-Gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway#installation)
-- [Sqitch with Posgresql support](https://sqitch.org/download/)
+- [Sqitch with PosgreSQL support](https://sqitch.org/download/)
 
 
 ## Build everything - Will make the GNUmakefile
