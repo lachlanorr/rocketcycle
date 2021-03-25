@@ -8,6 +8,4 @@ const (
 	Platform string = "rpg"
 
 	Player string = "player"
-
-	DefaultTimeoutSecs int = 10
 )

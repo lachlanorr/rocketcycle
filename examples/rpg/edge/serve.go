@@ -99,14 +99,15 @@ func CodeTranslate(code rkcy_pb.Code) codes.Code {
 }
 
 type RespChan struct {
-	ReqId  string
-	RespCh chan *rkcy_pb.ApecsTxn
+	ReqId     string
+	RespCh    chan *rkcy_pb.ApecsTxn
+	StartTime time.Time
 }
 
 var registerCh chan *RespChan = make(chan *RespChan, 10)
 
 func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopic string, partition int32) {
-	reqMap := make(map[string]chan *rkcy_pb.ApecsTxn)
+	reqMap := make(map[string]*RespChan)
 
 	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", rkcy.PlatformName(), fullTopic, partition)
 
@@ -138,12 +139,24 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 			Msg("Failed to Assign")
 	}
 
+	cleanupTicker := time.NewTicker(5 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().
 				Msg("watchTopic.consume exiting, ctx.Done()")
 			return
+		case <-cleanupTicker.C:
+			for reqId, rspCh := range reqMap {
+				now := time.Now()
+				if now.Sub(rspCh.StartTime) >= time.Second*10 {
+					log.Warn().
+						Str("ReqId", reqId).
+						Msgf("Deleteing request channel info, this is not normal and this transaction may have been lost")
+					rspCh.RespCh <- nil
+					delete(reqMap, reqId)
+				}
+			}
 		default:
 			msg, err := cons.ReadMessage(time.Millisecond * 10)
 
@@ -158,7 +171,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 							Str("ReqId", rch.ReqId).
 							Msg("ReqId already registered for responses, replacing with new value")
 					}
-					reqMap[rch.ReqId] = rch.RespCh
+					reqMap[rch.ReqId] = rch
 					log.Info().Msgf("reqMap: %+v", reqMap)
 				default:
 					moreRegistrations = false
@@ -174,7 +187,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 				directive := rkcy.GetDirective(msg)
 				if directive == rkcy_pb.Directive_APECS_TXN {
 					reqId := rkcy.GetReqId(msg)
-					txnCh, ok := reqMap[reqId]
+					rspCh, ok := reqMap[reqId]
 					if !ok {
 						log.Error().
 							Str("ReqId", reqId).
@@ -189,7 +202,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 								Str("ReqId", reqId).
 								Msg("Failed to Unmarshal ApecsTxn")
 						} else {
-							txnCh <- &txn
+							rspCh.RespCh <- &txn
 						}
 					}
 				} else {
@@ -240,8 +253,9 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 
 	reqId := uuid.NewString()
 	respChan := RespChan{
-		ReqId:  reqId,
-		RespCh: make(chan *rkcy_pb.ApecsTxn),
+		ReqId:     reqId,
+		RespCh:    make(chan *rkcy_pb.ApecsTxn),
+		StartTime: time.Now(),
 	}
 	registerCh <- &respChan
 
@@ -279,13 +293,20 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 		Str("ReqId", reqId).
 		Msg("CreatePlayer")
 
-	txnRsp, err := waitForResponse(ctx, respChan.RespCh, consts.DefaultTimeoutSecs)
+	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("ReqId", reqId).
 			Msg("failed to waitForResponse")
 		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	if txnRsp == nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("nil txn received")
+		return nil, status.New(codes.Internal, "nil txn received").Err()
 	}
 
 	success, result := rkcy.ApecsTxnResult(txnRsp)

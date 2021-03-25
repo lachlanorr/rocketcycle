@@ -18,6 +18,8 @@ type Settings struct {
 
 	Topic     string
 	Partition int32
+
+	TimeoutSecs int
 }
 
 var (
@@ -85,6 +87,7 @@ func CobraCommand() *cobra.Command {
 	serveCmd.MarkPersistentFlagRequired("topic")
 	serveCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition index to consume")
 	serveCmd.MarkPersistentFlagRequired("partition")
+	serveCmd.PersistentFlags().IntVar(&settings.TimeoutSecs, "timeout", 30, "Client timeout")
 	rootCmd.AddCommand(serveCmd)
 
 	return rootCmd
