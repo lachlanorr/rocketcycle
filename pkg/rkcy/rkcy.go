@@ -17,7 +17,10 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-type Handler func(ctx context.Context, stepInfo *StepArgs) *StepResult
+type Handler struct {
+	Do   func(ctx context.Context, stepInfo *StepArgs) *StepResult
+	Undo func(ctx context.Context, stepInfo *StepArgs) *StepResult
+}
 
 type StepArgs struct {
 	ReqId         string

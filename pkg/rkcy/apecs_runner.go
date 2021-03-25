@@ -71,6 +71,14 @@ func advanceApecsTxn(
 		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
 		return
 	}
+	if rtxn.txn.Direction == pb.Direction_FORWARD && hndlr.Do == nil {
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
+		return
+	}
+	if rtxn.txn.Direction == pb.Direction_REVERSE && hndlr.Undo == nil {
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
+		return
+	}
 
 	if step.Key == "" {
 		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: No key in step")
@@ -101,7 +109,12 @@ func advanceApecsTxn(
 		Offset:        offset,
 	}
 
-	rslt := hndlr(ctx, &args)
+	var rslt *StepResult
+	if rtxn.txn.Direction == pb.Direction_FORWARD {
+		rslt = hndlr.Do(ctx, &args)
+	} else {
+		rslt = hndlr.Undo(ctx, &args)
+	}
 
 	effectiveTime := now
 	// if handler set EffectiveTime in result, we pick up the change here
@@ -283,7 +296,9 @@ func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
 		log.Warn().
 			Msg("Overriding Command_CREATE handler")
 	}
-	handlers[pb.Command_CREATE] = processHandlerCreate
+	handlers[pb.Command_CREATE] = Handler{
+		Do: processHandlerCreate,
+	}
 }
 
 func startApecsRunner(

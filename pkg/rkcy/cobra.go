@@ -68,10 +68,18 @@ func prepPlatformImpl(impl *PlatformImpl) {
 		platformHandlers[concernName][pb.System_PROCESS] = concernHandlers.Handlers
 		// Apply CrudHandlers into storage handlers
 		platformHandlers[concernName][pb.System_STORAGE] = make(map[pb.Command]Handler)
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_CREATE] = concernHandlers.CrudHandlers.Create
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_READ] = concernHandlers.CrudHandlers.Read
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_UPDATE] = concernHandlers.CrudHandlers.Update
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_DELETE] = concernHandlers.CrudHandlers.Delete
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_CREATE] = Handler{
+			Do: concernHandlers.CrudHandlers.Create,
+		}
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_READ] = Handler{
+			Do: concernHandlers.CrudHandlers.Read,
+		}
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_UPDATE] = Handler{
+			Do: concernHandlers.CrudHandlers.Update,
+		}
+		platformHandlers[concernName][pb.System_STORAGE][pb.Command_DELETE] = Handler{
+			Do: concernHandlers.CrudHandlers.Delete,
+		}
 	}
 }
 
