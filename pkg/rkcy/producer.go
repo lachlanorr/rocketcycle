@@ -129,7 +129,6 @@ func (prod *Producer) Produce(
 	value []byte,
 	deliveryChan chan kafka.Event,
 ) {
-	log.Info().Msgf("Produce %08x %s %s", directive, reqId, string(key))
 	prod.produceCh <- &message{
 		directive:  directive,
 		reqId:      reqId,

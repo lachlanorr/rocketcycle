@@ -46,6 +46,30 @@ func produceApecsTxnError(
 	}
 }
 
+func produceNextStep(
+	rtxn *rtApecsTxn,
+	step *pb.Step,
+	rsltPayload []byte,
+	aprod *ApecsProducer,
+) {
+	if rtxn.advanceStepIdx() {
+		nextStep := rtxn.currentStep()
+		// payload from last step should be passed to next step
+		nextStep.Payload = rsltPayload
+		err := aprod.produceCurrentStep(rtxn.txn)
+		if err != nil {
+			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			return
+		}
+	} else {
+		err := aprod.produceComplete(rtxn)
+		if err != nil {
+			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed to produceComplete", err.Error())
+			return
+		}
+	}
+}
+
 func advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
@@ -66,6 +90,70 @@ func advanceApecsTxn(
 		return
 	}
 
+	if step.Key == "" {
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: No key in step")
+		return
+	}
+
+	// Grab current timestamp, which will be used in a couple places below
+	now := timestamppb.Now()
+
+	// Read instance from InstanceCache
+	var inst []byte
+	if tp.System == pb.System_PROCESS {
+		// Special case "REFRESH" command
+		// REFRESH command is only ever sent after a READ was executed
+		// against the Storage
+		if step.Command == pb.Command_REFRESH {
+			instanceCache.Set(step.Key, step.Payload)
+			step.Result = &pb.Step_Result{
+				Code:          pb.Code_OK,
+				ProcessedTime: now,
+				EffectiveTime: now,
+			}
+			produceNextStep(rtxn, step, nil, aprod)
+			return
+		} else {
+			inst = instanceCache.Get(step.Key)
+
+			expectingNil := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
+			if inst == nil && !expectingNil {
+				// We should attempt to get the value from the DB, and we
+				// do this by inserting a Storage READ step before this
+				// one and sending things through again
+				err := rtxn.insertSteps(
+					rtxn.txn.CurrentStepIdx,
+					&pb.Step{
+						System:      pb.System_STORAGE,
+						ConcernName: step.ConcernName,
+						Command:     pb.Command_READ,
+						Key:         step.Key,
+					},
+					&pb.Step{
+						System:      pb.System_PROCESS,
+						ConcernName: step.ConcernName,
+						Command:     pb.Command_REFRESH,
+						Key:         step.Key,
+					},
+				)
+				if err != nil {
+					log.Error().Err(err).Msg("error in insertSteps")
+					produceApecsTxnError(rtxn, nil, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
+					return
+				}
+				err = aprod.produceCurrentStep(rtxn.txn)
+				if err != nil {
+					produceApecsTxnError(rtxn, nil, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+					return
+				}
+				return
+			} else if inst != nil && expectingNil {
+				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE/VALIDATE command", step.Key)
+				return
+			}
+		}
+	}
+
 	hndlr, ok := handlers[step.Command]
 	if !ok {
 		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
@@ -80,26 +168,6 @@ func advanceApecsTxn(
 		return
 	}
 
-	if step.Key == "" {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: No key in step")
-		return
-	}
-
-	var inst []byte
-	if tp.System == pb.System_PROCESS {
-		inst := instanceCache.Get(step.Key)
-
-		expectingNil := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
-		if inst == nil && !expectingNil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: No Instance found in cache in non CREATE/VALIDATE command", step.Key)
-			return
-		} else if inst != nil && expectingNil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE/VALIDATE command", step.Key)
-			return
-		}
-	}
-
-	now := timestamppb.Now()
 	args := StepArgs{
 		ReqId:         rtxn.txn.ReqId,
 		ProcessedTime: now,
@@ -114,6 +182,11 @@ func advanceApecsTxn(
 		rslt = hndlr.Do(ctx, &args)
 	} else {
 		rslt = hndlr.Undo(ctx, &args)
+	}
+
+	if rslt == nil {
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
+		return
 	}
 
 	effectiveTime := now
@@ -146,7 +219,7 @@ func advanceApecsTxn(
 				[]pb.Step{
 					{
 						System:      pb.System_STORAGE,
-						ConcernName: tp.ConcernName,
+						ConcernName: step.ConcernName,
 						Command:     pb.Command_UPDATE,
 						Key:         step.Key,
 						Payload:     rslt.Instance,
@@ -161,22 +234,7 @@ func advanceApecsTxn(
 		}
 	}
 
-	if rtxn.advanceStepIdx() {
-		nextStep := rtxn.currentStep()
-		// payload from last step should be passed to next step
-		nextStep.Payload = rslt.Payload
-		err := aprod.produceCurrentStep(rtxn.txn)
-		if err != nil {
-			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
-			return
-		}
-	} else {
-		err := aprod.produceComplete(rtxn)
-		if err != nil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed to produceComplete", err.Error())
-			return
-		}
-	}
+	produceNextStep(rtxn, step, rslt.Payload, aprod)
 }
 
 func consumeApecsTopic(
@@ -290,14 +348,37 @@ func processHandlerCreate(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	}
 }
 
+func processHandlerRead(ctx context.Context, stepInfo *StepArgs) *StepResult {
+	return &StepResult{
+		Code:    pb.Code_OK,
+		Payload: stepInfo.Instance,
+	}
+}
+
 func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
-	_, ok := handlers[pb.Command_CREATE]
+	_, ok := handlers[pb.Command_REFRESH]
+	if ok {
+		// Command_REFRESH is always handled explicitly in advanceApecsTxn
+		log.Warn().
+			Msg("Command_REFRESH should never be specified, ignoring")
+	}
+
+	_, ok = handlers[pb.Command_CREATE]
 	if ok {
 		log.Warn().
 			Msg("Overriding Command_CREATE handler")
 	}
 	handlers[pb.Command_CREATE] = Handler{
 		Do: processHandlerCreate,
+	}
+
+	_, ok = handlers[pb.Command_READ]
+	if ok {
+		log.Warn().
+			Msg("Overriding Command_READ handler")
+	}
+	handlers[pb.Command_READ] = Handler{
+		Do: processHandlerRead,
 	}
 }
 

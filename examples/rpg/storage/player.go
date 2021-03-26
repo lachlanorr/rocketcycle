@@ -25,16 +25,42 @@ func connect() (*pgx.Conn, error) {
 type Player struct {
 }
 
-func (player *Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
-	log.Info().
-		Msg("storage/player.go/Read")
-	return nil
+func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	rslt := rkcy.StepResult{}
+
+	conn, err := connect()
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_CONNECTION
+		return &rslt
+	}
+	defer conn.Close(context.Background())
+
+	player := rpg_pb.Player{}
+	offset := rkcy_pb.Offset{}
+	err = conn.QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", args.Key).
+		Scan(&player.Id, &player.Username, &player.Active, &offset.Generation, &offset.Partition, &offset.Offset)
+
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_NOT_FOUND
+		return &rslt
+	}
+
+	rslt.Offset = &offset
+
+	rslt.Payload, err = proto.Marshal(&player)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		return &rslt
+	}
+
+	rslt.Code = rkcy_pb.Code_OK
+	return &rslt
 }
 
-func (player *Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
-	log.Info().
-		Msg("storage/player.go/Create")
-
+func (*Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
 	mdl := rpg_pb.Player{}
@@ -85,13 +111,13 @@ func (player *Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.Ste
 	return &rslt
 }
 
-func (player *Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+func (*Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	log.Info().
 		Msg("storage/player.go/Update")
 	return nil
 }
 
-func (player *Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	log.Info().
 		Msg("storage/player.go/Delete")
 	return nil

@@ -32,8 +32,9 @@ message Step {
     Command command     = 3; // command name, this will map to a piece of code (e.g. function)
     string key          = 4; // instance key used as the partition key
     bytes payload       = 5; // opaque payload for command
+    Offset offset       = 6; // when no nil, indicates the process topic offset associated with the step
 
-    Result result   = 6; // Result returned from step handler
+    Result result       = 7; // Result returned from step handler
 
     message Result {
         // Result code of step, generally one of "Code" enum below but users can define their own codes greater than RKCY_INTERNAL_MAX
@@ -49,6 +50,7 @@ message Step {
         repeated LogEvent logEvents = 4;
 
         bytes payload = 5; // opaque payload returned from command
+        Offset offset = 6; // when no nil, indicates the process topic offset associated with the result
     }
 }
 
@@ -67,6 +69,7 @@ enum Command {
     DELETE = 4;
 
     VALIDATE = 5;
+    REFRESH = 6;
 
     // User defined commands should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_COMMAND = 16;
@@ -108,30 +111,3 @@ message Offset {
     int32 partition  = 2;
     int64 offset     = 3;
 }
-
-/*
-message ApecsStorageRequest {
-    string req_id       = 1;
-    string concern_name = 2;
-    Op op               = 3;
-    string key          = 4;
-    bytes payload       = 5;
-
-    ResponseTarget response_target = 6;
-
-    enum Op {
-        GET    = 0;
-        CREATE = 1;
-        UPDATE = 2;
-        DELETE = 3;
-    }
-}
-
-message ApecsStorageResult {
-    string req_id        = 1;
-    Code code            = 2;
-    bytes payload        = 3;
-    MostRecentOffset mro = 4;
-
-}
-*/

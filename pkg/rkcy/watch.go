@@ -78,7 +78,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
 					txnJson := protojson.Format(proto.Message(&txn))
-					fmt.Println(txnJson)
+					log.WithLevel(wt.logLevel).
+						Msg(txnJson)
 				}
 			}
 		}

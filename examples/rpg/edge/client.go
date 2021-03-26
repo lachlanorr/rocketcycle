@@ -45,7 +45,9 @@ func cobraGetResource(cmd *cobra.Command, args []string) {
 			Msg("Failed to ReadAll")
 	}
 
-	fmt.Println(string(body))
+	if len(body) > 0 {
+		fmt.Printf("%d %s\n", resp.StatusCode, string(body))
+	}
 
 	if resp.StatusCode != 200 {
 		os.Exit(1)
@@ -112,7 +114,7 @@ var messageFactory = map[string]func() proto.Message{
 }
 
 func cobraCreateResource(cmd *cobra.Command, args []string) {
-	path := fmt.Sprintf("/v1/%s/create", args[0])
+	path := fmt.Sprintf("/v1/%s/create?pretty", args[0])
 
 	slog := log.With().
 		Str("Path", path).

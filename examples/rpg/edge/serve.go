@@ -172,7 +172,6 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 							Msg("ReqId already registered for responses, replacing with new value")
 					}
 					reqMap[rch.ReqId] = rch
-					log.Info().Msgf("reqMap: %+v", reqMap)
 				default:
 					moreRegistrations = false
 				}
@@ -231,9 +230,86 @@ func waitForResponse(ctx context.Context, rspCh <-chan *rkcy_pb.ApecsTxn, timeou
 }
 
 func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Player, error) {
-	log.Info().Msg("GetPlayer " + in.Id)
-	player := rpg_pb.Player{}
-	return &player, nil
+	reqId := uuid.NewString()
+	respChan := RespChan{
+		ReqId:     reqId,
+		RespCh:    make(chan *rkcy_pb.ApecsTxn),
+		StartTime: time.Now(),
+	}
+	registerCh <- &respChan
+
+	err := aprod.ExecuteTxn(
+		reqId,
+		&rkcy_pb.ResponseTarget{
+			BootstrapServers: settings.BootstrapServers,
+			TopicName:        settings.Topic,
+			Partition:        settings.Partition,
+		},
+		false,
+		nil,
+		[]rkcy.Step{
+			{
+				ConcernName: consts.Player,
+				Command:     rkcy_pb.Command_READ,
+				Key:         in.Id,
+			},
+		},
+	)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("failed to ExecuteTxn")
+		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
+	}
+
+	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("failed to waitForResponse")
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	if txnRsp == nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("nil txn received")
+		return nil, status.New(codes.Internal, "nil txn received").Err()
+	}
+
+	success, result := rkcy.ApecsTxnResult(txnRsp)
+	if success {
+		playerResult := rpg_pb.Player{}
+		err = proto.Unmarshal(result.Payload, &playerResult)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("ReqId", reqId).
+				Msg("Failed to Unmarshal Payload")
+			return nil, status.New(codes.Internal, err.Error()).Err()
+		}
+
+		return &playerResult, nil
+	} else {
+		details := make([]*anypb.Any, 0, 1)
+		resultAny, err := anypb.New(result)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("ReqId", reqId).
+				Msg("Unable to convert result to Any")
+		} else {
+			details = append(details, resultAny)
+		}
+		stat := spb.Status{
+			Code:    int32(CodeTranslate(result.Code)),
+			Message: "failure",
+			Details: details,
+		}
+		return nil, status.ErrorProto(&stat)
+	}
 }
 
 func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Player, error) {
@@ -288,10 +364,6 @@ func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Play
 			Msg("failed to ExecuteTxn")
 		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
 	}
-
-	log.Info().
-		Str("ReqId", reqId).
-		Msg("CreatePlayer")
 
 	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
 	if err != nil {

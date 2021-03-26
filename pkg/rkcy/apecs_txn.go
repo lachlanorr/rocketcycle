@@ -69,33 +69,67 @@ func (rtxn *rtApecsTxn) firstForwardStep() *pb.Step {
 	return rtxn.txn.ForwardSteps[0]
 }
 
-func (rtxn *rtApecsTxn) advanceStepIdx() bool {
-	canAdvance := false
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
-		if rtxn.txn.CurrentStepIdx < int32(len(rtxn.txn.ForwardSteps)-1) {
-			canAdvance = true
+func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*pb.Step) error {
+	currSteps := rtxn.getSteps()
+	if idx >= int32(len(steps)) {
+		return fmt.Errorf("Index out of range")
+	}
+	newSteps := make([]*pb.Step, len(currSteps)+len(steps))
+
+	newIdx := int32(0)
+	for currIdx, _ := range currSteps {
+		if newIdx == idx {
+			for stepIdx, _ := range steps {
+				newSteps[newIdx] = steps[stepIdx]
+				newIdx++
+			}
 		}
+		newSteps[newIdx] = currSteps[currIdx]
+		newIdx++
+	}
+	rtxn.setSteps(newSteps)
+	return nil
+}
+
+func getSteps(txn *pb.ApecsTxn) []*pb.Step {
+	if txn.Direction == pb.Direction_FORWARD {
+		return txn.ForwardSteps
 	} else { // txn.Direction == Reverse
-		if rtxn.txn.CurrentStepIdx < int32(len(rtxn.txn.ReverseSteps)-1) {
-			canAdvance = true
-		}
+		return txn.ReverseSteps
 	}
-	if canAdvance {
+}
+
+func (rtxn *rtApecsTxn) getSteps() []*pb.Step {
+	return getSteps(rtxn.txn)
+}
+
+func (rtxn *rtApecsTxn) setSteps(steps []*pb.Step) {
+	if rtxn.txn.Direction == pb.Direction_FORWARD {
+		rtxn.txn.ForwardSteps = steps
+	} else { // txn.Direction == Reverse
+		rtxn.txn.ReverseSteps = steps
+	}
+}
+
+func (rtxn *rtApecsTxn) canAdvance() bool {
+	steps := rtxn.getSteps()
+	return rtxn.txn.CurrentStepIdx < int32(len(steps)-1)
+}
+
+func (rtxn *rtApecsTxn) advanceStepIdx() bool {
+	if rtxn.canAdvance() {
 		rtxn.txn.CurrentStepIdx++
+		return true
 	}
-	return canAdvance
+	return false
 }
 
 func (rtxn *rtApecsTxn) previousStep() *pb.Step {
 	if rtxn.txn.CurrentStepIdx == 0 {
 		return nil
 	}
-
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
-		return rtxn.txn.ForwardSteps[rtxn.txn.CurrentStepIdx-1]
-	} else { // txn.Direction == Reverse
-		return rtxn.txn.ReverseSteps[rtxn.txn.CurrentStepIdx-1]
-	}
+	steps := rtxn.getSteps()
+	return steps[rtxn.txn.CurrentStepIdx-1]
 }
 
 func (rtxn *rtApecsTxn) currentStep() *pb.Step {
@@ -103,11 +137,8 @@ func (rtxn *rtApecsTxn) currentStep() *pb.Step {
 }
 
 func ApecsTxnCurrentStep(txn *pb.ApecsTxn) *pb.Step {
-	if txn.Direction == pb.Direction_FORWARD {
-		return txn.ForwardSteps[txn.CurrentStepIdx]
-	} else { // txn.Direction == Reverse
-		return txn.ReverseSteps[txn.CurrentStepIdx]
-	}
+	steps := getSteps(txn)
+	return steps[txn.CurrentStepIdx]
 }
 
 func validateSteps(reqId string, currentStepIdx int32, steps []*pb.Step, name string) error {

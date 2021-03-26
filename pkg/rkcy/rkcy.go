@@ -34,9 +34,10 @@ type StepArgs struct {
 type StepResult struct {
 	Code          pb.Code
 	EffectiveTime *timestamp.Timestamp
+	LogEvents     []*pb.LogEvent
 	Instance      []byte
 	Payload       []byte
-	LogEvents     []*pb.LogEvent
+	Offset        *pb.Offset
 }
 
 // These must be implemented, so we enforce this by requiring clients
