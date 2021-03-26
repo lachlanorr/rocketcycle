@@ -50,7 +50,6 @@ message Step {
         repeated LogEvent logEvents = 4;
 
         bytes payload = 5; // opaque payload returned from command
-        Offset offset = 6; // when no nil, indicates the process topic offset associated with the result
     }
 }
 

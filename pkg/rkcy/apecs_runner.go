@@ -50,12 +50,27 @@ func produceNextStep(
 	rtxn *rtApecsTxn,
 	step *pb.Step,
 	rsltPayload []byte,
+	offset *pb.Offset,
 	aprod *ApecsProducer,
 ) {
 	if rtxn.advanceStepIdx() {
 		nextStep := rtxn.currentStep()
 		// payload from last step should be passed to next step
 		nextStep.Payload = rsltPayload
+		if nextStep.System == pb.System_STORAGE && nextStep.Offset == nil {
+			// STORAGE steps always need the value PROCESS Offset
+			if step.Offset != nil {
+				// if current step has an offset, set that one
+				// This allows multiple STORAGE steps in a row, and the same
+				// PROCESS offset will get set on all of them.
+				nextStep.Offset = step.Offset
+			} else {
+				// step has no offset, it's likely a PROCESS step, and we
+				// default to the argument, which is the most recent offset
+				// read from kafka
+				nextStep.Offset = offset
+			}
+		}
 		err := aprod.produceCurrentStep(rtxn.txn)
 		if err != nil {
 			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
@@ -78,6 +93,10 @@ func advanceApecsTxn(
 	handlers map[pb.Command]Handler,
 	aprod *ApecsProducer,
 ) {
+	log.Debug().
+		Str("ReqId", rtxn.txn.ReqId).
+		Msgf("Advancing ApecsTxn: %s %d", pb.Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx)
+
 	step := rtxn.currentStep()
 
 	if step.Result != nil {
@@ -111,7 +130,7 @@ func advanceApecsTxn(
 				ProcessedTime: now,
 				EffectiveTime: now,
 			}
-			produceNextStep(rtxn, step, nil, aprod)
+			produceNextStep(rtxn, step, nil, offset, aprod)
 			return
 		} else {
 			inst = instanceCache.Get(step.Key)
@@ -128,6 +147,7 @@ func advanceApecsTxn(
 						ConcernName: step.ConcernName,
 						Command:     pb.Command_READ,
 						Key:         step.Key,
+						Offset:      offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 					&pb.Step{
 						System:      pb.System_PROCESS,
@@ -174,7 +194,7 @@ func advanceApecsTxn(
 		Key:           step.Key,
 		Instance:      inst,
 		Payload:       step.Payload,
-		Offset:        offset,
+		Offset:        step.Offset,
 	}
 
 	var rslt *StepResult
@@ -223,6 +243,7 @@ func advanceApecsTxn(
 						Command:     pb.Command_UPDATE,
 						Key:         step.Key,
 						Payload:     rslt.Instance,
+						Offset:      offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 				},
 			)
@@ -234,7 +255,7 @@ func advanceApecsTxn(
 		}
 	}
 
-	produceNextStep(rtxn, step, rslt.Payload, aprod)
+	produceNextStep(rtxn, step, rslt.Payload, offset, aprod)
 }
 
 func consumeApecsTopic(

@@ -140,13 +140,13 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"process", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "proc/@concern/@partition",
+					Abbrev: "p/@concern/@partition",
 				}
 			case "storage":
 				topics.ConsumerProgram = &pb.Program{
 					Name:   "./@platform",
 					Args:   []string{"storage", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "stor/@concern/@partition",
+					Abbrev: "s/@concern/@partition",
 				}
 			}
 		}
