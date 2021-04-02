@@ -9,24 +9,12 @@ CREATE TABLE rpg.character (
   id UUID PRIMARY KEY,
   player_id UUID REFERENCES rpg.player(id) NOT NULL,
   fullname TEXT NOT NULL,
-  active BOOL NOT NULL
+  active BOOL NOT NULL,
+
+  -- rocketcyle annotations for "most recent offsets"
+  mro_generation INT NOT NULL CHECK (mro_generation >= 1),
+  mro_partition INT NOT NULL CHECK (mro_partition >= 0),
+  mro_offset BIGINT NOT NULL CHECK (mro_offset >= 0)
 );
-
-
-DO $$
-DECLARE
-    i int := 1;
-    end_id int := 1001;
-    sh_player_id uuid;
-BEGIN
-    sh_player_id := (select id from rpg.player where username = 'sys_holding');
-
-    LOOP
-        EXIT WHEN i = end_id;
-
-        INSERT INTO rpg.character (id, player_id, fullname, active) VALUES (gen_random_uuid(), sh_player_id, 'sys_holding_' || i, TRUE);
-        i := i + 1;
-    END LOOP;
-END $$;
 
 COMMIT;

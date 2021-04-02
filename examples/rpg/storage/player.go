@@ -8,7 +8,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v4"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -34,7 +33,7 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 		rslt.Code = rkcy_pb.Code_CONNECTION
 		return &rslt
 	}
-	defer conn.Close(context.Background())
+	defer conn.Close(ctx)
 
 	player := rpg_pb.Player{}
 	offset := rkcy_pb.Offset{}
@@ -60,7 +59,7 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	return &rslt
 }
 
-func (*Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
 	mdl := rpg_pb.Player{}
@@ -79,21 +78,16 @@ func (*Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 	}
 	defer conn.Close(context.Background())
 
-	stmt := `INSERT INTO rpg.player (id, username, active, mro_generation, mro_partition, mro_offset)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id`
-
-	retid := ""
-	err = conn.QueryRow(
+	_, err = conn.Exec(
 		context.Background(),
-		stmt,
+		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",
 		mdl.Id,
 		mdl.Username,
 		mdl.Active,
 		args.Offset.Generation,
 		args.Offset.Partition,
 		args.Offset.Offset,
-	).Scan(&retid)
+	)
 
 	if err != nil {
 		rslt.LogError(err.Error())
@@ -101,24 +95,37 @@ func (*Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 		return &rslt
 	}
 
-	rslt.Payload, err = proto.Marshal(&mdl)
-	if err != nil {
-		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
-		return &rslt
-	}
-
+	rslt.Code = rkcy_pb.Code_OK
+	rslt.Payload = args.Payload
 	return &rslt
 }
 
-func (*Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
-	log.Info().
-		Msg("storage/player.go/Update")
-	return nil
+func (p *Player) Create(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	return p.upsert(ctx, args)
+}
+
+func (p *Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
+	return p.upsert(ctx, args)
 }
 
 func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
-	log.Info().
-		Msg("storage/player.go/Delete")
-	return nil
+	rslt := rkcy.StepResult{}
+
+	conn, err := connect()
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_CONNECTION
+		return &rslt
+	}
+	defer conn.Close(ctx)
+
+	_, err = conn.Exec(ctx, "DELETE FROM rpg.player WHERE id=$1", args.Key)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy_pb.Code_INTERNAL
+		return &rslt
+	}
+
+	rslt.Code = rkcy_pb.Code_OK
+	return &rslt
 }

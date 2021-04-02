@@ -27,17 +27,25 @@ func newApecsTxn(reqId string, rspTgt *pb.ResponseTarget, canRevert bool, steps 
 		CanRevert:      canRevert,
 		ForwardSteps:   make([]*pb.Step, 0, len(steps)),
 	}
-	fwdstps := make([]*pb.Step, 0, len(steps))
 
 	for _, stepiter := range steps {
 		step := stepiter
 		if step.System == pb.System_PROCESS && step.Command == pb.Command_CREATE {
+			// Inject a refresh step so the cache gets updated in storage CREATE succeeds
+			refreshStep := step
+			refreshStep.Command = pb.Command_REFRESH
+			refreshStep.System = pb.System_PROCESS
+			step.System = pb.System_STORAGE // switch to storage CREATE
+			txn.ForwardSteps = append(txn.ForwardSteps, &step)
+			txn.ForwardSteps = append(txn.ForwardSteps, &refreshStep)
+		} else if step.System == pb.System_PROCESS && step.Command == pb.Command_DELETE {
 			storStep := step
 			storStep.System = pb.System_STORAGE
+			txn.ForwardSteps = append(txn.ForwardSteps, &step)
 			txn.ForwardSteps = append(txn.ForwardSteps, &storStep)
+		} else {
+			txn.ForwardSteps = append(txn.ForwardSteps, &step)
 		}
-		fwdstps = append(fwdstps, &step)
-		txn.ForwardSteps = append(txn.ForwardSteps, &step)
 	}
 
 	return &txn, nil

@@ -26,3 +26,7 @@ func (instCache *InstanceCache) Get(key string) []byte {
 func (instCache *InstanceCache) Set(key string, val []byte) {
 	instCache.instances[key] = val
 }
+
+func (instCache *InstanceCache) Remove(key string) {
+	delete(instCache.instances, key)
+}

@@ -48,6 +48,36 @@
         ]
       }
     },
+    "/v1/player/delete/{id}": {
+      "post": {
+        "operationId": "MmoService_DeletePlayer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.MmoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "MmoService"
+        ]
+      }
+    },
     "/v1/player/get/{id}": {
       "get": {
         "operationId": "MmoService_GetPlayer",
@@ -71,6 +101,38 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "MmoService"
+        ]
+      }
+    },
+    "/v1/player/update": {
+      "post": {
+        "operationId": "MmoService_UpdatePlayer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+            }
           }
         ],
         "tags": [
@@ -107,6 +169,16 @@
           "items": {
             "$ref": "#/definitions/google.protobuf.Any"
           }
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.pb.MmoResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
         }
       }
     },

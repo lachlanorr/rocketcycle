@@ -74,6 +74,26 @@ func CobraCommand() *cobra.Command {
 	createCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(createCmd)
 
+	updateCmd := &cobra.Command{
+		Use:       "update resource id [key1=val1] [key2=val2]",
+		Short:     "updates specified fields in already existing resource",
+		Run:       cobraUpdateResource,
+		Args:      cobra.MinimumNArgs(3),
+		ValidArgs: []string{"resource", "id"},
+	}
+	updateCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
+	rootCmd.AddCommand(updateCmd)
+
+	deleteCmd := &cobra.Command{
+		Use:       "delete resource id",
+		Short:     "delete a specific resource from rest api",
+		Run:       cobraDeleteResource,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{"resource", "id"},
+	}
+	deleteCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
+	rootCmd.AddCommand(deleteCmd)
+
 	serveCmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Rocketcycle Edge Api Server",

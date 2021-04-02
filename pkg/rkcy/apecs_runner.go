@@ -129,14 +129,15 @@ func advanceApecsTxn(
 				Code:          pb.Code_OK,
 				ProcessedTime: now,
 				EffectiveTime: now,
+				Payload:       step.Payload,
 			}
 			produceNextStep(rtxn, step, nil, offset, aprod)
 			return
 		} else {
 			inst = instanceCache.Get(step.Key)
 
-			expectingNil := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
-			if inst == nil && !expectingNil {
+			nilOk := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
+			if inst == nil && !nilOk {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
 				// one and sending things through again
@@ -167,8 +168,8 @@ func advanceApecsTxn(
 					return
 				}
 				return
-			} else if inst != nil && expectingNil {
-				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE/VALIDATE command", step.Key)
+			} else if inst != nil && step.Command == pb.Command_CREATE {
+				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return
 			}
 		}
@@ -226,6 +227,12 @@ func advanceApecsTxn(
 	if step.Result.Code != pb.Code_OK {
 		produceApecsTxnError(rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return
+	}
+
+	// Unless explcitly set by the handler, always assume we should
+	// pass step payload in result to next step
+	if rslt.Payload == nil {
+		rslt.Payload = step.Payload
 	}
 
 	if tp.System == pb.System_PROCESS {
@@ -361,11 +368,11 @@ func consumeApecsTopic(
 
 type PlatformHandlers map[string]map[pb.System]map[pb.Command]Handler
 
-func processHandlerCreate(ctx context.Context, stepInfo *StepArgs) *StepResult {
-	instanceCache.Set(stepInfo.Key, stepInfo.Payload)
+func processHandlerPayloadToInstance(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	return &StepResult{
-		Code:    pb.Code_OK,
-		Payload: stepInfo.Payload,
+		Code:     pb.Code_OK,
+		Payload:  stepInfo.Payload,
+		Instance: stepInfo.Payload,
 	}
 }
 
@@ -373,6 +380,13 @@ func processHandlerRead(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	return &StepResult{
 		Code:    pb.Code_OK,
 		Payload: stepInfo.Instance,
+	}
+}
+
+func processHandlerDelete(ctx context.Context, stepInfo *StepArgs) *StepResult {
+	instanceCache.Remove(stepInfo.Key)
+	return &StepResult{
+		Code: pb.Code_OK,
 	}
 }
 
@@ -390,7 +404,16 @@ func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
 			Msg("Overriding Command_CREATE handler")
 	}
 	handlers[pb.Command_CREATE] = Handler{
-		Do: processHandlerCreate,
+		Do: processHandlerPayloadToInstance,
+	}
+
+	_, ok = handlers[pb.Command_UPDATE]
+	if ok {
+		log.Warn().
+			Msg("Overriding Command_UPDATE handler")
+	}
+	handlers[pb.Command_UPDATE] = Handler{
+		Do: processHandlerPayloadToInstance,
 	}
 
 	_, ok = handlers[pb.Command_READ]
@@ -400,6 +423,15 @@ func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
 	}
 	handlers[pb.Command_READ] = Handler{
 		Do: processHandlerRead,
+	}
+
+	_, ok = handlers[pb.Command_DELETE]
+	if ok {
+		log.Warn().
+			Msg("Overriding Command_DELETE handler")
+	}
+	handlers[pb.Command_DELETE] = Handler{
+		Do: processHandlerDelete,
 	}
 }
 

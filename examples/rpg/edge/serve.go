@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
@@ -229,8 +230,62 @@ func waitForResponse(ctx context.Context, rspCh <-chan *rkcy_pb.ApecsTxn, timeou
 	}
 }
 
-func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Player, error) {
+func processCrudRequest(
+	ctx context.Context,
+	concernName string,
+	command rkcy_pb.Command,
+	msg proto.Message,
+) (string, *rkcy_pb.Step_Result, error) {
 	reqId := uuid.NewString()
+
+	msgR := msg.ProtoReflect()
+	desc := msgR.Descriptor()
+	fields := desc.Fields()
+
+	fdId := fields.ByName("id")
+	if fdId == nil {
+		return reqId, nil, status.New(codes.InvalidArgument, "no 'id' field in payload").Err()
+	}
+	if fdId.Kind() != protoreflect.StringKind {
+		return reqId, nil, status.New(codes.InvalidArgument, "non string 'id' field in payload").Err()
+	}
+	id := msgR.Get(fdId).String()
+
+	// Create id uuid for CREATE calls
+	if command == rkcy_pb.Command_CREATE {
+		if id != "" {
+			return reqId, nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
+		}
+		id = uuid.NewString()
+		msgR.Set(fdId, protoreflect.ValueOf(id))
+	} else {
+		if id == "" {
+			return reqId, nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
+		}
+	}
+
+	var steps []rkcy.Step
+	var msgSer []byte
+	if command == rkcy_pb.Command_CREATE || command == rkcy_pb.Command_UPDATE {
+		var err error
+		msgSer, err = proto.Marshal(msg)
+		if err != nil {
+			return reqId, nil, status.New(codes.Internal, "failed to marshal payload").Err()
+		}
+
+		// CREATE/UPDATE get a validate step first
+		steps = append(steps, rkcy.Step{
+			ConcernName: concernName,
+			Command:     rkcy_pb.Command_VALIDATE,
+			Key:         id,
+		})
+	}
+	steps = append(steps, rkcy.Step{
+		ConcernName: concernName,
+		Command:     command,
+		Key:         id,
+	})
+
 	respChan := RespChan{
 		ReqId:     reqId,
 		RespCh:    make(chan *rkcy_pb.ApecsTxn),
@@ -246,53 +301,24 @@ func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Pla
 			Partition:        settings.Partition,
 		},
 		false,
-		nil,
-		[]rkcy.Step{
-			{
-				ConcernName: consts.Player,
-				Command:     rkcy_pb.Command_READ,
-				Key:         in.Id,
-			},
-		},
+		msgSer,
+		steps,
 	)
+
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("failed to ExecuteTxn")
-		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
+		return reqId, nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
 	}
 
 	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
 	if err != nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("failed to waitForResponse")
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return reqId, nil, status.New(codes.Internal, err.Error()).Err()
 	}
 	if txnRsp == nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("nil txn received")
-		return nil, status.New(codes.Internal, "nil txn received").Err()
+		return reqId, nil, status.New(codes.Internal, "nil txn received").Err()
 	}
 
 	success, result := rkcy.ApecsTxnResult(txnRsp)
-	if success {
-		playerResult := rpg_pb.Player{}
-		err = proto.Unmarshal(result.Payload, &playerResult)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("ReqId", reqId).
-				Msg("Failed to Unmarshal Payload")
-			return nil, status.New(codes.Internal, err.Error()).Err()
-		}
-
-		return &playerResult, nil
-	} else {
+	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)
 		if err != nil {
@@ -308,110 +334,56 @@ func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Pla
 			Message: "failure",
 			Details: details,
 		}
-		return nil, status.ErrorProto(&stat)
+		return reqId, nil, status.ErrorProto(&stat)
 	}
+	return reqId, result, nil
+}
+
+func processCrudRequestPlayer(
+	ctx context.Context,
+	command rkcy_pb.Command,
+	msg proto.Message,
+) (*rpg_pb.Player, error) {
+	reqId, result, err := processCrudRequest(ctx, consts.Player, command, msg)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to processCrudRequest")
+		return nil, err
+	}
+
+	playerResult := rpg_pb.Player{}
+	err = proto.Unmarshal(result.Payload, &playerResult)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to Unmarshal Payload")
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+
+	return &playerResult, nil
+}
+
+func (server) GetPlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.Player, error) {
+	return processCrudRequestPlayer(ctx, rkcy_pb.Command_READ, in)
 }
 
 func (server) CreatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Player, error) {
-	if in.Username == "" {
-		return nil, status.New(codes.InvalidArgument, "missing username in create call").Err()
-	}
+	return processCrudRequestPlayer(ctx, rkcy_pb.Command_CREATE, in)
+}
 
-	if in.Id != "" {
-		return nil, status.New(codes.InvalidArgument, "id provided in create call").Err()
-	}
-	in.Id = uuid.NewString()
+func (server) UpdatePlayer(ctx context.Context, in *rpg_pb.Player) (*rpg_pb.Player, error) {
+	return processCrudRequestPlayer(ctx, rkcy_pb.Command_UPDATE, in)
+}
 
-	inSer, err := proto.Marshal(in)
+func (server) DeletePlayer(ctx context.Context, in *rpg_pb.MmoRequest) (*rpg_pb.MmoResponse, error) {
+	_, _, err := processCrudRequest(ctx, consts.Player, rkcy_pb.Command_DELETE, in)
 	if err != nil {
-		return nil, status.New(codes.Internal, "failed to marshal Player").Err()
+		return nil, err
 	}
-
-	reqId := uuid.NewString()
-	respChan := RespChan{
-		ReqId:     reqId,
-		RespCh:    make(chan *rkcy_pb.ApecsTxn),
-		StartTime: time.Now(),
-	}
-	registerCh <- &respChan
-
-	err = aprod.ExecuteTxn(
-		reqId,
-		&rkcy_pb.ResponseTarget{
-			BootstrapServers: settings.BootstrapServers,
-			TopicName:        settings.Topic,
-			Partition:        settings.Partition,
-		},
-		false,
-		inSer,
-		[]rkcy.Step{
-			{
-				ConcernName: consts.Player,
-				Command:     rkcy_pb.Command_VALIDATE,
-				Key:         in.Id,
-			},
-			{
-				ConcernName: consts.Player,
-				Command:     rkcy_pb.Command_CREATE,
-				Key:         in.Id,
-			},
-		},
-	)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("failed to ExecuteTxn")
-		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
-	}
-
-	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("failed to waitForResponse")
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-	if txnRsp == nil {
-		log.Error().
-			Err(err).
-			Str("ReqId", reqId).
-			Msg("nil txn received")
-		return nil, status.New(codes.Internal, "nil txn received").Err()
-	}
-
-	success, result := rkcy.ApecsTxnResult(txnRsp)
-	if success {
-		playerResult := rpg_pb.Player{}
-		err = proto.Unmarshal(result.Payload, &playerResult)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("ReqId", reqId).
-				Msg("Failed to Unmarshal Payload")
-			return nil, status.New(codes.Internal, err.Error()).Err()
-		}
-
-		return &playerResult, nil
-	} else {
-		details := make([]*anypb.Any, 0, 1)
-		resultAny, err := anypb.New(result)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("ReqId", reqId).
-				Msg("Unable to convert result to Any")
-		} else {
-			details = append(details, resultAny)
-		}
-		stat := spb.Status{
-			Code:    int32(CodeTranslate(result.Code)),
-			Message: "failure",
-			Details: details,
-		}
-		return nil, status.ErrorProto(&stat)
-	}
+	return &rpg_pb.MmoResponse{Id: in.Id}, nil
 }
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {

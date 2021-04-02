@@ -16,6 +16,10 @@ message MmoRequest {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
 }
 
+message MmoResponse {
+    string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
+}
+
 service MmoService {
     rpc GetPlayer(MmoRequest) returns (rocketcycle.examples.rpg.pb.Player) {
         option (google.api.http) = {
@@ -26,6 +30,17 @@ service MmoService {
         option (google.api.http) = {
             post: "/v1/player/create"
             body: "*"
+        };
+    }
+    rpc UpdatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
+        option (google.api.http) = {
+            post: "/v1/player/update"
+            body: "*"
+        };
+    }
+    rpc DeletePlayer(MmoRequest) returns (MmoResponse) {
+        option (google.api.http) = {
+            post: "/v1/player/delete/{id}"
         };
     }
 }

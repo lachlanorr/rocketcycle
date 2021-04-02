@@ -11,25 +11,9 @@ CREATE TABLE rpg.player (
   active BOOL NOT NULL,
 
   -- rocketcyle annotations for "most recent offsets"
-  mro_generation INT NOT NULL,
-  mro_partition INT NOT NULL,
-  mro_offset BIGINT NOT NULL
-);
-
-INSERT INTO rpg.player (
-    id,
-    username,
-    active,
-    mro_generation,
-    mro_partition,
-    mro_offset
-) VALUES (
-    gen_random_uuid(),
-    'sys_holding',
-    TRUE,
-    0,
-    0,
-    0
+  mro_generation INT NOT NULL CHECK (mro_generation >= 1),
+  mro_partition INT NOT NULL CHECK (mro_partition >= 0),
+  mro_offset BIGINT NOT NULL CHECK (mro_offset >= 0)
 );
 
 COMMIT;

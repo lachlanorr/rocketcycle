@@ -23,33 +23,170 @@ import (
 	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
-func cobraGetResource(cmd *cobra.Command, args []string) {
-	path := fmt.Sprintf("/v1/%s/get/%s?pretty", args[0], args[1])
+var messageFactory = map[string]func() proto.Message{
+	"player": func() proto.Message { return proto.Message(new(rpg_pb.Player)) },
+}
 
-	slog := log.With().
-		Str("Path", path).
-		Logger()
+func getResource(resourceName string, id string) (int, []byte, error) {
+	path := fmt.Sprintf("/v1/%s/get/%s?pretty", resourceName, id)
 
 	resp, err := http.Get(settings.EdgeAddr + path)
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to GET")
+		return 500, nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		slog.Fatal().
+		return resp.StatusCode, nil, err
+	}
+
+	return resp.StatusCode, body, nil
+}
+
+func cobraGetResource(cmd *cobra.Command, args []string) {
+	status, body, err := getResource(args[0], args[1])
+	if err != nil {
+		log.Fatal().
 			Err(err).
-			Msg("Failed to ReadAll")
+			Str("Resource", args[0]).
+			Str("Id", args[1]).
+			Msg("Failed to GET")
 	}
 
-	if len(body) > 0 {
-		fmt.Printf("%d %s\n", resp.StatusCode, string(body))
+	fmt.Printf("%d %s\n", status, string(body))
+
+	if status != 200 {
+		os.Exit(1)
+	}
+}
+
+func createOrUpdateResource(verb string, resourceName string, msg proto.Message, fieldsToSet []string) (int, []byte, error) {
+	path := fmt.Sprintf("/v1/%s/%s?pretty", resourceName, verb)
+
+	err := reflectKeyValArgs(msg, resourceName, fieldsToSet, true)
+	if err != nil {
+		return 500, nil, err
 	}
 
-	if resp.StatusCode != 200 {
+	content, err := protojson.Marshal(msg)
+	if err != nil {
+		return 500, nil, err
+	}
+
+	contentRdr := bytes.NewReader(content)
+	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	if err != nil {
+		return 500, nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+
+	return resp.StatusCode, body, nil
+}
+
+func cobraCreateResource(cmd *cobra.Command, args []string) {
+	msgFac, ok := messageFactory[args[0]]
+	if !ok {
+		log.Fatal().
+			Str("Resource", args[0]).
+			Msg("Invalid Resource")
+	}
+	msg := msgFac()
+
+	status, body, err := createOrUpdateResource("create", args[0], msg, args[1:])
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("Resource", args[0]).
+			Msg("Failed to CREATE")
+	}
+
+	fmt.Printf("%d %s\n", status, body)
+
+	if status != 200 {
+		os.Exit(1)
+	}
+}
+
+func cobraUpdateResource(cmd *cobra.Command, args []string) {
+	msgFac, ok := messageFactory[args[0]]
+	if !ok {
+		log.Fatal().
+			Str("Resource", args[0]).
+			Msg("Invalid Resource")
+	}
+	msg := msgFac()
+
+	// First try to get resource, since we'll be overlaying requested field values
+	statusGet, bodyGet, err := getResource(args[0], args[1])
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("Resource", args[0]).
+			Str("Id", args[1]).
+			Msg("Failed to GET")
+	}
+	if statusGet != 200 {
+		log.Fatal().
+			Err(err).
+			Str("Resource", args[0]).
+			Str("Id", args[1]).
+			Msg("Error status from GET")
+	}
+
+	err = protojson.Unmarshal(bodyGet, msg)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("Resource", args[0]).
+			Str("Id", args[1]).
+			Msg("Failed to Unmarshal GET response")
+	}
+
+	status, body, err := createOrUpdateResource("update", args[0], msg, args[2:])
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to UPDATE")
+	}
+
+	fmt.Printf("%d %s\n", status, string(body))
+
+	if status != 200 {
+		os.Exit(1)
+	}
+}
+
+func deleteResource(resourceName string, id string) (int, error) {
+	path := fmt.Sprintf("/v1/%s/delete/%s", resourceName, id)
+
+	resp, err := http.Post(settings.EdgeAddr+path, "application/json", nil)
+	if err != nil {
+		return 500, err
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode, nil
+}
+
+func cobraDeleteResource(cmd *cobra.Command, args []string) {
+	status, err := deleteResource(args[0], args[1])
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("Resource", args[0]).
+			Str("Id", args[1]).
+			Msg("Failed to DELETE")
+	}
+
+	fmt.Printf("%d\n", status)
+
+	if status != 200 {
 		os.Exit(1)
 	}
 }
@@ -107,61 +244,4 @@ func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string,
 	}
 
 	return nil
-}
-
-var messageFactory = map[string]func() proto.Message{
-	"player": func() proto.Message { return proto.Message(new(rpg_pb.Player)) },
-}
-
-func cobraCreateResource(cmd *cobra.Command, args []string) {
-	path := fmt.Sprintf("/v1/%s/create?pretty", args[0])
-
-	slog := log.With().
-		Str("Path", path).
-		Logger()
-
-	resourceName := args[0]
-	msgFac, ok := messageFactory[resourceName]
-	if !ok {
-		slog.Fatal().
-			Msgf("Invalid resource: %s", resourceName)
-	}
-	msg := msgFac()
-	err := reflectKeyValArgs(msg, resourceName, args[1:], true)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to reflect key values")
-	}
-
-	content, err := protojson.Marshal(msg)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to marshal json payload")
-	}
-
-	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to POST")
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to ReadAll")
-	}
-
-	if len(body) > 0 {
-		fmt.Printf("%d %s\n", resp.StatusCode, string(body))
-	}
-
-	if resp.StatusCode != 200 {
-		os.Exit(1)
-	}
 }

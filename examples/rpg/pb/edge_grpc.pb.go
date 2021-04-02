@@ -19,6 +19,8 @@ const _ = grpc.SupportPackageIsVersion7
 type MmoServiceClient interface {
 	GetPlayer(ctx context.Context, in *MmoRequest, opts ...grpc.CallOption) (*Player, error)
 	CreatePlayer(ctx context.Context, in *Player, opts ...grpc.CallOption) (*Player, error)
+	UpdatePlayer(ctx context.Context, in *Player, opts ...grpc.CallOption) (*Player, error)
+	DeletePlayer(ctx context.Context, in *MmoRequest, opts ...grpc.CallOption) (*MmoResponse, error)
 }
 
 type mmoServiceClient struct {
@@ -47,12 +49,32 @@ func (c *mmoServiceClient) CreatePlayer(ctx context.Context, in *Player, opts ..
 	return out, nil
 }
 
+func (c *mmoServiceClient) UpdatePlayer(ctx context.Context, in *Player, opts ...grpc.CallOption) (*Player, error) {
+	out := new(Player)
+	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.pb.MmoService/UpdatePlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mmoServiceClient) DeletePlayer(ctx context.Context, in *MmoRequest, opts ...grpc.CallOption) (*MmoResponse, error) {
+	out := new(MmoResponse)
+	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.pb.MmoService/DeletePlayer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MmoServiceServer is the server API for MmoService service.
 // All implementations must embed UnimplementedMmoServiceServer
 // for forward compatibility
 type MmoServiceServer interface {
 	GetPlayer(context.Context, *MmoRequest) (*Player, error)
 	CreatePlayer(context.Context, *Player) (*Player, error)
+	UpdatePlayer(context.Context, *Player) (*Player, error)
+	DeletePlayer(context.Context, *MmoRequest) (*MmoResponse, error)
 	mustEmbedUnimplementedMmoServiceServer()
 }
 
@@ -65,6 +87,12 @@ func (UnimplementedMmoServiceServer) GetPlayer(context.Context, *MmoRequest) (*P
 }
 func (UnimplementedMmoServiceServer) CreatePlayer(context.Context, *Player) (*Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePlayer not implemented")
+}
+func (UnimplementedMmoServiceServer) UpdatePlayer(context.Context, *Player) (*Player, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdatePlayer not implemented")
+}
+func (UnimplementedMmoServiceServer) DeletePlayer(context.Context, *MmoRequest) (*MmoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeletePlayer not implemented")
 }
 func (UnimplementedMmoServiceServer) mustEmbedUnimplementedMmoServiceServer() {}
 
@@ -115,6 +143,42 @@ func _MmoService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MmoService_UpdatePlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Player)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MmoServiceServer).UpdatePlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rocketcycle.examples.rpg.pb.MmoService/UpdatePlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MmoServiceServer).UpdatePlayer(ctx, req.(*Player))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MmoService_DeletePlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MmoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MmoServiceServer).DeletePlayer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rocketcycle.examples.rpg.pb.MmoService/DeletePlayer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MmoServiceServer).DeletePlayer(ctx, req.(*MmoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _MmoService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "rocketcycle.examples.rpg.pb.MmoService",
 	HandlerType: (*MmoServiceServer)(nil),
@@ -126,6 +190,14 @@ var _MmoService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreatePlayer",
 			Handler:    _MmoService_CreatePlayer_Handler,
+		},
+		{
+			MethodName: "UpdatePlayer",
+			Handler:    _MmoService_UpdatePlayer_Handler,
+		},
+		{
+			MethodName: "DeletePlayer",
+			Handler:    _MmoService_DeletePlayer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
