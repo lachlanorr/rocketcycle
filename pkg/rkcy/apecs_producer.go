@@ -132,7 +132,7 @@ func (aprod *ApecsProducer) ExecuteTxn(
 	reqId string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
-	payload []byte,
+	payload *Buffer,
 	steps []Step,
 ) error {
 	stepsPb := make([]*ApecsTxn_Step, len(steps))

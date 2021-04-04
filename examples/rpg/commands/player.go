@@ -7,7 +7,7 @@ package commands
 import (
 	"context"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/rs/zerolog/log"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
@@ -17,19 +17,30 @@ import (
 func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	player := storage.Player{}
-	err := proto.Unmarshal(stepArgs.Payload, &player)
+	mdl, err := storage.Unmarshal(stepArgs.Payload)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
+	log.Info().Msgf("mdl %+v", mdl)
+	player, ok := mdl.(*storage.Player)
+	if !ok {
+		rslt.LogError("Unmarshal returned wrong type")
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
 
 	if stepArgs.Instance != nil {
-		playerInst := storage.Player{}
-		err := proto.Unmarshal(stepArgs.Instance, &playerInst)
+		mdl, err := storage.Unmarshal(stepArgs.Instance)
 		if err != nil {
 			rslt.LogError(err.Error())
+			rslt.Code = rkcy.Code_MARSHAL_FAILED
+			return &rslt
+		}
+		playerInst, ok := mdl.(*storage.Player)
+		if !ok {
+			rslt.LogError("Unmarshal returned wrong type")
 			rslt.Code = rkcy.Code_MARSHAL_FAILED
 			return &rslt
 		}

@@ -29,6 +29,61 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
+type ResourceType int32
+
+const (
+	ResourceType_UNDEFINED        ResourceType = 0
+	ResourceType_PLAYER           ResourceType = 1
+	ResourceType_CHARACTER        ResourceType = 2
+	ResourceType_FUNDING_REQUEST  ResourceType = 3
+	ResourceType_TRANSFER_REQUEST ResourceType = 4
+)
+
+// Enum value maps for ResourceType.
+var (
+	ResourceType_name = map[int32]string{
+		0: "UNDEFINED",
+		1: "PLAYER",
+		2: "CHARACTER",
+		3: "FUNDING_REQUEST",
+		4: "TRANSFER_REQUEST",
+	}
+	ResourceType_value = map[string]int32{
+		"UNDEFINED":        0,
+		"PLAYER":           1,
+		"CHARACTER":        2,
+		"FUNDING_REQUEST":  3,
+		"TRANSFER_REQUEST": 4,
+	}
+)
+
+func (x ResourceType) Enum() *ResourceType {
+	p := new(ResourceType)
+	*p = x
+	return p
+}
+
+func (x ResourceType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ResourceType) Descriptor() protoreflect.EnumDescriptor {
+	return file_storage_proto_enumTypes[0].Descriptor()
+}
+
+func (ResourceType) Type() protoreflect.EnumType {
+	return &file_storage_proto_enumTypes[0]
+}
+
+func (x ResourceType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ResourceType.Descriptor instead.
+func (ResourceType) EnumDescriptor() ([]byte, []int) {
+	return file_storage_proto_rawDescGZIP(), []int{0}
+}
+
 type Player struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -481,11 +536,18 @@ var file_storage_proto_rawDesc = []byte{
 	0x72, 0x6f, 0x63, 0x6b, 0x65, 0x74, 0x63, 0x79, 0x63, 0x6c, 0x65, 0x2e, 0x65, 0x78, 0x61, 0x6d,
 	0x70, 0x6c, 0x65, 0x73, 0x2e, 0x72, 0x70, 0x67, 0x2e, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65,
 	0x2e, 0x43, 0x68, 0x61, 0x72, 0x61, 0x63, 0x74, 0x65, 0x72, 0x2e, 0x43, 0x75, 0x72, 0x72, 0x65,
-	0x6e, 0x63, 0x79, 0x52, 0x08, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x63, 0x79, 0x42, 0x38, 0x5a,
-	0x36, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6c, 0x61, 0x63, 0x68,
-	0x6c, 0x61, 0x6e, 0x6f, 0x72, 0x72, 0x2f, 0x72, 0x6f, 0x63, 0x6b, 0x65, 0x74, 0x63, 0x79, 0x63,
-	0x6c, 0x65, 0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x73, 0x2f, 0x72, 0x70, 0x67, 0x2f,
-	0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x63, 0x79, 0x52, 0x08, 0x63, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x63, 0x79, 0x2a, 0x63, 0x0a,
+	0x0c, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0d, 0x0a,
+	0x09, 0x55, 0x4e, 0x44, 0x45, 0x46, 0x49, 0x4e, 0x45, 0x44, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06,
+	0x50, 0x4c, 0x41, 0x59, 0x45, 0x52, 0x10, 0x01, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x48, 0x41, 0x52,
+	0x41, 0x43, 0x54, 0x45, 0x52, 0x10, 0x02, 0x12, 0x13, 0x0a, 0x0f, 0x46, 0x55, 0x4e, 0x44, 0x49,
+	0x4e, 0x47, 0x5f, 0x52, 0x45, 0x51, 0x55, 0x45, 0x53, 0x54, 0x10, 0x03, 0x12, 0x14, 0x0a, 0x10,
+	0x54, 0x52, 0x41, 0x4e, 0x53, 0x46, 0x45, 0x52, 0x5f, 0x52, 0x45, 0x51, 0x55, 0x45, 0x53, 0x54,
+	0x10, 0x04, 0x42, 0x38, 0x5a, 0x36, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d,
+	0x2f, 0x6c, 0x61, 0x63, 0x68, 0x6c, 0x61, 0x6e, 0x6f, 0x72, 0x72, 0x2f, 0x72, 0x6f, 0x63, 0x6b,
+	0x65, 0x74, 0x63, 0x79, 0x63, 0x6c, 0x65, 0x2f, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x73,
+	0x2f, 0x72, 0x70, 0x67, 0x2f, 0x73, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -500,20 +562,22 @@ func file_storage_proto_rawDescGZIP() []byte {
 	return file_storage_proto_rawDescData
 }
 
+var file_storage_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_storage_proto_goTypes = []interface{}{
-	(*Player)(nil),             // 0: rocketcycle.examples.rpg.storage.Player
-	(*Character)(nil),          // 1: rocketcycle.examples.rpg.storage.Character
-	(*FundingRequest)(nil),     // 2: rocketcycle.examples.rpg.storage.FundingRequest
-	(*TransferRequest)(nil),    // 3: rocketcycle.examples.rpg.storage.TransferRequest
-	(*Character_Currency)(nil), // 4: rocketcycle.examples.rpg.storage.Character.Currency
-	(*Character_Item)(nil),     // 5: rocketcycle.examples.rpg.storage.Character.Item
+	(ResourceType)(0),          // 0: rocketcycle.examples.rpg.storage.ResourceType
+	(*Player)(nil),             // 1: rocketcycle.examples.rpg.storage.Player
+	(*Character)(nil),          // 2: rocketcycle.examples.rpg.storage.Character
+	(*FundingRequest)(nil),     // 3: rocketcycle.examples.rpg.storage.FundingRequest
+	(*TransferRequest)(nil),    // 4: rocketcycle.examples.rpg.storage.TransferRequest
+	(*Character_Currency)(nil), // 5: rocketcycle.examples.rpg.storage.Character.Currency
+	(*Character_Item)(nil),     // 6: rocketcycle.examples.rpg.storage.Character.Item
 }
 var file_storage_proto_depIdxs = []int32{
-	4, // 0: rocketcycle.examples.rpg.storage.Character.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
-	5, // 1: rocketcycle.examples.rpg.storage.Character.items:type_name -> rocketcycle.examples.rpg.storage.Character.Item
-	4, // 2: rocketcycle.examples.rpg.storage.FundingRequest.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
-	4, // 3: rocketcycle.examples.rpg.storage.TransferRequest.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
+	5, // 0: rocketcycle.examples.rpg.storage.Character.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
+	6, // 1: rocketcycle.examples.rpg.storage.Character.items:type_name -> rocketcycle.examples.rpg.storage.Character.Item
+	5, // 2: rocketcycle.examples.rpg.storage.FundingRequest.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
+	5, // 3: rocketcycle.examples.rpg.storage.TransferRequest.currency:type_name -> rocketcycle.examples.rpg.storage.Character.Currency
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -605,13 +669,14 @@ func file_storage_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_storage_proto_rawDesc,
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_storage_proto_goTypes,
 		DependencyIndexes: file_storage_proto_depIdxs,
+		EnumInfos:         file_storage_proto_enumTypes,
 		MessageInfos:      file_storage_proto_msgTypes,
 	}.Build()
 	File_storage_proto = out.File

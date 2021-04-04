@@ -201,3 +201,14 @@ func BytesToInt(arr []byte) int {
 	*(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(3))) = arr[3]
 	return val
 }
+
+func OffsetGreaterThan(lhs *Offset, rhs *Offset) bool {
+	if lhs.Generation == rhs.Generation {
+		if lhs.Partition == rhs.Partition {
+			return lhs.Offset > rhs.Offset
+		}
+		return lhs.Partition > rhs.Partition
+	} else {
+		return lhs.Generation > rhs.Generation
+	}
+}

@@ -158,7 +158,7 @@ func advanceApecsTxn(
 	now := timestamppb.Now()
 
 	// Read instance from InstanceCache
-	var inst []byte
+	var inst *Buffer
 	if tp.System == System_PROCESS {
 		step.Offset = offset
 
@@ -166,7 +166,7 @@ func advanceApecsTxn(
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
 		if step.Command == Command_REFRESH {
-			instanceCache.Set(step.Key, step.Payload)
+			instanceCache.Set(step.Key, step.Payload, offset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
@@ -284,7 +284,7 @@ func advanceApecsTxn(
 	}
 
 	if tp.System == System_PROCESS && rslt.Instance != nil {
-		instanceCache.Set(step.Key, rslt.Instance)
+		instanceCache.Set(step.Key, rslt.Instance, offset)
 	}
 
 	produceNextStep(rtxn, step, offset, aprod)

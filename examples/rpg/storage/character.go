@@ -93,12 +93,13 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 		return &rslt
 	}
 
-	rslt.Payload, err = proto.Marshal(&character)
+	charSer, err := proto.Marshal(&character)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
+	rslt.Payload = &rkcy.Buffer{Type: int32(ResourceType_CHARACTER), Data: charSer}
 
 	rslt.Code = rkcy.Code_OK
 	return &rslt
@@ -120,10 +121,15 @@ func hasItem(id string, items []*Character_Item) bool {
 func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	mdl := Character{}
-	err := proto.Unmarshal(args.Payload, &mdl)
+	mdl, err := Unmarshal(args.Payload)
 	if err != nil {
 		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
+	char, ok := mdl.(*Character)
+	if !ok {
+		rslt.LogError("Unmarshal returned wrong type")
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
@@ -140,9 +146,9 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		context.Background(),
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
 		args.Key,
-		mdl.PlayerId,
-		mdl.Fullname,
-		mdl.Active,
+		char.PlayerId,
+		char.Fullname,
+		char.Active,
 		args.Offset.Generation,
 		args.Offset.Partition,
 		args.Offset.Offset,
@@ -154,17 +160,17 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		return &rslt
 	}
 
-	if mdl.Currency == nil {
-		mdl.Currency = &Character_Currency{}
+	if char.Currency == nil {
+		char.Currency = &Character_Currency{}
 	}
 	_, err = conn.Exec(
 		context.Background(),
 		"CALL rpg.sp_upsert_character_currency($1, $2, $3, $4, $5, $6, $7, $8)",
 		args.Key,
-		mdl.Currency.Gold,
-		mdl.Currency.Faction_0,
-		mdl.Currency.Faction_1,
-		mdl.Currency.Faction_2,
+		char.Currency.Gold,
+		char.Currency.Faction_0,
+		char.Currency.Faction_1,
+		char.Currency.Faction_2,
 		args.Offset.Generation,
 		args.Offset.Partition,
 		args.Offset.Offset,
@@ -185,7 +191,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		return &rslt
 	}
 	for _, dbItem := range dbItems {
-		if !hasItem(dbItem.Id, mdl.Items) {
+		if !hasItem(dbItem.Id, char.Items) {
 			_, err = conn.Exec(
 				context.Background(),
 				"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
@@ -204,7 +210,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 			}
 		}
 	}
-	for _, item := range mdl.Items {
+	for _, item := range char.Items {
 		_, err = conn.Exec(
 			context.Background(),
 			"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
@@ -223,12 +229,13 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		}
 	}
 
-	rslt.Payload, err = proto.Marshal(&mdl)
+	rslt.Payload, err = Marshal(int32(ResourceType_CHARACTER), char)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
+
 	rslt.Code = rkcy.Code_OK
 	return &rslt
 }

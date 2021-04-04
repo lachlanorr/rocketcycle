@@ -23,11 +23,6 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
-var messageFactory = map[string]func() proto.Message{
-	"player":    func() proto.Message { return proto.Message(new(storage.Player)) },
-	"character": func() proto.Message { return proto.Message(new(storage.Character)) },
-}
-
 func readResource(resourceName string, id string) (int, []byte, error) {
 	path := fmt.Sprintf("/v1/%s/read/%s?pretty", resourceName, id)
 
@@ -91,7 +86,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 }
 
 func cobraCreateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := messageFactory[args[0]]
+	msgFac, ok := storage.MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -115,7 +110,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 }
 
 func cobraUpdateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := messageFactory[args[0]]
+	msgFac, ok := storage.MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).

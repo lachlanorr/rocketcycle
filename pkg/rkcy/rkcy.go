@@ -25,8 +25,8 @@ type StepArgs struct {
 	ReqId         string
 	ProcessedTime *timestamp.Timestamp
 	Key           string
-	Instance      []byte
-	Payload       []byte
+	Instance      *Buffer
+	Payload       *Buffer
 	Offset        *Offset
 }
 
@@ -34,8 +34,8 @@ type StepResult struct {
 	Code          Code
 	EffectiveTime *timestamp.Timestamp
 	LogEvents     []*LogEvent
-	Instance      []byte
-	Payload       []byte
+	Instance      *Buffer
+	Payload       *Buffer
 	Offset        *Offset
 }
 

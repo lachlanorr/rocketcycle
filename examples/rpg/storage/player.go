@@ -7,8 +7,6 @@ package storage
 import (
 	"context"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
@@ -36,7 +34,7 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 
 	rslt.Offset = &offset
 
-	rslt.Payload, err = proto.Marshal(&player)
+	rslt.Payload, err = Marshal(int32(ResourceType_PLAYER), &player)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
@@ -50,10 +48,15 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	mdl := Player{}
-	err := proto.Unmarshal(args.Payload, &mdl)
+	mdl, err := Unmarshal(args.Payload)
 	if err != nil {
 		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
+	plyr, ok := mdl.(*Player)
+	if !ok {
+		rslt.LogError("Unmarshal returned wrong type")
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
@@ -70,8 +73,8 @@ func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 		context.Background(),
 		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",
 		args.Key,
-		mdl.Username,
-		mdl.Active,
+		plyr.Username,
+		plyr.Active,
 		args.Offset.Generation,
 		args.Offset.Partition,
 		args.Offset.Offset,

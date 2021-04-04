@@ -22,7 +22,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
@@ -237,45 +236,14 @@ func processCrudRequest(
 	ctx context.Context,
 	concernName string,
 	command rkcy.Command,
-	msg proto.Message,
+	key string,
+	payload *rkcy.Buffer,
 ) (string, *rkcy.ApecsTxn_Step_Result, error) {
+
 	reqId := uuid.NewString()
 
-	msgR := msg.ProtoReflect()
-	desc := msgR.Descriptor()
-	fields := desc.Fields()
-
-	fdId := fields.ByName("id")
-	if fdId == nil {
-		return reqId, nil, status.New(codes.InvalidArgument, "no 'id' field in payload").Err()
-	}
-	if fdId.Kind() != protoreflect.StringKind {
-		return reqId, nil, status.New(codes.InvalidArgument, "non string 'id' field in payload").Err()
-	}
-	id := msgR.Get(fdId).String()
-
-	// Create id uuid for CREATE calls
-	if command == rkcy.Command_CREATE {
-		if id != "" {
-			return reqId, nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-		}
-		id = uuid.NewString()
-		msgR.Set(fdId, protoreflect.ValueOf(id))
-	} else {
-		if id == "" {
-			return reqId, nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
-		}
-	}
-
 	var steps []rkcy.Step
-	var msgSer []byte
 	if command == rkcy.Command_CREATE || command == rkcy.Command_UPDATE {
-		var err error
-		msgSer, err = proto.Marshal(msg)
-		if err != nil {
-			return reqId, nil, status.New(codes.Internal, "failed to marshal payload").Err()
-		}
-
 		var validateCmd rkcy.Command
 		if command == rkcy.Command_CREATE {
 			validateCmd = rkcy.Command_VALIDATE_NEW
@@ -287,13 +255,13 @@ func processCrudRequest(
 		steps = append(steps, rkcy.Step{
 			ConcernName: concernName,
 			Command:     validateCmd,
-			Key:         id,
+			Key:         key,
 		})
 	}
 	steps = append(steps, rkcy.Step{
 		ConcernName: concernName,
 		Command:     command,
-		Key:         id,
+		Key:         key,
 	})
 
 	respChan := RespChan{
@@ -311,7 +279,7 @@ func processCrudRequest(
 			Partition:        settings.Partition,
 		},
 		false,
-		msgSer,
+		payload,
 		steps,
 	)
 
@@ -352,9 +320,26 @@ func processCrudRequest(
 func processCrudRequestPlayer(
 	ctx context.Context,
 	command rkcy.Command,
-	msg proto.Message,
+	plyr *storage.Player,
 ) (*storage.Player, error) {
-	reqId, result, err := processCrudRequest(ctx, consts.Player, command, msg)
+
+	var (
+		payload *rkcy.Buffer
+		err     error
+	)
+	if command == rkcy.Command_CREATE {
+		if plyr.Id != "" {
+			return nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
+		}
+		plyr.Id = uuid.NewString()
+		payload, err = storage.Marshal(int32(storage.ResourceType_PLAYER), plyr)
+	} else {
+		if plyr.Id == "" {
+			return nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
+		}
+	}
+
+	reqId, result, err := processCrudRequest(ctx, consts.Player, command, plyr.Id, payload)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -363,8 +348,7 @@ func processCrudRequestPlayer(
 		return nil, err
 	}
 
-	playerResult := storage.Player{}
-	err = proto.Unmarshal(result.Payload, &playerResult)
+	mdl, err := storage.Unmarshal(result.Payload)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -372,16 +356,41 @@ func processCrudRequestPlayer(
 			Msg("Failed to Unmarshal Payload")
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
+	playerResult, ok := mdl.(*storage.Player)
+	if !ok {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Unmarshal returned wrong type")
+		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
+	}
 
-	return &playerResult, nil
+	return playerResult, nil
 }
 
 func processCrudRequestCharacter(
 	ctx context.Context,
 	command rkcy.Command,
-	msg proto.Message,
+	char *storage.Character,
 ) (*storage.Character, error) {
-	reqId, result, err := processCrudRequest(ctx, consts.Character, command, msg)
+
+	var (
+		payload *rkcy.Buffer
+		err     error
+	)
+	if command == rkcy.Command_CREATE {
+		if char.Id != "" {
+			return nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
+		}
+		char.Id = uuid.NewString()
+		payload, err = storage.Marshal(int32(storage.ResourceType_CHARACTER), char)
+	} else {
+		if char.Id == "" {
+			return nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
+		}
+	}
+
+	reqId, result, err := processCrudRequest(ctx, consts.Character, command, char.Id, payload)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -390,8 +399,7 @@ func processCrudRequestCharacter(
 		return nil, err
 	}
 
-	characterResult := storage.Character{}
-	err = proto.Unmarshal(result.Payload, &characterResult)
+	mdl, err := storage.Unmarshal(result.Payload)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -399,53 +407,61 @@ func processCrudRequestCharacter(
 			Msg("Failed to Unmarshal Payload")
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
+	characterResult, ok := mdl.(*storage.Character)
+	if !ok {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Unmarshal returned wrong type")
+		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
+	}
 
-	return &characterResult, nil
+	return characterResult, nil
 }
 
-func (server) ReadPlayer(ctx context.Context, in *RpgRequest) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, rkcy.Command_READ, in)
+func (server) ReadPlayer(ctx context.Context, req *RpgRequest) (*storage.Player, error) {
+	return processCrudRequestPlayer(ctx, rkcy.Command_READ, &storage.Player{Id: req.Id})
 }
 
-func (server) CreatePlayer(ctx context.Context, in *storage.Player) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, rkcy.Command_CREATE, in)
+func (server) CreatePlayer(ctx context.Context, plyr *storage.Player) (*storage.Player, error) {
+	return processCrudRequestPlayer(ctx, rkcy.Command_CREATE, plyr)
 }
 
-func (server) UpdatePlayer(ctx context.Context, in *storage.Player) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, rkcy.Command_UPDATE, in)
+func (server) UpdatePlayer(ctx context.Context, plyr *storage.Player) (*storage.Player, error) {
+	return processCrudRequestPlayer(ctx, rkcy.Command_UPDATE, plyr)
 }
 
-func (server) DeletePlayer(ctx context.Context, in *RpgRequest) (*RpgResponse, error) {
-	_, _, err := processCrudRequest(ctx, consts.Player, rkcy.Command_DELETE, in)
+func (server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
+	_, _, err := processCrudRequest(ctx, consts.Player, rkcy.Command_DELETE, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &RpgResponse{Id: in.Id}, nil
+	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) ReadCharacter(ctx context.Context, in *RpgRequest) (*storage.Character, error) {
-	return processCrudRequestCharacter(ctx, rkcy.Command_READ, in)
+func (server) ReadCharacter(ctx context.Context, req *RpgRequest) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_READ, &storage.Character{Id: req.Id})
 }
 
-func (server) CreateCharacter(ctx context.Context, in *storage.Character) (*storage.Character, error) {
-	return processCrudRequestCharacter(ctx, rkcy.Command_CREATE, in)
+func (server) CreateCharacter(ctx context.Context, char *storage.Character) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_CREATE, char)
 }
 
-func (server) UpdateCharacter(ctx context.Context, in *storage.Character) (*storage.Character, error) {
-	return processCrudRequestCharacter(ctx, rkcy.Command_UPDATE, in)
+func (server) UpdateCharacter(ctx context.Context, char *storage.Character) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_UPDATE, char)
 }
 
-func (server) DeleteCharacter(ctx context.Context, in *RpgRequest) (*RpgResponse, error) {
-	_, _, err := processCrudRequest(ctx, consts.Character, rkcy.Command_DELETE, in)
+func (server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
+	_, _, err := processCrudRequest(ctx, consts.Character, rkcy.Command_DELETE, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &RpgResponse{Id: in.Id}, nil
+	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) FundCharacter(ctx context.Context, in *storage.FundingRequest) (*storage.Character, error) {
+func (server) FundCharacter(ctx context.Context, fr *storage.FundingRequest) (*storage.Character, error) {
 	reqId := uuid.NewString()
-	inSer, err := proto.Marshal(in)
+	payload, err := storage.Marshal(int32(storage.ResourceType_FUNDING_REQUEST), fr)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -469,12 +485,12 @@ func (server) FundCharacter(ctx context.Context, in *storage.FundingRequest) (*s
 			Partition:        settings.Partition,
 		},
 		false,
-		inSer,
+		payload,
 		[]rkcy.Step{
 			{
 				ConcernName: consts.Character,
 				Command:     commands.Command_FUND,
-				Key:         in.CharacterId,
+				Key:         fr.CharacterId,
 			},
 		},
 	)
@@ -510,8 +526,7 @@ func (server) FundCharacter(ctx context.Context, in *storage.FundingRequest) (*s
 		return nil, status.ErrorProto(&stat)
 	}
 
-	characterResult := storage.Character{}
-	err = proto.Unmarshal(result.Payload, &characterResult)
+	mdl, err := storage.Unmarshal(result.Payload)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -519,8 +534,15 @@ func (server) FundCharacter(ctx context.Context, in *storage.FundingRequest) (*s
 			Msg("Failed to Unmarshal Payload")
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-
-	return &characterResult, nil
+	characterResult, ok := mdl.(*storage.Character)
+	if !ok {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Unmarshal returned wrong type")
+		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
+	}
+	return characterResult, nil
 }
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
