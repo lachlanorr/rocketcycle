@@ -15,7 +15,8 @@ message PlatformArgs {
 }
 
 message DecodeResponse {
-    string decoded = 1;
+    string type = 1;
+    bytes json = 2;
 }
 
 service AdminService {

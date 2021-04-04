@@ -53,6 +53,11 @@ type ConcernHandlers struct {
 	CrudHandlers CrudHandlers
 }
 
+type DebugDecoder interface {
+	Type(*Buffer) string
+	Json(*Buffer) ([]byte, error)
+}
+
 type PlatformImpl struct {
 	Name          string
 	CobraCommands []*cobra.Command
@@ -60,7 +65,7 @@ type PlatformImpl struct {
 	// string key is ConcernName
 	Handlers map[string]ConcernHandlers
 
-	JsonDebugDecoder func(*Buffer) ([]byte, error)
+	DebugDecoder DebugDecoder
 }
 
 func StartPlatform(impl *PlatformImpl) {

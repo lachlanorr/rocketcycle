@@ -118,8 +118,12 @@
     "rkcy.DecodeResponse": {
       "type": "object",
       "properties": {
-        "decoded": {
+        "type": {
           "type": "string"
+        },
+        "json": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },

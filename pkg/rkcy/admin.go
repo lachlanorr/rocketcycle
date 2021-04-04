@@ -137,7 +137,7 @@ func cobraAdminDecode(cmd *cobra.Command, args []string) {
 			Msg("Failed to Unmarshal DecodeResponse")
 	}
 
-	fmt.Println(decodeRsp.Decoded)
+	fmt.Printf("%s: %s\n", decodeRsp.Type, decodeRsp.Json)
 }
 
 type adminServer struct {
@@ -184,14 +184,16 @@ func (adminServer) Platform(ctx context.Context, pa *PlatformArgs) (*Platform, e
 }
 
 func (adminServer) Decode(ctx context.Context, buffer *Buffer) (*DecodeResponse, error) {
-	dec, err := platformImpl.JsonDebugDecoder(buffer)
-
+	dec, err := platformImpl.DebugDecoder.Json(buffer)
 	if err != nil {
 		return nil, err
 	}
 
+	typeStr := platformImpl.DebugDecoder.Type(buffer)
+
 	return &DecodeResponse{
-		Decoded: string(dec),
+		Type: typeStr,
+		Json: dec,
 	}, nil
 }
 

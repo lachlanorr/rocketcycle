@@ -25,7 +25,17 @@ var MessageFactory = map[string]func() proto.Message{
 	"character": messageFactory[ResourceType_CHARACTER],
 }
 
-func JsonDebugDecoder(buffer *rkcy.Buffer) ([]byte, error) {
+type DebugDecoder struct{}
+
+func (DebugDecoder) Type(buffer *rkcy.Buffer) string {
+	str, ok := ResourceType_name[buffer.Type]
+	if ok {
+		return str
+	}
+	return "UNKNOWN"
+}
+
+func (DebugDecoder) Json(buffer *rkcy.Buffer) ([]byte, error) {
 	msg, err := Unmarshal(buffer)
 	if err != nil {
 		return nil, err

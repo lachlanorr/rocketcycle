@@ -125,7 +125,7 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 }
 
 func decodeOpaques(txnJson []byte) ([]byte, error) {
-	if platformImpl.JsonDebugDecoder == nil {
+	if platformImpl.DebugDecoder.Json == nil {
 		return txnJson, nil
 	}
 
@@ -149,7 +149,7 @@ func decodeOpaques(txnJson []byte) ([]byte, error) {
 						if ok {
 							decData, err := base64.StdEncoding.DecodeString(data)
 							if err == nil {
-								jsonDec, err := platformImpl.JsonDebugDecoder(&Buffer{Type: resourceType, Data: decData})
+								jsonDec, err := platformImpl.DebugDecoder.Json(&Buffer{Type: resourceType, Data: decData})
 								if err == nil {
 									// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 									var dataUnser interface{}

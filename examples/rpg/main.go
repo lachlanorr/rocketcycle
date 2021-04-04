@@ -53,7 +53,7 @@ func main() {
 			},
 		},
 
-		JsonDebugDecoder: storage.JsonDebugDecoder,
+		DebugDecoder: &storage.DebugDecoder{},
 	}
 
 	rkcy.StartPlatform(&impl)
