@@ -23,6 +23,7 @@ type Settings struct {
 
 	WatchError    bool
 	WatchComplete bool
+	WatchDecode   bool
 }
 
 var (
@@ -117,19 +118,29 @@ func runCobra(impl *PlatformImpl) {
 	}
 	rootCmd.AddCommand(adminCmd)
 
-	adminGetCmd := &cobra.Command{
-		Use:   "get",
-		Short: "get a specific resource from rest api",
+	adminReadCmd := &cobra.Command{
+		Use:   "read",
+		Short: "read a specific resource from rest api",
 	}
-	adminGetCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
-	adminCmd.AddCommand(adminGetCmd)
+	adminReadCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	adminCmd.AddCommand(adminReadCmd)
 
-	adminGetPlatformCmd := &cobra.Command{
+	adminReadPlatformCmd := &cobra.Command{
 		Use:   "platform",
-		Short: "get the platform definition",
-		Run:   cobraAdminGetPlatform,
+		Short: "read the platform definition",
+		Run:   cobraAdminReadPlatform,
 	}
-	adminGetCmd.AddCommand(adminGetPlatformCmd)
+	adminReadCmd.AddCommand(adminReadPlatformCmd)
+
+	adminDecodeCmd := &cobra.Command{
+		Use:       "decode resource_id base64_payload",
+		Short:     "decode and print base64 payload using JsonDebugDecoder",
+		Run:       cobraAdminDecode,
+		Args:      cobra.MinimumNArgs(2),
+		ValidArgs: []string{"resource_id", "base64_payload"},
+	}
+	adminDecodeCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	adminCmd.AddCommand(adminDecodeCmd)
 
 	adminServeCmd := &cobra.Command{
 		Use:   "serve",
@@ -180,6 +191,7 @@ func runCobra(impl *PlatformImpl) {
 	watchCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	watchCmd.PersistentFlags().BoolVarP(&settings.WatchError, "error", "e", true, "Whether to watch error topics")
 	watchCmd.PersistentFlags().BoolVarP(&settings.WatchComplete, "complete", "c", true, "Whether to watch complete topics")
+	watchCmd.PersistentFlags().BoolVarP(&settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(watchCmd)
 
 	runCmd := &cobra.Command{
@@ -189,6 +201,7 @@ func runCobra(impl *PlatformImpl) {
 		Run:   cobraRun,
 	}
 	runCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config and begin all other processes")
+	runCmd.PersistentFlags().BoolVarP(&settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(runCmd)
 
 	platCmd := &cobra.Command{

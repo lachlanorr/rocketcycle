@@ -5,8 +5,10 @@
 package rkcy
 
 import (
+	"bytes"
 	"context"
 	"embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -54,8 +56,8 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 	}
 }
 
-func cobraAdminGetPlatform(cmd *cobra.Command, args []string) {
-	path := "/v1/platform/get?pretty"
+func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
+	path := "/v1/platform/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
@@ -65,7 +67,7 @@ func cobraAdminGetPlatform(cmd *cobra.Command, args []string) {
 	if err != nil {
 		slog.Fatal().
 			Err(err).
-			Msg("Failed to GET")
+			Msg("Failed to READ")
 	}
 	defer resp.Body.Close()
 
@@ -77,6 +79,65 @@ func cobraAdminGetPlatform(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(string(body))
+}
+
+func cobraAdminDecode(cmd *cobra.Command, args []string) {
+	path := "/v1/decode"
+
+	slog := log.With().
+		Str("Path", path).
+		Logger()
+
+	var err error
+
+	intType, err := strconv.Atoi(args[0])
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to parse Type arg")
+	}
+
+	buff := Buffer{}
+	buff.Type = int32(intType)
+	buff.Data, err = base64.StdEncoding.DecodeString(args[1])
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to decode data")
+	}
+
+	buffSer, err := protojson.Marshal(&buff)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to marshal Buffer")
+	}
+
+	contentRdr := bytes.NewReader(buffSer)
+	resp, err := http.Post(settings.AdminAddr+path, "application/json", contentRdr)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to DECODE")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+	}
+
+	decodeRsp := DecodeResponse{}
+	err = protojson.Unmarshal(body, &decodeRsp)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to Unmarshal DecodeResponse")
+	}
+
+	fmt.Println(decodeRsp.Decoded)
 }
 
 type adminServer struct {
@@ -115,11 +176,23 @@ func (adminServer) RegisterHandlerFromEndpoint(
 	return RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (adminServer) Platform(ctx context.Context, in *PlatformArgs) (*Platform, error) {
+func (adminServer) Platform(ctx context.Context, pa *PlatformArgs) (*Platform, error) {
 	if oldRtPlat != nil {
 		return oldRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
+}
+
+func (adminServer) Decode(ctx context.Context, buffer *Buffer) (*DecodeResponse, error) {
+	dec, err := platformImpl.JsonDebugDecoder(buffer)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &DecodeResponse{
+		Decoded: string(dec),
+	}, nil
 }
 
 func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {

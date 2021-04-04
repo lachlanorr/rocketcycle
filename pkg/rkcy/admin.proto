@@ -8,15 +8,27 @@ package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
 import "google/api/annotations.proto";
+import "apecs.proto";
 import "platform.proto";
 
 message PlatformArgs {
+}
+
+message DecodeResponse {
+    string decoded = 1;
 }
 
 service AdminService {
     rpc Platform(PlatformArgs) returns (rkcy.Platform) {
         option (google.api.http) = {
             get: "/v1/platform/read"
+        };
+    }
+
+    rpc Decode(Buffer) returns (DecodeResponse) {
+        option (google.api.http) = {
+            post: "/v1/decode"
+            body: "*"
         };
     }
 }

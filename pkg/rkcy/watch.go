@@ -78,9 +78,9 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
-					txnJson, err := protojson.Marshal(proto.Message(&txn))
-					if err == nil {
-						txnJsonDec, err := decodeOpaques(txnJson)
+					txnJson := protojson.Format(proto.Message(&txn))
+					if settings.WatchDecode {
+						txnJsonDec, err := decodeOpaques([]byte(txnJson))
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -90,9 +90,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 								Msgf("Failed to decodeOpaques: %s", string(txnJson))
 						}
 					} else {
-						log.Error().
-							Err(err).
-							Msg("Failed to protojson.Marshal")
+						log.WithLevel(wt.logLevel).
+							Msg(string(txnJson))
 					}
 				}
 			}

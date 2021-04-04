@@ -258,6 +258,11 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 }
 
 func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+	args := []string{"watch"}
+	if settings.WatchDecode {
+		args = append(args, "-d")
+	}
+
 	updateRunning(
 		ctx,
 		running,
@@ -265,7 +270,7 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 		&AdminConsumerDirective{
 			Program: &Program{
 				Name:   "./" + platformName,
-				Args:   []string{"watch"},
+				Args:   args,
 				Abbrev: "watch",
 			},
 		},

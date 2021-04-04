@@ -18,6 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdminServiceClient interface {
 	Platform(ctx context.Context, in *PlatformArgs, opts ...grpc.CallOption) (*Platform, error)
+	Decode(ctx context.Context, in *Buffer, opts ...grpc.CallOption) (*DecodeResponse, error)
 }
 
 type adminServiceClient struct {
@@ -37,11 +38,21 @@ func (c *adminServiceClient) Platform(ctx context.Context, in *PlatformArgs, opt
 	return out, nil
 }
 
+func (c *adminServiceClient) Decode(ctx context.Context, in *Buffer, opts ...grpc.CallOption) (*DecodeResponse, error) {
+	out := new(DecodeResponse)
+	err := c.cc.Invoke(ctx, "/rkcy.AdminService/Decode", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility
 type AdminServiceServer interface {
 	Platform(context.Context, *PlatformArgs) (*Platform, error)
+	Decode(context.Context, *Buffer) (*DecodeResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -51,6 +62,9 @@ type UnimplementedAdminServiceServer struct {
 
 func (UnimplementedAdminServiceServer) Platform(context.Context, *PlatformArgs) (*Platform, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Platform not implemented")
+}
+func (UnimplementedAdminServiceServer) Decode(context.Context, *Buffer) (*DecodeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Decode not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 
@@ -83,6 +97,24 @@ func _AdminService_Platform_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_Decode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Buffer)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Decode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.AdminService/Decode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Decode(ctx, req.(*Buffer))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _AdminService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "rkcy.AdminService",
 	HandlerType: (*AdminServiceServer)(nil),
@@ -90,6 +122,10 @@ var _AdminService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Platform",
 			Handler:    _AdminService_Platform_Handler,
+		},
+		{
+			MethodName: "Decode",
+			Handler:    _AdminService_Decode_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

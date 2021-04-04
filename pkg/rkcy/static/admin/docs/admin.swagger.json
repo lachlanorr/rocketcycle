@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/decode": {
+      "post": {
+        "operationId": "AdminService_Decode",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.DecodeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rkcy.Buffer"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/platform/read": {
       "get": {
         "operationId": "AdminService_Platform",
@@ -67,6 +99,27 @@
           "items": {
             "$ref": "#/definitions/google.protobuf.Any"
           }
+        }
+      }
+    },
+    "rkcy.Buffer": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "rkcy.DecodeResponse": {
+      "type": "object",
+      "properties": {
+        "decoded": {
+          "type": "string"
         }
       }
     },
