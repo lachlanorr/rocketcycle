@@ -12,3 +12,26 @@ message Player {
     string username = 2;
     bool active = 3;
 }
+
+message Character {
+    string id = 1;
+    string player_id = 2;
+    string fullname = 3;
+    bool active = 4;
+
+    Currency currency = 5;
+
+    repeated Item items = 6;
+
+    message Currency {
+        int32 gold = 1;
+        int32 faction_0 = 2;
+        int32 faction_1 = 3;
+        int32 faction_2 = 4;
+    }
+
+    message Item {
+        string id = 1;
+        string description = 2;
+    }
+}

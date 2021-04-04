@@ -273,10 +273,17 @@ func processCrudRequest(
 			return reqId, nil, status.New(codes.Internal, "failed to marshal payload").Err()
 		}
 
+		var validateCmd rkcy_pb.Command
+		if command == rkcy_pb.Command_CREATE {
+			validateCmd = rkcy_pb.Command_VALIDATE_NEW
+		} else {
+			validateCmd = rkcy_pb.Command_VALIDATE_EXISTING
+		}
+
 		// CREATE/UPDATE get a validate step first
 		steps = append(steps, rkcy.Step{
 			ConcernName: concernName,
-			Command:     rkcy_pb.Command_VALIDATE,
+			Command:     validateCmd,
 			Key:         id,
 		})
 	}

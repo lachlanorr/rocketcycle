@@ -22,8 +22,24 @@ func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResu
 	err := proto.Unmarshal(stepArgs.Payload, &player)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_FAILED_CONSTRAINT
+		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
 		return &rslt
+	}
+
+	if stepArgs.Instance != nil {
+		playerInst := rpg_pb.Player{}
+		err := proto.Unmarshal(stepArgs.Instance, &playerInst)
+		if err != nil {
+			rslt.LogError(err.Error())
+			rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+			return &rslt
+		}
+
+		if player.Username != playerInst.Username {
+			rslt.LogError("Username may not be changed")
+			rslt.Code = rkcy_pb.Code_FAILED_CONSTRAINT
+			return &rslt
+		}
 	}
 
 	if len(player.Username) < 4 {

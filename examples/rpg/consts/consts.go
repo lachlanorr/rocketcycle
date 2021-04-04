@@ -7,5 +7,8 @@ package consts
 const (
 	Platform string = "rpg"
 
-	Player string = "player"
+	Player    string = "player"
+	Character string = "character"
+
+	ZeroUuid string = "00000000-0000-0000-0000-000000000000"
 )

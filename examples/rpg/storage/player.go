@@ -7,7 +7,6 @@ package storage
 import (
 	"context"
 
-	"github.com/jackc/pgx/v4"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -16,18 +15,13 @@ import (
 	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-func connect() (*pgx.Conn, error) {
-	// LORRTODO: make connection string a config
-	return pgx.Connect(context.Background(), "postgresql://postgres@127.0.0.1:5432/rpg")
-}
-
 type Player struct {
 }
 
 func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	conn, err := connect()
+	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy_pb.Code_CONNECTION
@@ -70,7 +64,7 @@ func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 		return &rslt
 	}
 
-	conn, err := connect()
+	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy_pb.Code_CONNECTION
@@ -81,7 +75,7 @@ func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 	_, err = conn.Exec(
 		context.Background(),
 		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",
-		mdl.Id,
+		args.Key,
 		mdl.Username,
 		mdl.Active,
 		args.Offset.Generation,
@@ -111,7 +105,7 @@ func (p *Player) Update(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResu
 func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	conn, err := connect()
+	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy_pb.Code_CONNECTION
@@ -119,7 +113,15 @@ func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 	}
 	defer conn.Close(ctx)
 
-	_, err = conn.Exec(ctx, "DELETE FROM rpg.player WHERE id=$1", args.Key)
+	_, err = conn.Exec(
+		context.Background(),
+		"CALL rpg.sp_delete_player($1, $2, $3, $4)",
+		args.Key,
+		args.Offset.Generation,
+		args.Offset.Partition,
+		args.Offset.Offset,
+	)
+
 	if err != nil {
 		rslt.LogError(err.Error())
 		rslt.Code = rkcy_pb.Code_INTERNAL

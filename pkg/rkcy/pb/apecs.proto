@@ -10,15 +10,17 @@ package rkcy.pb;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
 
 message ApecsTxn {
-    string req_id = 1;       // uuid of txn used for tracing and reporting
-    ResponseTarget response_target = 2;
+    string req_id = 1;      // uuid of txn used for tracing and reporting
+    string orig_req_id = 2; // if set, req_id of ApecsTxn that generated this transaction
 
-    int32 current_step_idx = 3;
-    Direction direction = 4; // starts in forward, can potentially go to reverse if the transaction is reversible
-    bool can_revert = 5;     // whether or not this transaction can be rolled back.
+    ResponseTarget response_target = 3;
 
-    repeated Step forward_steps = 6;  // filled upon creation with forward steps
-    repeated Step reverse_steps = 7;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
+    int32 current_step_idx = 4;
+    Direction direction = 5; // starts in forward, can potentially go to reverse if the transaction is reversible
+    bool can_revert = 6;     // whether or not this transaction can be rolled back.
+
+    repeated Step forward_steps = 7;  // filled upon creation with forward steps
+    repeated Step reverse_steps = 8;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
 }
 
 enum Direction {
@@ -50,6 +52,8 @@ message Step {
         repeated LogEvent logEvents = 4;
 
         bytes payload = 5; // opaque payload returned from command
+
+        bytes instance = 6; // opaque payload returned from command
     }
 }
 
@@ -67,8 +71,9 @@ enum Command {
     UPDATE = 3;
     DELETE = 4;
 
-    VALIDATE = 5;
-    REFRESH = 6;
+    VALIDATE_NEW = 6;
+    VALIDATE_EXISTING = 7;
+    REFRESH = 8;
 
     // User defined commands should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_COMMAND = 16;

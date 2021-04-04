@@ -150,6 +150,7 @@ func (aprod *ApecsProducer) ExecuteTxn(
 	}
 	return aprod.executeTxn(
 		reqId,
+		"",
 		rspTgt,
 		canRevert,
 		stepsPb,
@@ -158,11 +159,12 @@ func (aprod *ApecsProducer) ExecuteTxn(
 
 func (aprod *ApecsProducer) executeTxn(
 	reqId string,
+	origReqId string,
 	rspTgt *pb.ResponseTarget,
 	canRevert bool,
 	steps []pb.Step,
 ) error {
-	txn, err := newApecsTxn(reqId, rspTgt, canRevert, steps)
+	txn, err := newApecsTxn(reqId, origReqId, rspTgt, canRevert, steps)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@
                 {
                     "name": "response",
                     "current": {
-                        "partitionCount": 2
+                        "partitionCount": 4
                     },
                     "consumerProgram": {
                         "name": "./@platform",
@@ -22,6 +22,25 @@
         {
             "type": "APECS",
             "name": "player",
+
+            "topics": [
+                {
+                    "name": "process",
+                    "current": {
+                        "partitionCount": 4
+                    }
+                },
+                {
+                    "name": "storage",
+                    "current": {
+                        "partitionCount": 2
+                    }
+                }
+            ]
+        },
+        {
+            "type": "APECS",
+            "name": "character",
 
             "topics": [
                 {

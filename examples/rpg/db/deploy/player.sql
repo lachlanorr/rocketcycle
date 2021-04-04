@@ -16,4 +16,20 @@ CREATE TABLE rpg.player (
   mro_offset BIGINT NOT NULL CHECK (mro_offset >= 0)
 );
 
+INSERT INTO rpg.player (
+    id,
+    username,
+    active,
+    mro_generation,
+    mro_partition,
+    mro_offset
+) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    'sys_reserved',
+    TRUE,
+    1,
+    0,
+    0
+);
+
 COMMIT;

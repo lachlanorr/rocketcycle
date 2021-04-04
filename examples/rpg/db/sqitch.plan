@@ -4,7 +4,6 @@
 
 schema 2020-09-20T00:39:33Z Lachlan Orr <lorr@gaen.org> # rpg schema
 player [schema] 2020-09-20T01:43:11Z Lachlan Orr <lorr@gaen.org> # create player table
-character [player] 2020-09-20T02:09:04Z Lachlan Orr <lorr@gaen.org> # create player table
-character_currency [character] 2020-09-20T02:22:58Z Lachlan Orr <lorr@gaen.org> # create character_currency table
-character_item [character] 2020-09-20T02:25:45Z Lachlan Orr <lorr@gaen.org> # create character_item table
-sp_player [player] 2021-04-02T16:19:13Z Lachlan Orr <lorr@gaen.org> # create sp_player stored procedure
+character [player] 2020-09-20T02:09:04Z Lachlan Orr <lorr@gaen.org> # create character table
+sp_player [player] 2021-04-02T16:19:13Z Lachlan Orr <lorr@gaen.org> # create player stored procedures
+sp_character [player] 2021-04-02T20:59:22Z Lachlan Orr <lorr@gaen.org> # create character stored procedures

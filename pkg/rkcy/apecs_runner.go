@@ -49,14 +49,15 @@ func produceApecsTxnError(
 func produceNextStep(
 	rtxn *rtApecsTxn,
 	step *pb.Step,
-	rsltPayload []byte,
 	offset *pb.Offset,
 	aprod *ApecsProducer,
 ) {
 	if rtxn.advanceStepIdx() {
 		nextStep := rtxn.currentStep()
 		// payload from last step should be passed to next step
-		nextStep.Payload = rsltPayload
+		if nextStep.Payload == nil {
+			nextStep.Payload = step.Result.Payload
+		}
 		if nextStep.System == pb.System_STORAGE && nextStep.Offset == nil {
 			// STORAGE steps always need the value PROCESS Offset
 			if step.Offset != nil {
@@ -73,13 +74,47 @@ func produceNextStep(
 		}
 		err := aprod.produceCurrentStep(rtxn.txn)
 		if err != nil {
-			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
+		// search for instance updates and create new storage txn to update storage
+		if rtxn.txn.Direction == pb.Direction_FORWARD {
+			var storageSteps []pb.Step
+			for _, step := range rtxn.txn.ForwardSteps {
+				if step.Result.Instance != nil {
+					storageSteps = append(
+						storageSteps,
+						pb.Step{
+							System:      pb.System_STORAGE,
+							ConcernName: step.ConcernName,
+							Command:     pb.Command_UPDATE,
+							Key:         step.Key,
+							Payload:     step.Result.Instance,
+							Offset:      step.Offset,
+						},
+					)
+
+				}
+			}
+			if storageSteps != nil {
+				err := aprod.executeTxn(
+					uuid.NewString(),
+					rtxn.txn.ReqId,
+					nil,
+					false,
+					storageSteps,
+				)
+				if err != nil {
+					produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+					return
+				}
+			}
+		}
+
 		err := aprod.produceComplete(rtxn)
 		if err != nil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
@@ -120,6 +155,8 @@ func advanceApecsTxn(
 	// Read instance from InstanceCache
 	var inst []byte
 	if tp.System == pb.System_PROCESS {
+		step.Offset = offset
+
 		// Special case "REFRESH" command
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
@@ -131,12 +168,12 @@ func advanceApecsTxn(
 				EffectiveTime: now,
 				Payload:       step.Payload,
 			}
-			produceNextStep(rtxn, step, nil, offset, aprod)
+			produceNextStep(rtxn, step, offset, aprod)
 			return
 		} else {
 			inst = instanceCache.Get(step.Key)
 
-			nilOk := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE
+			nilOk := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE_NEW
 			if inst == nil && !nilOk {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
@@ -189,6 +226,11 @@ func advanceApecsTxn(
 		return
 	}
 
+	if step.Offset == nil {
+		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
+		return
+	}
+
 	args := StepArgs{
 		ReqId:         rtxn.txn.ReqId,
 		ProcessedTime: now,
@@ -222,6 +264,7 @@ func advanceApecsTxn(
 		EffectiveTime: effectiveTime,
 		LogEvents:     rslt.LogEvents,
 		Payload:       rslt.Payload,
+		Instance:      rslt.Instance,
 	}
 
 	if step.Result.Code != pb.Code_OK {
@@ -235,34 +278,11 @@ func advanceApecsTxn(
 		rslt.Payload = step.Payload
 	}
 
-	if tp.System == pb.System_PROCESS {
-		if rslt.Instance != nil {
-			// Instance has changed in handler, update the
-			// storage system
-			err := aprod.executeTxn(
-				uuid.NewString(),
-				nil,
-				false,
-				[]pb.Step{
-					{
-						System:      pb.System_STORAGE,
-						ConcernName: step.ConcernName,
-						Command:     pb.Command_UPDATE,
-						Key:         step.Key,
-						Payload:     rslt.Instance,
-						Offset:      offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
-					},
-				},
-			)
-			if err != nil {
-				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
-				return
-			}
-			instanceCache.Set(step.Key, rslt.Instance)
-		}
+	if tp.System == pb.System_PROCESS && rslt.Instance != nil {
+		instanceCache.Set(step.Key, rslt.Instance)
 	}
 
-	produceNextStep(rtxn, step, rslt.Payload, offset, aprod)
+	produceNextStep(rtxn, step, offset, aprod)
 }
 
 func consumeApecsTopic(
