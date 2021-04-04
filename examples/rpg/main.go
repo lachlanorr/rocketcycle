@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
@@ -28,22 +28,22 @@ func main() {
 
 		Handlers: map[string]rkcy.ConcernHandlers{
 			consts.Player: {
-				Handlers: map[rkcy_pb.Command]rkcy.Handler{
-					rkcy_pb.Command_VALIDATE_NEW: {
+				Handlers: map[pb.Command]rkcy.Handler{
+					pb.Command_VALIDATE_NEW: {
 						Do: commands.PlayerValidate,
 					},
-					rkcy_pb.Command_VALIDATE_EXISTING: {
+					pb.Command_VALIDATE_EXISTING: {
 						Do: commands.PlayerValidate,
 					},
 				},
 				CrudHandlers: &storage.Player{},
 			},
 			consts.Character: {
-				Handlers: map[rkcy_pb.Command]rkcy.Handler{
-					rkcy_pb.Command_VALIDATE_NEW: {
+				Handlers: map[pb.Command]rkcy.Handler{
+					pb.Command_VALIDATE_NEW: {
 						Do: commands.CharacterValidate,
 					},
-					rkcy_pb.Command_VALIDATE_EXISTING: {
+					pb.Command_VALIDATE_EXISTING: {
 						Do: commands.CharacterValidate,
 					},
 				},

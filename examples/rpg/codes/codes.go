@@ -5,9 +5,9 @@
 package codes
 
 import (
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 const (
-	Code_NOT_IMPLEMENTEDD rkcy_pb.Code = rkcy_pb.Code_RKCY_INTERNAL_MAX_CODE + 1
+	Code_NOT_IMPLEMENTEDD pb.Code = pb.Code_RKCY_INTERNAL_MAX_CODE + 1
 )

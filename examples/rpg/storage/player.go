@@ -11,12 +11,8 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
-
-type Player struct {
-}
 
 func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
@@ -24,19 +20,19 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
 
-	player := rpg_pb.Player{}
-	offset := rkcy_pb.Offset{}
+	player := Player{}
+	offset := pb.Offset{}
 	err = conn.QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", args.Key).
 		Scan(&player.Id, &player.Username, &player.Active, &offset.Generation, &offset.Partition, &offset.Offset)
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_NOT_FOUND
+		rslt.Code = pb.Code_NOT_FOUND
 		return &rslt
 	}
 
@@ -45,29 +41,29 @@ func (*Player) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt.Payload, err = proto.Marshal(&player)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		rslt.Code = pb.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	return &rslt
 }
 
 func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	mdl := rpg_pb.Player{}
+	mdl := Player{}
 	err := proto.Unmarshal(args.Payload, &mdl)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		rslt.Code = pb.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(context.Background())
@@ -85,11 +81,11 @@ func (*Player) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	rslt.Payload = args.Payload
 	return &rslt
 }
@@ -108,7 +104,7 @@ func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
@@ -124,10 +120,10 @@ func (*Player) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	return &rslt
 }

@@ -23,7 +23,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
             }
           },
           "default": {
@@ -39,7 +39,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
             }
           }
         ],
@@ -55,7 +55,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.MmoResponse"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.MmoResponse"
             }
           },
           "default": {
@@ -85,7 +85,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
             }
           },
           "default": {
@@ -115,7 +115,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
             }
           },
           "default": {
@@ -131,7 +131,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
             }
           }
         ],
@@ -172,7 +172,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.MmoResponse": {
+    "rocketcycle.examples.rpg.edge.MmoResponse": {
       "type": "object",
       "properties": {
         "id": {
@@ -182,7 +182,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.Player": {
+    "rocketcycle.examples.rpg.storage.Player": {
       "type": "object",
       "properties": {
         "id": {

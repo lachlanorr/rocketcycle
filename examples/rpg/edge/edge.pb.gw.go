@@ -2,11 +2,11 @@
 // source: edge.proto
 
 /*
-Package pb is a reverse proxy.
+Package edge is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package pb
+package edge
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -84,7 +85,7 @@ func local_request_MmoService_GetPlayer_0(ctx context.Context, marshaler runtime
 }
 
 func request_MmoService_CreatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, client MmoServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq Player
+	var protoReq storage.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -101,7 +102,7 @@ func request_MmoService_CreatePlayer_0(ctx context.Context, marshaler runtime.Ma
 }
 
 func local_request_MmoService_CreatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, server MmoServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq Player
+	var protoReq storage.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -118,7 +119,7 @@ func local_request_MmoService_CreatePlayer_0(ctx context.Context, marshaler runt
 }
 
 func request_MmoService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, client MmoServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq Player
+	var protoReq storage.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -135,7 +136,7 @@ func request_MmoService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Ma
 }
 
 func local_request_MmoService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, server MmoServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq Player
+	var protoReq storage.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -215,7 +216,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/GetPlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -238,7 +239,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/CreatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -261,7 +262,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/UpdatePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/UpdatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -284,7 +285,7 @@ func RegisterMmoServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/DeletePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/DeletePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -346,7 +347,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/GetPlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/GetPlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -366,7 +367,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/CreatePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/CreatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -386,7 +387,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/UpdatePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/UpdatePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -406,7 +407,7 @@ func RegisterMmoServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.pb.MmoService/DeletePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rocketcycle.examples.rpg.edge.MmoService/DeletePlayer")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

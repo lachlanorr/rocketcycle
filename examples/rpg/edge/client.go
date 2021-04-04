@@ -20,11 +20,11 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
 var messageFactory = map[string]func() proto.Message{
-	"player": func() proto.Message { return proto.Message(new(rpg_pb.Player)) },
+	"player": func() proto.Message { return proto.Message(new(storage.Player)) },
 }
 
 func getResource(resourceName string, id string) (int, []byte, error) {

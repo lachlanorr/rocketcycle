@@ -4,13 +4,13 @@
 
 syntax = "proto3";
 
-package rocketcycle.examples.rpg.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
+package rocketcycle.examples.rpg.edge;
+option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/edge";
 
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
-import "storage.proto";
+import "examples/rpg/storage/storage.proto";
 
 message MmoRequest {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
@@ -21,18 +21,18 @@ message MmoResponse {
 }
 
 service MmoService {
-    rpc GetPlayer(MmoRequest) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc GetPlayer(MmoRequest) returns (rocketcycle.examples.rpg.storage.Player) {
         option (google.api.http) = {
             get: "/v1/player/get/{id}"
         };
     }
-    rpc CreatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc CreatePlayer(rocketcycle.examples.rpg.storage.Player) returns (rocketcycle.examples.rpg.storage.Player) {
         option (google.api.http) = {
             post: "/v1/player/create"
             body: "*"
         };
     }
-    rpc UpdatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc UpdatePlayer(rocketcycle.examples.rpg.storage.Player) returns (rocketcycle.examples.rpg.storage.Player) {
         option (google.api.http) = {
             post: "/v1/player/update"
             body: "*"

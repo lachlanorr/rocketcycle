@@ -13,19 +13,15 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	rpg_pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	rkcy_pb "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
-type Character struct {
-}
-
-func (*Character) ReadItems(ctx context.Context, conn *pgx.Conn, characterId string) ([]*rpg_pb.Character_Item, error) {
-	var items []*rpg_pb.Character_Item
+func (*Character) ReadItems(ctx context.Context, conn *pgx.Conn, characterId string) ([]*Character_Item, error) {
+	var items []*Character_Item
 	rows, err := conn.Query(ctx, "select id, description from rpg.character_item where character_id = $1", characterId)
 	if err == nil {
 		for rows.Next() {
-			item := rpg_pb.Character_Item{}
+			item := Character_Item{}
 
 			err = rows.Scan(&item.Id, &item.Description)
 			if err != nil {
@@ -43,16 +39,16 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
 
-	character := rpg_pb.Character{
-		Currency: &rpg_pb.Character_Currency{},
+	character := Character{
+		Currency: &Character_Currency{},
 	}
 
-	offset := rkcy_pb.Offset{}
+	offset := pb.Offset{}
 	err = conn.QueryRow(
 		ctx,
 		`SELECT c.id,
@@ -86,7 +82,7 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_NOT_FOUND
+		rslt.Code = pb.Code_NOT_FOUND
 		return &rslt
 	}
 
@@ -95,22 +91,22 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	character.Items, err = c.ReadItems(ctx, conn, args.Key)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
 	rslt.Payload, err = proto.Marshal(&character)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		rslt.Code = pb.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	return &rslt
 }
 
-func hasItem(id string, items []*rpg_pb.Character_Item) bool {
+func hasItem(id string, items []*Character_Item) bool {
 	if items == nil {
 		return false
 	}
@@ -126,18 +122,18 @@ func hasItem(id string, items []*rpg_pb.Character_Item) bool {
 func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	mdl := rpg_pb.Character{}
+	mdl := Character{}
 	err := proto.Unmarshal(args.Payload, &mdl)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_MARSHAL_FAILED
+		rslt.Code = pb.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(context.Background())
@@ -156,7 +152,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
@@ -175,7 +171,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
@@ -184,7 +180,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 	dbItems, err := c.ReadItems(ctx, conn, args.Key)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 	for _, dbItem := range dbItems {
@@ -202,7 +198,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 			if err != nil {
 				rslt.LogError(err.Error())
-				rslt.Code = rkcy_pb.Code_INTERNAL
+				rslt.Code = pb.Code_INTERNAL
 				return &rslt
 			}
 		}
@@ -221,12 +217,12 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 		if err != nil {
 			rslt.LogError(err.Error())
-			rslt.Code = rkcy_pb.Code_INTERNAL
+			rslt.Code = pb.Code_INTERNAL
 			return &rslt
 		}
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	rslt.Payload = args.Payload
 	return &rslt
 }
@@ -245,7 +241,7 @@ func (*Character) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_CONNECTION
+		rslt.Code = pb.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
@@ -260,10 +256,10 @@ func (*Character) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = rkcy_pb.Code_INTERNAL
+		rslt.Code = pb.Code_INTERNAL
 		return &rslt
 	}
 
-	rslt.Code = rkcy_pb.Code_OK
+	rslt.Code = pb.Code_OK
 	return &rslt
 }
