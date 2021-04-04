@@ -13,12 +13,11 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type Step struct {
 	ConcernName string
-	Command     pb.Command
+	Command     Command
 	Key         string
 	Payload     []byte
 }
@@ -73,7 +72,7 @@ func (aprod *ApecsProducer) getProducer(
 	return pdc, nil
 }
 
-func (aprod *ApecsProducer) produceResponse(txn *pb.ApecsTxn) error {
+func (aprod *ApecsProducer) produceResponse(txn *ApecsTxn) error {
 	if txn.ResponseTarget == nil {
 		return nil
 	}
@@ -104,7 +103,7 @@ func (aprod *ApecsProducer) produceResponse(txn *pb.ApecsTxn) error {
 			Partition: rspTgt.Partition,
 		},
 		Value:   txnSer,
-		Headers: standardHeaders(pb.Directive_APECS_TXN, txn.ReqId),
+		Headers: standardHeaders(Directive_APECS_TXN, txn.ReqId),
 	}
 
 	err = kProd.Produce(&kMsg, nil)
@@ -131,15 +130,15 @@ func (aprod *ApecsProducer) Close() {
 
 func (aprod *ApecsProducer) ExecuteTxn(
 	reqId string,
-	rspTgt *pb.ResponseTarget,
+	rspTgt *ResponseTarget,
 	canRevert bool,
 	payload []byte,
 	steps []Step,
 ) error {
-	stepsPb := make([]pb.Step, len(steps))
+	stepsPb := make([]*ApecsTxn_Step, len(steps))
 	for i, step := range steps {
-		stepsPb[i] = pb.Step{
-			System:      pb.System_PROCESS,
+		stepsPb[i] = &ApecsTxn_Step{
+			System:      System_PROCESS,
 			ConcernName: step.ConcernName,
 			Command:     step.Command,
 			Key:         step.Key,
@@ -160,9 +159,9 @@ func (aprod *ApecsProducer) ExecuteTxn(
 func (aprod *ApecsProducer) executeTxn(
 	reqId string,
 	origReqId string,
-	rspTgt *pb.ResponseTarget,
+	rspTgt *ResponseTarget,
 	canRevert bool,
-	steps []pb.Step,
+	steps []*ApecsTxn_Step,
 ) error {
 	txn, err := newApecsTxn(reqId, origReqId, rspTgt, canRevert, steps)
 	if err != nil {
@@ -172,12 +171,12 @@ func (aprod *ApecsProducer) executeTxn(
 	return aprod.produceCurrentStep(txn)
 }
 
-var systemToTopic = map[pb.System]consts.StandardTopicName{
-	pb.System_PROCESS: consts.Process,
-	pb.System_STORAGE: consts.Storage,
+var systemToTopic = map[System]consts.StandardTopicName{
+	System_PROCESS: consts.Process,
+	System_STORAGE: consts.Storage,
 }
 
-func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code pb.Code, logToResult bool, msg string) error {
+func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, code Code, logToResult bool, msg string) error {
 	if step == nil {
 		step := rtxn.firstForwardStep()
 		if step == nil {
@@ -188,7 +187,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code p
 
 	// if no result, put one in so we can log to it
 	if step.Result == nil {
-		step.Result = &pb.Step_Result{
+		step.Result = &ApecsTxn_Step_Result{
 			Code:          code,
 			ProcessedTime: timestamppb.Now(),
 			EffectiveTime: timestamppb.Now(),
@@ -198,8 +197,8 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code p
 	if logToResult {
 		step.Result.LogEvents = append(
 			step.Result.LogEvents,
-			&pb.LogEvent{
-				Sev: pb.Severity_ERROR,
+			&LogEvent{
+				Sev: Severity_ERROR,
 				Msg: msg,
 			},
 		)
@@ -215,7 +214,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *pb.Step, code p
 		return err
 	}
 
-	prd.Produce(pb.Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
 
 	err = aprod.produceResponse(rtxn.txn)
 	if err != nil {
@@ -243,7 +242,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(pb.Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
 
 	err = aprod.produceResponse(rtxn.txn)
 	if err != nil {
@@ -253,7 +252,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 	return nil
 }
 
-func (aprod *ApecsProducer) produceCurrentStep(txn *pb.ApecsTxn) error {
+func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn) error {
 	rtxn, err := newRtApecsTxn(txn)
 	if err != nil {
 		return err
@@ -277,6 +276,6 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *pb.ApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(pb.Directive_APECS_TXN, txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, txn.ReqId, []byte(step.Key), txnSer, nil)
 	return nil
 }

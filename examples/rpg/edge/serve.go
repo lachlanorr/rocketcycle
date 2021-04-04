@@ -27,7 +27,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 	"github.com/lachlanorr/rocketcycle/version"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
@@ -77,22 +76,22 @@ func (server) RegisterHandlerFromEndpoint(
 	return RegisterMmoServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func CodeTranslate(code pb.Code) codes.Code {
+func CodeTranslate(code rkcy.Code) codes.Code {
 	switch code {
-	case pb.Code_OK:
+	case rkcy.Code_OK:
 		return codes.OK
-	case pb.Code_NOT_FOUND:
+	case rkcy.Code_NOT_FOUND:
 		return codes.NotFound
-	case pb.Code_FAILED_CONSTRAINT:
+	case rkcy.Code_FAILED_CONSTRAINT:
 		return codes.AlreadyExists
 
-	case pb.Code_INTERNAL:
+	case rkcy.Code_INTERNAL:
 		fallthrough
-	case pb.Code_MARSHAL_FAILED:
+	case rkcy.Code_MARSHAL_FAILED:
 		fallthrough
-	case pb.Code_CONNECTION:
+	case rkcy.Code_CONNECTION:
 		fallthrough
-	case pb.Code_UNKNOWN_COMMAND:
+	case rkcy.Code_UNKNOWN_COMMAND:
 		fallthrough
 	default:
 		return codes.Internal
@@ -101,7 +100,7 @@ func CodeTranslate(code pb.Code) codes.Code {
 
 type RespChan struct {
 	ReqId     string
-	RespCh    chan *pb.ApecsTxn
+	RespCh    chan *rkcy.ApecsTxn
 	StartTime time.Time
 }
 
@@ -185,7 +184,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				directive := rkcy.GetDirective(msg)
-				if directive == pb.Directive_APECS_TXN {
+				if directive == rkcy.Directive_APECS_TXN {
 					reqId := rkcy.GetReqId(msg)
 					rspCh, ok := reqMap[reqId]
 					if !ok {
@@ -194,7 +193,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 							Msg("ReqId not found in reqMap")
 					} else {
 						delete(reqMap, reqId)
-						txn := pb.ApecsTxn{}
+						txn := rkcy.ApecsTxn{}
 						err := proto.Unmarshal(msg.Value, &txn)
 						if err != nil {
 							log.Error().
@@ -215,7 +214,7 @@ func consumeResponseTopic(ctx context.Context, bootstrapServers string, fullTopi
 	}
 }
 
-func waitForResponse(ctx context.Context, rspCh <-chan *pb.ApecsTxn, timeoutSecs int) (*pb.ApecsTxn, error) {
+func waitForResponse(ctx context.Context, rspCh <-chan *rkcy.ApecsTxn, timeoutSecs int) (*rkcy.ApecsTxn, error) {
 	timer := time.NewTimer(time.Duration(timeoutSecs) * time.Second)
 
 	select {
@@ -233,9 +232,9 @@ func waitForResponse(ctx context.Context, rspCh <-chan *pb.ApecsTxn, timeoutSecs
 func processCrudRequest(
 	ctx context.Context,
 	concernName string,
-	command pb.Command,
+	command rkcy.Command,
 	msg proto.Message,
-) (string, *pb.Step_Result, error) {
+) (string, *rkcy.ApecsTxn_Step_Result, error) {
 	reqId := uuid.NewString()
 
 	msgR := msg.ProtoReflect()
@@ -252,7 +251,7 @@ func processCrudRequest(
 	id := msgR.Get(fdId).String()
 
 	// Create id uuid for CREATE calls
-	if command == pb.Command_CREATE {
+	if command == rkcy.Command_CREATE {
 		if id != "" {
 			return reqId, nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 		}
@@ -266,18 +265,18 @@ func processCrudRequest(
 
 	var steps []rkcy.Step
 	var msgSer []byte
-	if command == pb.Command_CREATE || command == pb.Command_UPDATE {
+	if command == rkcy.Command_CREATE || command == rkcy.Command_UPDATE {
 		var err error
 		msgSer, err = proto.Marshal(msg)
 		if err != nil {
 			return reqId, nil, status.New(codes.Internal, "failed to marshal payload").Err()
 		}
 
-		var validateCmd pb.Command
-		if command == pb.Command_CREATE {
-			validateCmd = pb.Command_VALIDATE_NEW
+		var validateCmd rkcy.Command
+		if command == rkcy.Command_CREATE {
+			validateCmd = rkcy.Command_VALIDATE_NEW
 		} else {
-			validateCmd = pb.Command_VALIDATE_EXISTING
+			validateCmd = rkcy.Command_VALIDATE_EXISTING
 		}
 
 		// CREATE/UPDATE get a validate step first
@@ -295,14 +294,14 @@ func processCrudRequest(
 
 	respChan := RespChan{
 		ReqId:     reqId,
-		RespCh:    make(chan *pb.ApecsTxn),
+		RespCh:    make(chan *rkcy.ApecsTxn),
 		StartTime: time.Now(),
 	}
 	registerCh <- &respChan
 
 	err := aprod.ExecuteTxn(
 		reqId,
-		&pb.ResponseTarget{
+		&rkcy.ResponseTarget{
 			BootstrapServers: settings.BootstrapServers,
 			TopicName:        settings.Topic,
 			Partition:        settings.Partition,
@@ -348,7 +347,7 @@ func processCrudRequest(
 
 func processCrudRequestPlayer(
 	ctx context.Context,
-	command pb.Command,
+	command rkcy.Command,
 	msg proto.Message,
 ) (*storage.Player, error) {
 	reqId, result, err := processCrudRequest(ctx, consts.Player, command, msg)
@@ -374,19 +373,19 @@ func processCrudRequestPlayer(
 }
 
 func (server) GetPlayer(ctx context.Context, in *MmoRequest) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, pb.Command_READ, in)
+	return processCrudRequestPlayer(ctx, rkcy.Command_READ, in)
 }
 
 func (server) CreatePlayer(ctx context.Context, in *storage.Player) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, pb.Command_CREATE, in)
+	return processCrudRequestPlayer(ctx, rkcy.Command_CREATE, in)
 }
 
 func (server) UpdatePlayer(ctx context.Context, in *storage.Player) (*storage.Player, error) {
-	return processCrudRequestPlayer(ctx, pb.Command_UPDATE, in)
+	return processCrudRequestPlayer(ctx, rkcy.Command_UPDATE, in)
 }
 
 func (server) DeletePlayer(ctx context.Context, in *MmoRequest) (*MmoResponse, error) {
-	_, _, err := processCrudRequest(ctx, consts.Player, pb.Command_DELETE, in)
+	_, _, err := processCrudRequest(ctx, consts.Player, rkcy.Command_DELETE, in)
 	if err != nil {
 		return nil, err
 	}

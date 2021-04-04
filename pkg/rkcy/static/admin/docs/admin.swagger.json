@@ -23,7 +23,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rkcy.pb.Platform"
+              "$ref": "#/definitions/rkcy.Platform"
             }
           },
           "default": {
@@ -70,7 +70,7 @@
         }
       }
     },
-    "rkcy.pb.Platform": {
+    "rkcy.Platform": {
       "type": "object",
       "properties": {
         "name": {
@@ -79,18 +79,18 @@
         "concerns": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.pb.Platform.Concern"
+            "$ref": "#/definitions/rkcy.Platform.Concern"
           }
         },
         "clusters": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.pb.Platform.Cluster"
+            "$ref": "#/definitions/rkcy.Platform.Cluster"
           }
         }
       }
     },
-    "rkcy.pb.Platform.Cluster": {
+    "rkcy.Platform.Cluster": {
       "type": "object",
       "properties": {
         "name": {
@@ -103,27 +103,27 @@
         }
       }
     },
-    "rkcy.pb.Platform.Concern": {
+    "rkcy.Platform.Concern": {
       "type": "object",
       "properties": {
         "type": {
-          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Type"
+          "$ref": "#/definitions/rkcy.Platform.Concern.Type"
         },
         "name": {
           "type": "string"
         },
         "logLevel": {
-          "$ref": "#/definitions/rkcy.pb.Severity"
+          "$ref": "#/definitions/rkcy.Severity"
         },
         "topics": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topics"
+            "$ref": "#/definitions/rkcy.Platform.Concern.Topics"
           }
         }
       }
     },
-    "rkcy.pb.Platform.Concern.Topic": {
+    "rkcy.Platform.Concern.Topic": {
       "type": "object",
       "properties": {
         "generation": {
@@ -140,12 +140,12 @@
           "format": "int32"
         },
         "partitionStrat": {
-          "$ref": "#/definitions/rkcy.pb.Platform.PartitionStrategy",
+          "$ref": "#/definitions/rkcy.Platform.PartitionStrategy",
           "description": "How to determine which partiton messages are produced to"
         }
       }
     },
-    "rkcy.pb.Platform.Concern.Topics": {
+    "rkcy.Platform.Concern.Topics": {
       "type": "object",
       "properties": {
         "name": {
@@ -153,23 +153,23 @@
           "description": "base name, it will get decorated with additional dot notated pieces"
         },
         "state": {
-          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topics.State",
+          "$ref": "#/definitions/rkcy.Platform.Concern.Topics.State",
           "description": "current vs future transition state"
         },
         "current": {
-          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topic",
+          "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
           "description": "current physical topic"
         },
         "future": {
-          "$ref": "#/definitions/rkcy.pb.Platform.Concern.Topic",
+          "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
           "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
         },
         "consumerProgram": {
-          "$ref": "#/definitions/rkcy.pb.Program"
+          "$ref": "#/definitions/rkcy.Program"
         }
       }
     },
-    "rkcy.pb.Platform.Concern.Topics.State": {
+    "rkcy.Platform.Concern.Topics.State": {
       "type": "string",
       "enum": [
         "CURRENT",
@@ -185,7 +185,7 @@
       "default": "CURRENT",
       "description": "States surrounding current vs future topics and current to future transition\n\n - CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - FUTURE_MIRROR: current to future mirroring starts and gets as caught up as possible\n - PRODUCER_PAUSE: producers all pause\n - FUTURE_MIRROR_VALIDATE: wait until mirror is confirmed on all partitions\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT"
     },
-    "rkcy.pb.Platform.Concern.Type": {
+    "rkcy.Platform.Concern.Type": {
       "type": "string",
       "enum": [
         "GENERAL",
@@ -195,7 +195,7 @@
       "default": "GENERAL",
       "description": "Type implies what topics will be present\n\n - GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer"
     },
-    "rkcy.pb.Platform.PartitionStrategy": {
+    "rkcy.Platform.PartitionStrategy": {
       "type": "string",
       "enum": [
         "FNV64_MOD"
@@ -203,7 +203,7 @@
       "default": "FNV64_MOD",
       "description": "Different types of partitioning mechanisms\n\n - FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count"
     },
-    "rkcy.pb.Program": {
+    "rkcy.Program": {
       "type": "object",
       "properties": {
         "name": {
@@ -220,7 +220,7 @@
         }
       }
     },
-    "rkcy.pb.Severity": {
+    "rkcy.Severity": {
       "type": "string",
       "enum": [
         "DEBUG",

@@ -7,8 +7,6 @@ package rkcy
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 // Cobra sets these values based on command parsing
@@ -47,14 +45,14 @@ func prepPlatformImpl(impl *PlatformImpl) {
 	initPlatformName(impl.Name)
 	prepLogging(impl.Name)
 
-	platformHandlers = make(map[string]map[pb.System]map[pb.Command]Handler)
+	platformHandlers = make(map[string]map[System]map[Command]Handler)
 
 	if impl.Handlers == nil {
 		log.Fatal().
 			Msg("No PlatformImpl.Handlers specificed")
 	}
 	for concernName, concernHandlers := range impl.Handlers {
-		platformHandlers[concernName] = make(map[pb.System]map[pb.Command]Handler)
+		platformHandlers[concernName] = make(map[System]map[Command]Handler)
 		if concernHandlers.CrudHandlers == nil {
 			log.Fatal().
 				Str("Concern", concernName).
@@ -65,19 +63,19 @@ func prepPlatformImpl(impl *PlatformImpl) {
 				Str("Concern", concernName).
 				Msg("No ProcessHandlers specified for concern")
 		}
-		platformHandlers[concernName][pb.System_PROCESS] = concernHandlers.Handlers
+		platformHandlers[concernName][System_PROCESS] = concernHandlers.Handlers
 		// Apply CrudHandlers into storage handlers
-		platformHandlers[concernName][pb.System_STORAGE] = make(map[pb.Command]Handler)
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_CREATE] = Handler{
+		platformHandlers[concernName][System_STORAGE] = make(map[Command]Handler)
+		platformHandlers[concernName][System_STORAGE][Command_CREATE] = Handler{
 			Do: concernHandlers.CrudHandlers.Create,
 		}
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_READ] = Handler{
+		platformHandlers[concernName][System_STORAGE][Command_READ] = Handler{
 			Do: concernHandlers.CrudHandlers.Read,
 		}
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_UPDATE] = Handler{
+		platformHandlers[concernName][System_STORAGE][Command_UPDATE] = Handler{
 			Do: concernHandlers.CrudHandlers.Update,
 		}
-		platformHandlers[concernName][pb.System_STORAGE][pb.Command_DELETE] = Handler{
+		platformHandlers[concernName][System_STORAGE][Command_DELETE] = Handler{
 			Do: concernHandlers.CrudHandlers.Delete,
 		}
 	}

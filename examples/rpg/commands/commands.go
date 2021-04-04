@@ -5,9 +5,9 @@
 package commands
 
 import (
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
 const (
-	Command_SOME_NEW_COMMAND pb.Command = pb.Command_RKCY_INTERNAL_MAX_COMMAND + 1
+	Command_SOME_NEW_COMMAND rkcy.Command = rkcy.Command_RKCY_INTERNAL_MAX_COMMAND + 1
 )

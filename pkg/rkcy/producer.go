@@ -12,8 +12,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type Producer struct {
@@ -29,14 +27,14 @@ type Producer struct {
 	topics         *rtTopics
 
 	doneCh     chan struct{}
-	platformCh chan *pb.Platform
+	platformCh chan *Platform
 	produceCh  chan *message
 
 	fnv64 hash.Hash64
 }
 
 type message struct {
-	directive  pb.Directive
+	directive  Directive
 	reqId      string
 	key        []byte
 	value      []byte
@@ -63,7 +61,7 @@ func NewProducer(
 
 	prod.slog = prod.constlog.With().Logger()
 	prod.doneCh = make(chan struct{})
-	prod.platformCh = make(chan *pb.Platform)
+	prod.platformCh = make(chan *Platform)
 	prod.produceCh = make(chan *message)
 
 	go consumePlatformConfig(ctx, prod.platformCh, bootstrapServers, platformName)
@@ -76,7 +74,7 @@ func NewProducer(
 	return &prod
 }
 
-func (prod *Producer) updatePlatform(plat *pb.Platform) {
+func (prod *Producer) updatePlatform(plat *Platform) {
 	rtPlat, err := newRtPlatform(plat)
 	if err != nil {
 		prod.slog.Error().
@@ -123,7 +121,7 @@ func (prod *Producer) updatePlatform(plat *pb.Platform) {
 }
 
 func (prod *Producer) Produce(
-	directive pb.Directive,
+	directive Directive,
 	reqId string,
 	key []byte,
 	value []byte,

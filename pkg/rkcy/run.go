@@ -19,12 +19,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type rtProgram struct {
-	program     *pb.Program
+	program     *Program
 	key         string
 	color       int
 	abbrev      string
@@ -38,7 +36,7 @@ type rtProgram struct {
 
 var currColorIdx int = 0
 
-func newRtProgram(program *pb.Program, key string) *rtProgram {
+func newRtProgram(program *Program, key string) *rtProgram {
 	rtProg := &rtProgram{
 		program: program,
 		key:     key,
@@ -50,7 +48,7 @@ func newRtProgram(program *pb.Program, key string) *rtProgram {
 	return rtProg
 }
 
-func runStorage(ctx context.Context, consumeTopic *pb.Platform_Concern_Topics) {
+func runStorage(ctx context.Context, consumeTopic *Platform_Concern_Topics) {
 	cmd := exec.CommandContext(ctx, "./rcstore")
 
 	stderr, _ := cmd.StderrPipe()
@@ -65,7 +63,7 @@ func runStorage(ctx context.Context, consumeTopic *pb.Platform_Concern_Topics) {
 	log.Info().Msg("runStorage exit")
 }
 
-func progKey(prog *pb.Program) string {
+func progKey(prog *Program) string {
 	// Combine name and args to a string for key lookup
 	if prog == nil {
 		return "NIL"
@@ -173,8 +171,8 @@ func (rtProg *rtProgram) start(
 func updateRunning(
 	ctx context.Context,
 	running map[string]*rtProgram,
-	directive pb.Directive,
-	acd *pb.AdminConsumerDirective,
+	directive Directive,
+	acd *AdminConsumerDirective,
 	printCh chan<- string,
 ) {
 	key := progKey(acd.Program)
@@ -185,7 +183,7 @@ func updateRunning(
 	)
 
 	switch directive {
-	case pb.Directive_ADMIN_CONSUMER_START:
+	case Directive_ADMIN_CONSUMER_START:
 		rtProg, ok = running[key]
 		if ok {
 			log.Warn().
@@ -202,7 +200,7 @@ func updateRunning(
 			return
 		}
 		running[key] = rtProg
-	case pb.Directive_ADMIN_CONSUMER_STOP:
+	case Directive_ADMIN_CONSUMER_STOP:
 		rtProg, ok = running[key]
 		if !ok {
 			log.Warn().Msg("Program not running running, cannot stop: " + key)
@@ -247,9 +245,9 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 	updateRunning(
 		ctx,
 		running,
-		pb.Directive_ADMIN_CONSUMER_START,
-		&pb.AdminConsumerDirective{
-			Program: &pb.Program{
+		Directive_ADMIN_CONSUMER_START,
+		&AdminConsumerDirective{
+			Program: &Program{
 				Name:   "./" + platformName,
 				Args:   []string{"admin", "serve"},
 				Abbrev: "admin",
@@ -263,9 +261,9 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 	updateRunning(
 		ctx,
 		running,
-		pb.Directive_ADMIN_CONSUMER_START,
-		&pb.AdminConsumerDirective{
-			Program: &pb.Program{
+		Directive_ADMIN_CONSUMER_START,
+		&AdminConsumerDirective{
+			Program: &Program{
 				Name:   "./" + platformName,
 				Args:   []string{"watch"},
 				Abbrev: "watch",
@@ -275,14 +273,14 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 	)
 }
 
-func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
+func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
 	rkcyCh := make(chan *rkcyMessage, 1)
 	go consumePlatformAdminTopic(
 		ctx,
 		rkcyCh,
 		settings.BootstrapServers,
 		platformName,
-		pb.Directive_ADMIN_CONSUMER,
+		Directive_ADMIN_CONSUMER,
 		PastLastMatch,
 	)
 
@@ -304,7 +302,7 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *pb.Platform) {
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
 		case rkcyMsg := <-rkcyCh:
-			acd := pb.AdminConsumerDirective{}
+			acd := AdminConsumerDirective{}
 			err := proto.Unmarshal(rkcyMsg.Value, &acd)
 			if err != nil {
 				log.Error().
@@ -330,7 +328,7 @@ func cobraRun(cmd *cobra.Command, args []string) {
 	interruptCh := make(chan os.Signal)
 	signal.Notify(interruptCh, os.Interrupt)
 
-	platCh := make(chan *pb.Platform, 10)
+	platCh := make(chan *Platform, 10)
 
 	go runConsumerPrograms(ctx, platCh)
 	for {

@@ -29,7 +29,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -81,7 +80,7 @@ func cobraAdminGetPlatform(cmd *cobra.Command, args []string) {
 }
 
 type adminServer struct {
-	pb.UnimplementedAdminServiceServer
+	UnimplementedAdminServiceServer
 
 	httpAddr string
 	grpcAddr string
@@ -104,7 +103,7 @@ func (adminServer) StaticFilesPathPrefix() string {
 }
 
 func (srv adminServer) RegisterServer(srvReg grpc.ServiceRegistrar) {
-	pb.RegisterAdminServiceServer(srvReg, srv)
+	RegisterAdminServiceServer(srvReg, srv)
 }
 
 func (adminServer) RegisterHandlerFromEndpoint(
@@ -113,10 +112,10 @@ func (adminServer) RegisterHandlerFromEndpoint(
 	endpoint string,
 	opts []grpc.DialOption,
 ) (err error) {
-	return pb.RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
+	return RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (adminServer) Platform(ctx context.Context, in *pb.PlatformArgs) (*pb.Platform, error) {
+func (adminServer) Platform(ctx context.Context, in *PlatformArgs) (*Platform, error) {
 	if oldRtPlat != nil {
 		return oldRtPlat.Platform, nil
 	}
@@ -131,7 +130,7 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 var oldRtPlat *rtPlatform = nil
 
 type clusterInfo struct {
-	cluster        *pb.Platform_Cluster
+	cluster        *Platform_Cluster
 	admin          *kafka.AdminClient
 	existingTopics map[string]struct{}
 	brokerCount    int
@@ -180,7 +179,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func newClusterInfo(cluster *pb.Platform_Cluster) (*clusterInfo, error) {
+func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
@@ -220,7 +219,7 @@ func newClusterInfo(cluster *pb.Platform_Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func createMissingTopic(topicName string, topic *pb.Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
+func createMissingTopic(topicName string, topic *Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.ClusterName]
 	if !ok {
 		log.Error().
@@ -244,7 +243,7 @@ func createMissingTopic(topicName string, topic *pb.Platform_Concern_Topic, clus
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *pb.Platform_Concern_Topics, clusterInfos map[string]*clusterInfo) {
+func createMissingTopics(topicNamePrefix string, topics *Platform_Concern_Topics, clusterInfos map[string]*clusterInfo) {
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
@@ -283,7 +282,7 @@ func updateTopics(rtPlat *rtPlatform) {
 	var concernTypesAutoCreate = []string{"GENERAL", "APECS"}
 
 	for _, concern := range rtPlat.Platform.Concerns {
-		if contains(concernTypesAutoCreate, pb.Platform_Concern_Type_name[int32(concern.Type)]) {
+		if contains(concernTypesAutoCreate, Platform_Concern_Type_name[int32(concern.Type)]) {
 			for _, topics := range concern.Topics {
 				createMissingTopics(
 					BuildTopicNamePrefix(rtPlat.Platform.Name, concern.Name, concern.Type),
@@ -316,7 +315,7 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 		}
 	}()
 
-	platCh := make(chan *pb.Platform)
+	platCh := make(chan *Platform)
 	go consumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
 
 	for {
@@ -352,27 +351,27 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 
 func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
 	for _, p := range platDiff.progsToStop {
-		acd := &pb.AdminConsumerDirective{Program: p}
+		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to marshal pb.AdminConsumerDirective")
+			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(pb.Directive_ADMIN_CONSUMER_STOP, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, uuid.NewString()),
 		}, nil)
 	}
 	for _, p := range platDiff.progsToStart {
-		acd := &pb.AdminConsumerDirective{Program: p}
+		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to marshal pb.AdminConsumerDirective")
+			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(pb.Directive_ADMIN_CONSUMER_START, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, uuid.NewString()),
 		}, nil)
 	}
 }
@@ -386,12 +385,12 @@ func substStr(s string, concernName string, clusterBootstrap string, topicName s
 	return s
 }
 
-func expandProgs(concern *pb.Platform_Concern, topics *pb.Platform_Concern_Topics, clusters map[string]*pb.Platform_Cluster) []*pb.Program {
-	progs := make([]*pb.Program, topics.Current.PartitionCount)
+func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
+	progs := make([]*Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.ClusterName]
-		progs[i] = &pb.Program{
+		progs[i] = &Program{
 			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
 			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topicName, i),

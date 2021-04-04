@@ -6,53 +6,50 @@ package rkcy
 
 import (
 	"fmt"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type rtApecsTxn struct {
-	txn *pb.ApecsTxn
+	txn *ApecsTxn
 }
 
-func newApecsTxn(reqId string, origReqId string, rspTgt *pb.ResponseTarget, canRevert bool, steps []pb.Step) (*pb.ApecsTxn, error) {
+func newApecsTxn(reqId string, origReqId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
 	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
 		return nil, fmt.Errorf("NewApecsTxn ReqId=%s ResponseTarget=%+v: Invalid ResponseTarget", reqId, rspTgt)
 	}
 
-	txn := pb.ApecsTxn{
+	txn := ApecsTxn{
 		ReqId:          reqId,
 		OrigReqId:      origReqId,
 		ResponseTarget: rspTgt,
 		CurrentStepIdx: 0,
-		Direction:      pb.Direction_FORWARD,
+		Direction:      Direction_FORWARD,
 		CanRevert:      canRevert,
-		ForwardSteps:   make([]*pb.Step, 0, len(steps)),
+		ForwardSteps:   make([]*ApecsTxn_Step, 0, len(steps)),
 	}
 
-	for _, stepiter := range steps {
-		step := stepiter
-		if step.System == pb.System_PROCESS && step.Command == pb.Command_CREATE {
+	for _, step := range steps {
+		if step.System == System_PROCESS && step.Command == Command_CREATE {
 			// Inject a refresh step so the cache gets updated in storage CREATE succeeds
-			refreshStep := step
-			refreshStep.Command = pb.Command_REFRESH
-			refreshStep.System = pb.System_PROCESS
-			step.System = pb.System_STORAGE // switch to storage CREATE
-			txn.ForwardSteps = append(txn.ForwardSteps, &step)
+			refreshStep := *step
+			refreshStep.Command = Command_REFRESH
+			refreshStep.System = System_PROCESS
+			step.System = System_STORAGE // switch to storage CREATE
+			txn.ForwardSteps = append(txn.ForwardSteps, step)
 			txn.ForwardSteps = append(txn.ForwardSteps, &refreshStep)
-		} else if step.System == pb.System_PROCESS && step.Command == pb.Command_DELETE {
-			storStep := step
-			storStep.System = pb.System_STORAGE
-			txn.ForwardSteps = append(txn.ForwardSteps, &step)
+		} else if step.System == System_PROCESS && step.Command == Command_DELETE {
+			storStep := *step
+			storStep.System = System_STORAGE
+			txn.ForwardSteps = append(txn.ForwardSteps, step)
 			txn.ForwardSteps = append(txn.ForwardSteps, &storStep)
 		} else {
-			txn.ForwardSteps = append(txn.ForwardSteps, &step)
+			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		}
 	}
 
 	return &txn, nil
 }
 
-func newRtApecsTxn(txn *pb.ApecsTxn) (*rtApecsTxn, error) {
+func newRtApecsTxn(txn *ApecsTxn) (*rtApecsTxn, error) {
 	rtxn := rtApecsTxn{
 		txn: txn,
 	}
@@ -65,25 +62,25 @@ func newRtApecsTxn(txn *pb.ApecsTxn) (*rtApecsTxn, error) {
 	return &rtxn, nil
 }
 
-func ApecsTxnResult(txn *pb.ApecsTxn) (bool, *pb.Step_Result) {
+func ApecsTxnResult(txn *ApecsTxn) (bool, *ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
-	success := txn.Direction == pb.Direction_FORWARD &&
+	success := txn.Direction == Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
 		step.Result != nil &&
-		step.Result.Code == pb.Code_OK
+		step.Result.Code == Code_OK
 	return success, step.Result
 }
 
-func (rtxn *rtApecsTxn) firstForwardStep() *pb.Step {
+func (rtxn *rtApecsTxn) firstForwardStep() *ApecsTxn_Step {
 	return rtxn.txn.ForwardSteps[0]
 }
 
-func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*pb.Step) error {
+func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 	currSteps := rtxn.getSteps()
 	if idx >= int32(len(steps)) {
 		return fmt.Errorf("Index out of range")
 	}
-	newSteps := make([]*pb.Step, len(currSteps)+len(steps))
+	newSteps := make([]*ApecsTxn_Step, len(currSteps)+len(steps))
 
 	newIdx := int32(0)
 	for currIdx, _ := range currSteps {
@@ -100,20 +97,20 @@ func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*pb.Step) error {
 	return nil
 }
 
-func getSteps(txn *pb.ApecsTxn) []*pb.Step {
-	if txn.Direction == pb.Direction_FORWARD {
+func getSteps(txn *ApecsTxn) []*ApecsTxn_Step {
+	if txn.Direction == Direction_FORWARD {
 		return txn.ForwardSteps
 	} else { // txn.Direction == Reverse
 		return txn.ReverseSteps
 	}
 }
 
-func (rtxn *rtApecsTxn) getSteps() []*pb.Step {
+func (rtxn *rtApecsTxn) getSteps() []*ApecsTxn_Step {
 	return getSteps(rtxn.txn)
 }
 
-func (rtxn *rtApecsTxn) setSteps(steps []*pb.Step) {
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
+func (rtxn *rtApecsTxn) setSteps(steps []*ApecsTxn_Step) {
+	if rtxn.txn.Direction == Direction_FORWARD {
 		rtxn.txn.ForwardSteps = steps
 	} else { // txn.Direction == Reverse
 		rtxn.txn.ReverseSteps = steps
@@ -133,7 +130,7 @@ func (rtxn *rtApecsTxn) advanceStepIdx() bool {
 	return false
 }
 
-func (rtxn *rtApecsTxn) previousStep() *pb.Step {
+func (rtxn *rtApecsTxn) previousStep() *ApecsTxn_Step {
 	if rtxn.txn.CurrentStepIdx == 0 {
 		return nil
 	}
@@ -141,16 +138,16 @@ func (rtxn *rtApecsTxn) previousStep() *pb.Step {
 	return steps[rtxn.txn.CurrentStepIdx-1]
 }
 
-func (rtxn *rtApecsTxn) currentStep() *pb.Step {
+func (rtxn *rtApecsTxn) currentStep() *ApecsTxn_Step {
 	return ApecsTxnCurrentStep(rtxn.txn)
 }
 
-func ApecsTxnCurrentStep(txn *pb.ApecsTxn) *pb.Step {
+func ApecsTxnCurrentStep(txn *ApecsTxn) *ApecsTxn_Step {
 	steps := getSteps(txn)
 	return steps[txn.CurrentStepIdx]
 }
 
-func validateSteps(reqId string, currentStepIdx int32, steps []*pb.Step, name string) error {
+func validateSteps(reqId string, currentStepIdx int32, steps []*ApecsTxn_Step, name string) error {
 	if currentStepIdx >= int32(len(steps)) {
 		return fmt.Errorf(
 			"rtApecsTxn.validateSteps ReqId=%s CurrentStepIdx=%d len(%sSteps)=%d: CurrentStepIdx out of bounds",
@@ -169,7 +166,7 @@ func validateSteps(reqId string, currentStepIdx int32, steps []*pb.Step, name st
 	}
 
 	for _, step := range steps {
-		if step.System != pb.System_PROCESS && step.System != pb.System_STORAGE {
+		if step.System != System_PROCESS && step.System != System_STORAGE {
 			return fmt.Errorf(
 				"rtApecsTxn.validateSteps ReqId=%s System=%d: Invalid System",
 				reqId,
@@ -195,11 +192,11 @@ func (rtxn *rtApecsTxn) validate() error {
 			rtxn.txn.CurrentStepIdx,
 		)
 	}
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
+	if rtxn.txn.Direction == Direction_FORWARD {
 		if err := validateSteps(rtxn.txn.ReqId, rtxn.txn.CurrentStepIdx, rtxn.txn.ForwardSteps, "Forward"); err != nil {
 			return err
 		}
-	} else if rtxn.txn.Direction == pb.Direction_REVERSE {
+	} else if rtxn.txn.Direction == Direction_REVERSE {
 		if err := validateSteps(rtxn.txn.ReqId, rtxn.txn.CurrentStepIdx, rtxn.txn.ReverseSteps, "Reverse"); err != nil {
 			return err
 		}

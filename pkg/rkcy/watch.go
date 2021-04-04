@@ -19,7 +19,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -74,7 +73,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 					Str("Directive", fmt.Sprintf("0x%08X", int(GetDirective(msg)))).
 					Str("ReqId", GetReqId(msg)).
 					Msg(wt.topicName)
-				txn := pb.ApecsTxn{}
+				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
 					txnJson := protojson.Format(proto.Message(&txn))
@@ -114,7 +113,7 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 func watchResultTopics(ctx context.Context) {
 	wtMap := make(map[string]bool)
 
-	platCh := make(chan *pb.Platform)
+	platCh := make(chan *Platform)
 	go consumePlatformConfig(ctx, platCh, settings.BootstrapServers, platformName)
 
 	for {

@@ -10,8 +10,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type MatchLoc int
@@ -25,7 +23,7 @@ func findMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	match pb.Directive,
+	match Directive,
 	matchLoc MatchLoc,
 	delta int64,
 ) (bool, int64, error) {
@@ -54,7 +52,7 @@ func findMostRecentMatching(
 		return true, high, nil
 	}
 
-	if match == pb.Directive_ALL {
+	if match == Directive_ALL {
 		matchingOffset := high
 		if matchLoc == AtLastMatch {
 			matchingOffset = maxi64(0, matchingOffset-1)
@@ -105,7 +103,7 @@ func FindMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	match pb.Directive,
+	match Directive,
 	matchLoc MatchLoc,
 ) (bool, int64, error) {
 	const maxDelta int64 = 100000

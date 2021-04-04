@@ -14,8 +14,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 var (
@@ -24,9 +22,9 @@ var (
 
 func produceApecsTxnError(
 	rtxn *rtApecsTxn,
-	step *pb.Step,
+	step *ApecsTxn_Step,
 	aprod *ApecsProducer,
-	code pb.Code,
+	code Code,
 	logToResult bool,
 	format string,
 	args ...interface{},
@@ -48,8 +46,8 @@ func produceApecsTxnError(
 
 func produceNextStep(
 	rtxn *rtApecsTxn,
-	step *pb.Step,
-	offset *pb.Offset,
+	step *ApecsTxn_Step,
+	offset *Offset,
 	aprod *ApecsProducer,
 ) {
 	if rtxn.advanceStepIdx() {
@@ -58,7 +56,7 @@ func produceNextStep(
 		if nextStep.Payload == nil {
 			nextStep.Payload = step.Result.Payload
 		}
-		if nextStep.System == pb.System_STORAGE && nextStep.Offset == nil {
+		if nextStep.System == System_STORAGE && nextStep.Offset == nil {
 			// STORAGE steps always need the value PROCESS Offset
 			if step.Offset != nil {
 				// if current step has an offset, set that one
@@ -74,21 +72,21 @@ func produceNextStep(
 		}
 		err := aprod.produceCurrentStep(rtxn.txn)
 		if err != nil {
-			produceApecsTxnError(rtxn, nextStep, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(rtxn, nextStep, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
 		// search for instance updates and create new storage txn to update storage
-		if rtxn.txn.Direction == pb.Direction_FORWARD {
-			var storageSteps []pb.Step
+		if rtxn.txn.Direction == Direction_FORWARD {
+			var storageSteps []*ApecsTxn_Step
 			for _, step := range rtxn.txn.ForwardSteps {
 				if step.Result.Instance != nil {
 					storageSteps = append(
 						storageSteps,
-						pb.Step{
-							System:      pb.System_STORAGE,
+						&ApecsTxn_Step{
+							System:      System_STORAGE,
 							ConcernName: step.ConcernName,
-							Command:     pb.Command_UPDATE,
+							Command:     Command_UPDATE,
 							Key:         step.Key,
 							Payload:     step.Result.Instance,
 							Offset:      step.Offset,
@@ -106,7 +104,7 @@ func produceNextStep(
 					storageSteps,
 				)
 				if err != nil {
-					produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+					produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 					return
 				}
 			}
@@ -114,7 +112,7 @@ func produceNextStep(
 
 		err := aprod.produceComplete(rtxn)
 		if err != nil {
-			produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
@@ -124,28 +122,28 @@ func advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
-	offset *pb.Offset,
-	handlers map[pb.Command]Handler,
+	offset *Offset,
+	handlers map[Command]Handler,
 	aprod *ApecsProducer,
 ) {
 	log.Debug().
 		Str("ReqId", rtxn.txn.ReqId).
-		Msgf("Advancing ApecsTxn: %s %d", pb.Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx)
+		Msgf("Advancing ApecsTxn: %s %d", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx)
 
 	step := rtxn.currentStep()
 
 	if step.Result != nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
 		return
 	}
 
 	if step.ConcernName != tp.ConcernName {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
 		return
 	}
 
 	if step.Key == "" {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: No key in step")
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: No key in step")
 		return
 	}
 
@@ -154,16 +152,16 @@ func advanceApecsTxn(
 
 	// Read instance from InstanceCache
 	var inst []byte
-	if tp.System == pb.System_PROCESS {
+	if tp.System == System_PROCESS {
 		step.Offset = offset
 
 		// Special case "REFRESH" command
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
-		if step.Command == pb.Command_REFRESH {
+		if step.Command == Command_REFRESH {
 			instanceCache.Set(step.Key, step.Payload)
-			step.Result = &pb.Step_Result{
-				Code:          pb.Code_OK,
+			step.Result = &ApecsTxn_Step_Result{
+				Code:          Code_OK,
 				ProcessedTime: now,
 				EffectiveTime: now,
 				Payload:       step.Payload,
@@ -173,40 +171,40 @@ func advanceApecsTxn(
 		} else {
 			inst = instanceCache.Get(step.Key)
 
-			nilOk := step.Command == pb.Command_CREATE || step.Command == pb.Command_VALIDATE_NEW
+			nilOk := step.Command == Command_CREATE || step.Command == Command_VALIDATE_NEW
 			if inst == nil && !nilOk {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
 				// one and sending things through again
 				err := rtxn.insertSteps(
 					rtxn.txn.CurrentStepIdx,
-					&pb.Step{
-						System:      pb.System_STORAGE,
+					&ApecsTxn_Step{
+						System:      System_STORAGE,
 						ConcernName: step.ConcernName,
-						Command:     pb.Command_READ,
+						Command:     Command_READ,
 						Key:         step.Key,
 						Offset:      offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
-					&pb.Step{
-						System:      pb.System_PROCESS,
+					&ApecsTxn_Step{
+						System:      System_PROCESS,
 						ConcernName: step.ConcernName,
-						Command:     pb.Command_REFRESH,
+						Command:     Command_REFRESH,
 						Key:         step.Key,
 					},
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("error in insertSteps")
-					produceApecsTxnError(rtxn, nil, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
+					produceApecsTxnError(rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
 					return
 				}
 				err = aprod.produceCurrentStep(rtxn.txn)
 				if err != nil {
-					produceApecsTxnError(rtxn, nil, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+					produceApecsTxnError(rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 					return
 				}
 				return
-			} else if inst != nil && step.Command == pb.Command_CREATE {
-				produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
+			} else if inst != nil && step.Command == Command_CREATE {
+				produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return
 			}
 		}
@@ -214,20 +212,20 @@ func advanceApecsTxn(
 
 	hndlr, ok := handlers[step.Command]
 	if !ok {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
+		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
 		return
 	}
-	if rtxn.txn.Direction == pb.Direction_FORWARD && hndlr.Do == nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
+	if rtxn.txn.Direction == Direction_FORWARD && hndlr.Do == nil {
+		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
 		return
 	}
-	if rtxn.txn.Direction == pb.Direction_REVERSE && hndlr.Undo == nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
+	if rtxn.txn.Direction == Direction_REVERSE && hndlr.Undo == nil {
+		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
 		return
 	}
 
 	if step.Offset == nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
 		return
 	}
 
@@ -241,14 +239,14 @@ func advanceApecsTxn(
 	}
 
 	var rslt *StepResult
-	if rtxn.txn.Direction == pb.Direction_FORWARD {
+	if rtxn.txn.Direction == Direction_FORWARD {
 		rslt = hndlr.Do(ctx, &args)
 	} else {
 		rslt = hndlr.Undo(ctx, &args)
 	}
 
 	if rslt == nil {
-		produceApecsTxnError(rtxn, step, aprod, pb.Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
 		return
 	}
 
@@ -258,7 +256,7 @@ func advanceApecsTxn(
 		effectiveTime = rslt.EffectiveTime
 	}
 
-	step.Result = &pb.Step_Result{
+	step.Result = &ApecsTxn_Step_Result{
 		Code:          rslt.Code,
 		ProcessedTime: now,
 		EffectiveTime: effectiveTime,
@@ -267,7 +265,7 @@ func advanceApecsTxn(
 		Instance:      rslt.Instance,
 	}
 
-	if step.Result.Code != pb.Code_OK {
+	if step.Result.Code != Code_OK {
 		produceApecsTxnError(rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return
 	}
@@ -278,7 +276,7 @@ func advanceApecsTxn(
 		rslt.Payload = step.Payload
 	}
 
-	if tp.System == pb.System_PROCESS && rslt.Instance != nil {
+	if tp.System == System_PROCESS && rslt.Instance != nil {
 		instanceCache.Set(step.Key, rslt.Instance)
 	}
 
@@ -291,7 +289,7 @@ func consumeApecsTopic(
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
-	handlers map[pb.Command]Handler,
+	handlers map[Command]Handler,
 ) {
 	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName)
 
@@ -340,15 +338,15 @@ func consumeApecsTopic(
 
 			if !timedOut && msg != nil {
 				directive := GetDirective(msg)
-				if directive == pb.Directive_APECS_TXN {
-					txn := pb.ApecsTxn{}
+				if directive == Directive_APECS_TXN {
+					txn := ApecsTxn{}
 					err := proto.Unmarshal(msg.Value, &txn)
 					if err != nil {
 						log.Error().
 							Err(err).
 							Msg("Failed to Unmarshal ApecsTxn")
 					} else {
-						offset := &pb.Offset{
+						offset := &Offset{
 							Generation: tp.Generation,
 							Partition:  partition,
 							Offset:     int64(msg.TopicPartition.Offset),
@@ -386,11 +384,11 @@ func consumeApecsTopic(
 	}
 }
 
-type PlatformHandlers map[string]map[pb.System]map[pb.Command]Handler
+type PlatformHandlers map[string]map[System]map[Command]Handler
 
 func processHandlerPayloadToInstance(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	return &StepResult{
-		Code:     pb.Code_OK,
+		Code:     Code_OK,
 		Payload:  stepInfo.Payload,
 		Instance: stepInfo.Payload,
 	}
@@ -398,7 +396,7 @@ func processHandlerPayloadToInstance(ctx context.Context, stepInfo *StepArgs) *S
 
 func processHandlerRead(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	return &StepResult{
-		Code:    pb.Code_OK,
+		Code:    Code_OK,
 		Payload: stepInfo.Instance,
 	}
 }
@@ -406,51 +404,51 @@ func processHandlerRead(ctx context.Context, stepInfo *StepArgs) *StepResult {
 func processHandlerDelete(ctx context.Context, stepInfo *StepArgs) *StepResult {
 	instanceCache.Remove(stepInfo.Key)
 	return &StepResult{
-		Code: pb.Code_OK,
+		Code: Code_OK,
 	}
 }
 
-func registerProcessCrudHandlers(handlers map[pb.Command]Handler) {
-	_, ok := handlers[pb.Command_REFRESH]
+func registerProcessCrudHandlers(handlers map[Command]Handler) {
+	_, ok := handlers[Command_REFRESH]
 	if ok {
 		// Command_REFRESH is always handled explicitly in advanceApecsTxn
 		log.Warn().
 			Msg("Command_REFRESH should never be specified, ignoring")
 	}
 
-	_, ok = handlers[pb.Command_CREATE]
+	_, ok = handlers[Command_CREATE]
 	if ok {
 		log.Warn().
 			Msg("Overriding Command_CREATE handler")
 	}
-	handlers[pb.Command_CREATE] = Handler{
+	handlers[Command_CREATE] = Handler{
 		Do: processHandlerPayloadToInstance,
 	}
 
-	_, ok = handlers[pb.Command_UPDATE]
+	_, ok = handlers[Command_UPDATE]
 	if ok {
 		log.Warn().
 			Msg("Overriding Command_UPDATE handler")
 	}
-	handlers[pb.Command_UPDATE] = Handler{
+	handlers[Command_UPDATE] = Handler{
 		Do: processHandlerPayloadToInstance,
 	}
 
-	_, ok = handlers[pb.Command_READ]
+	_, ok = handlers[Command_READ]
 	if ok {
 		log.Warn().
 			Msg("Overriding Command_READ handler")
 	}
-	handlers[pb.Command_READ] = Handler{
+	handlers[Command_READ] = Handler{
 		Do: processHandlerRead,
 	}
 
-	_, ok = handlers[pb.Command_DELETE]
+	_, ok = handlers[Command_DELETE]
 	if ok {
 		log.Warn().
 			Msg("Overriding Command_DELETE handler")
 	}
-	handlers[pb.Command_DELETE] = Handler{
+	handlers[Command_DELETE] = Handler{
 		Do: processHandlerDelete,
 	}
 }
@@ -470,7 +468,7 @@ func startApecsRunner(
 			Msg("startApecsRunner: failed to ParseFullTopicName")
 	}
 
-	if tp.ConcernType != pb.Platform_Concern_APECS {
+	if tp.ConcernType != Platform_Concern_APECS {
 		log.Fatal().
 			Err(err).
 			Str("Topic", fullTopic).
@@ -486,14 +484,14 @@ func startApecsRunner(
 			Msg("startApecsRunner: no handlers for concern")
 	}
 
-	var handlers map[pb.Command]Handler
-	if tp.System == pb.System_PROCESS {
-		handlers = concernHandlers[pb.System_PROCESS]
+	var handlers map[Command]Handler
+	if tp.System == System_PROCESS {
+		handlers = concernHandlers[System_PROCESS]
 
 		// Insert handlers for process CRUD ops
 		registerProcessCrudHandlers(handlers)
-	} else if tp.System == pb.System_STORAGE {
-		handlers = concernHandlers[pb.System_STORAGE]
+	} else if tp.System == System_STORAGE {
+		handlers = concernHandlers[System_STORAGE]
 	} else {
 		log.Fatal().
 			Err(err).

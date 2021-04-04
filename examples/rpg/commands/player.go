@@ -12,7 +12,6 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
@@ -22,7 +21,7 @@ func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResu
 	err := proto.Unmarshal(stepArgs.Payload, &player)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_MARSHAL_FAILED
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
@@ -31,24 +30,24 @@ func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResu
 		err := proto.Unmarshal(stepArgs.Instance, &playerInst)
 		if err != nil {
 			rslt.LogError(err.Error())
-			rslt.Code = pb.Code_MARSHAL_FAILED
+			rslt.Code = rkcy.Code_MARSHAL_FAILED
 			return &rslt
 		}
 
 		if player.Username != playerInst.Username {
 			rslt.LogError("Username may not be changed")
-			rslt.Code = pb.Code_FAILED_CONSTRAINT
+			rslt.Code = rkcy.Code_FAILED_CONSTRAINT
 			return &rslt
 		}
 	}
 
 	if len(player.Username) < 4 {
 		rslt.LogError("Username too short")
-		rslt.Code = pb.Code_FAILED_CONSTRAINT
+		rslt.Code = rkcy.Code_FAILED_CONSTRAINT
 		return &rslt
 	}
 
-	rslt.Code = pb.Code_OK
+	rslt.Code = rkcy.Code_OK
 	rslt.Payload = stepArgs.Payload
 	return &rslt
 }

@@ -17,7 +17,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 var exists struct{}
@@ -77,12 +76,12 @@ func findHeader(msg *kafka.Message, key string) []byte {
 	return nil
 }
 
-func GetDirective(msg *kafka.Message) pb.Directive {
+func GetDirective(msg *kafka.Message) Directive {
 	val := findHeader(msg, consts.DirectiveHeader)
 	if val != nil {
-		return pb.Directive(BytesToInt(val))
+		return Directive(BytesToInt(val))
 	} else {
-		return pb.Directive_UNSPECIFIED
+		return Directive_UNSPECIFIED
 	}
 }
 
@@ -143,7 +142,7 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 	return topicName, nil
 }
 
-func standardHeaders(directive pb.Directive, reqId string) []kafka.Header {
+func standardHeaders(directive Directive, reqId string) []kafka.Header {
 	return []kafka.Header{
 		{
 			Key:   consts.DirectiveHeader,

@@ -4,8 +4,8 @@
 
 syntax = "proto3";
 
-package rkcy.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+package rkcy;
+option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
 import "google/api/annotations.proto";
 import "platform.proto";
@@ -14,7 +14,7 @@ message PlatformArgs {
 }
 
 service AdminService {
-    rpc Platform(PlatformArgs) returns (rkcy.pb.Platform) {
+    rpc Platform(PlatformArgs) returns (rkcy.Platform) {
         option (google.api.http) = {
             get: "/v1/platform/get"
         };

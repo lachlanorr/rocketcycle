@@ -12,8 +12,6 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 func (*Character) ReadItems(ctx context.Context, conn *pgx.Conn, characterId string) ([]*Character_Item, error) {
@@ -39,7 +37,7 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_CONNECTION
+		rslt.Code = rkcy.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
@@ -48,7 +46,7 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 		Currency: &Character_Currency{},
 	}
 
-	offset := pb.Offset{}
+	offset := rkcy.Offset{}
 	err = conn.QueryRow(
 		ctx,
 		`SELECT c.id,
@@ -82,7 +80,7 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_NOT_FOUND
+		rslt.Code = rkcy.Code_NOT_FOUND
 		return &rslt
 	}
 
@@ -91,18 +89,18 @@ func (c *Character) Read(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	character.Items, err = c.ReadItems(ctx, conn, args.Key)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_INTERNAL
+		rslt.Code = rkcy.Code_INTERNAL
 		return &rslt
 	}
 
 	rslt.Payload, err = proto.Marshal(&character)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_MARSHAL_FAILED
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
-	rslt.Code = pb.Code_OK
+	rslt.Code = rkcy.Code_OK
 	return &rslt
 }
 
@@ -126,14 +124,14 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 	err := proto.Unmarshal(args.Payload, &mdl)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_MARSHAL_FAILED
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
 
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_CONNECTION
+		rslt.Code = rkcy.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(context.Background())
@@ -152,7 +150,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_INTERNAL
+		rslt.Code = rkcy.Code_INTERNAL
 		return &rslt
 	}
 
@@ -171,7 +169,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_INTERNAL
+		rslt.Code = rkcy.Code_INTERNAL
 		return &rslt
 	}
 
@@ -180,7 +178,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 	dbItems, err := c.ReadItems(ctx, conn, args.Key)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_INTERNAL
+		rslt.Code = rkcy.Code_INTERNAL
 		return &rslt
 	}
 	for _, dbItem := range dbItems {
@@ -198,7 +196,7 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 			if err != nil {
 				rslt.LogError(err.Error())
-				rslt.Code = pb.Code_INTERNAL
+				rslt.Code = rkcy.Code_INTERNAL
 				return &rslt
 			}
 		}
@@ -217,12 +215,12 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 
 		if err != nil {
 			rslt.LogError(err.Error())
-			rslt.Code = pb.Code_INTERNAL
+			rslt.Code = rkcy.Code_INTERNAL
 			return &rslt
 		}
 	}
 
-	rslt.Code = pb.Code_OK
+	rslt.Code = rkcy.Code_OK
 	rslt.Payload = args.Payload
 	return &rslt
 }
@@ -241,7 +239,7 @@ func (*Character) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	conn, err := connect(ctx)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_CONNECTION
+		rslt.Code = rkcy.Code_CONNECTION
 		return &rslt
 	}
 	defer conn.Close(ctx)
@@ -256,10 +254,10 @@ func (*Character) Delete(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepRes
 	)
 	if err != nil {
 		rslt.LogError(err.Error())
-		rslt.Code = pb.Code_INTERNAL
+		rslt.Code = rkcy.Code_INTERNAL
 		return &rslt
 	}
 
-	rslt.Code = pb.Code_OK
+	rslt.Code = rkcy.Code_OK
 	return &rslt
 }

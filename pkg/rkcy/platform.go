@@ -21,7 +21,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 const undefinedPlatformName string = "__UNDEFINED__"
@@ -41,26 +40,26 @@ func PlatformName() string {
 
 // Platform pb, with some convenience lookup maps
 type rtPlatform struct {
-	Platform *pb.Platform
+	Platform *Platform
 	Hash     string
 	Concerns map[string]*rtConcern
-	Clusters map[string]*pb.Platform_Cluster
+	Clusters map[string]*Platform_Cluster
 }
 
 type rtConcern struct {
-	Concern *pb.Platform_Concern
+	Concern *Platform_Concern
 	Topics  map[string]*rtTopics
 }
 
 type rtTopics struct {
-	Topics         *pb.Platform_Concern_Topics
+	Topics         *Platform_Concern_Topics
 	CurrentTopic   string
-	CurrentCluster *pb.Platform_Cluster
+	CurrentCluster *Platform_Cluster
 	FutureTopic    string
-	FutureCluster  *pb.Platform_Cluster
+	FutureCluster  *Platform_Cluster
 }
 
-func newRtConcern(rtPlat *rtPlatform, concern *pb.Platform_Concern) (*rtConcern, error) {
+func newRtConcern(rtPlat *rtPlatform, concern *Platform_Concern) (*rtConcern, error) {
 	rtConc := rtConcern{
 		Concern: concern,
 		Topics:  make(map[string]*rtTopics),
@@ -79,7 +78,7 @@ func newRtConcern(rtPlat *rtPlatform, concern *pb.Platform_Concern) (*rtConcern,
 	return &rtConc, nil
 }
 
-func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *pb.Platform_Concern_Topics) (*rtTopics, error) {
+func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern_Topics) (*rtTopics, error) {
 	rtTops := rtTopics{
 		Topics: topics,
 	}
@@ -103,9 +102,9 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *pb.Platform_Conc
 	return &rtTops, nil
 }
 
-func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Platform_Concern_Topic {
+func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_Concern_Topic {
 	if topic == nil {
-		topic = &pb.Platform_Concern_Topic{}
+		topic = &Platform_Concern_Topic{}
 	}
 
 	if topic.Generation <= 0 {
@@ -123,9 +122,9 @@ func initTopic(topic *pb.Platform_Concern_Topic, defaultCluster string) *pb.Plat
 	return topic
 }
 
-func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, concernType pb.Platform_Concern_Type) *pb.Platform_Concern_Topics {
+func initTopics(topics *Platform_Concern_Topics, defaultCluster string, concernType Platform_Concern_Type) *Platform_Concern_Topics {
 	if topics == nil {
-		topics = &pb.Platform_Concern_Topics{}
+		topics = &Platform_Concern_Topics{}
 	}
 
 	topics.Current = initTopic(topics.Current, defaultCluster)
@@ -133,17 +132,17 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 		topics.Future = initTopic(topics.Future, defaultCluster)
 	}
 
-	if concernType == pb.Platform_Concern_APECS {
+	if concernType == Platform_Concern_APECS {
 		if topics.ConsumerProgram == nil {
 			switch topics.Name {
 			case "process":
-				topics.ConsumerProgram = &pb.Program{
+				topics.ConsumerProgram = &Program{
 					Name:   "./@platform",
 					Args:   []string{"process", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "p/@concern/@partition",
 				}
 			case "storage":
-				topics.ConsumerProgram = &pb.Program{
+				topics.ConsumerProgram = &Program{
 					Name:   "./@platform",
 					Args:   []string{"storage", "-b", "@bootstrap_servers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "s/@concern/@partition",
@@ -155,7 +154,7 @@ func initTopics(topics *pb.Platform_Concern_Topics, defaultCluster string, conce
 	return topics
 }
 
-func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
+func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	if platform.Name != PlatformName() {
 		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName)
 	}
@@ -163,7 +162,7 @@ func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
 	rtPlat := rtPlatform{
 		Platform: platform,
 		Concerns: make(map[string]*rtConcern),
-		Clusters: make(map[string]*pb.Platform_Cluster),
+		Clusters: make(map[string]*Platform_Cluster),
 	}
 
 	platJson := protojson.Format(proto.Message(rtPlat.Platform))
@@ -187,10 +186,10 @@ func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
 		rtPlat.Clusters[cluster.Name] = cluster
 	}
 
-	requiredTopics := map[pb.Platform_Concern_Type][]string{
-		pb.Platform_Concern_GENERAL: {"admin", "error"},
-		pb.Platform_Concern_BATCH:   {"admin", "error"},
-		pb.Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage"},
+	requiredTopics := map[Platform_Concern_Type][]string{
+		Platform_Concern_GENERAL: {"admin", "error"},
+		Platform_Concern_BATCH:   {"admin", "error"},
+		Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage"},
 	}
 
 	for idx, concern := range rtPlat.Platform.Concerns {
@@ -217,7 +216,7 @@ func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
 		for _, req := range requiredTopics[concern.Type] {
 			if !contains(topicNames, req) {
 				// conern.Topics will get initialized with reasonable defaults during topic validation below
-				concern.Topics = append(concern.Topics, &pb.Platform_Concern_Topics{Name: req})
+				concern.Topics = append(concern.Topics, &Platform_Concern_Topics{Name: req})
 			}
 		}
 
@@ -243,7 +242,7 @@ func newRtPlatform(platform *pb.Platform) (*rtPlatform, error) {
 	return &rtPlat, nil
 }
 
-func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.Platform_Cluster) error {
+func validateTopics(topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) error {
 	if topics.Name == "" {
 		return errors.New("Topics missing Name field")
 	}
@@ -283,7 +282,7 @@ func validateTopics(topics *pb.Platform_Concern_Topics, clusters map[string]*pb.
 	return nil
 }
 
-func validateTopic(topic *pb.Platform_Concern_Topic, clusters map[string]*pb.Platform_Cluster) error {
+func validateTopic(topic *Platform_Concern_Topic, clusters map[string]*Platform_Cluster) error {
 	if topic.Generation == 0 {
 		return errors.New("Topic missing Generation field")
 	}
@@ -304,7 +303,7 @@ func uncommittedGroupName(topic string, partition int) string {
 }
 
 type rkcyMessage struct {
-	Directive pb.Directive
+	Directive Directive
 	Value     []byte
 }
 
@@ -313,7 +312,7 @@ func consumePlatformAdminTopic(
 	ch chan<- *rkcyMessage,
 	bootstrapServers string,
 	platformName string,
-	match pb.Directive,
+	match Directive,
 	matchLoc MatchLoc,
 ) {
 	platformTopic := AdminTopic(platformName)
@@ -391,7 +390,7 @@ func consumePlatformAdminTopic(
 	}
 }
 
-func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstrapServers string, platformName string) {
+func consumePlatformConfig(ctx context.Context, ch chan<- *Platform, bootstrapServers string, platformName string) {
 	rkcyCh := make(chan *rkcyMessage, 1)
 
 	go consumePlatformAdminTopic(
@@ -399,7 +398,7 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstra
 		rkcyCh,
 		bootstrapServers,
 		platformName,
-		pb.Directive_PLATFORM,
+		Directive_PLATFORM,
 		AtLastMatch,
 	)
 
@@ -410,7 +409,7 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *pb.Platform, bootstra
 				Msg("ConsumePlatformConfig exiting, ctx.Done()")
 			return
 		case rkcyMsg := <-rkcyCh:
-			plat := pb.Platform{}
+			plat := Platform{}
 
 			err := proto.Unmarshal(rkcyMsg.Value, &plat)
 			if err != nil {
@@ -437,7 +436,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
-	plat := pb.Platform{}
+	plat := Platform{}
 	err = protojson.Unmarshal(conf, proto.Message(&plat))
 	if err != nil {
 		slog.Fatal().
@@ -488,7 +487,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        standardHeaders(pb.Directive_PLATFORM, uuid.NewString()),
+		Headers:        standardHeaders(Directive_PLATFORM, uuid.NewString()),
 	}
 
 	produce := func() {

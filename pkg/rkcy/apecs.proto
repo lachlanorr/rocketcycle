@@ -6,8 +6,8 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
-package rkcy.pb;
-option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy/pb";
+package rkcy;
+option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
 message ApecsTxn {
     string req_id = 1;      // uuid of txn used for tracing and reporting
@@ -21,40 +21,40 @@ message ApecsTxn {
 
     repeated Step forward_steps = 7;  // filled upon creation with forward steps
     repeated Step reverse_steps = 8;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
+
+    message Step {
+        System system       = 1; // Whether to queue step into Process or Storage code
+        string concern_name = 2; // logical persistence model that's used to partition messages
+        Command command     = 3; // command name, this will map to a piece of code (e.g. function)
+        string key          = 4; // instance key used as the partition key
+        bytes payload       = 5; // opaque payload for command
+        Offset offset       = 6; // when no nil, indicates the process topic offset associated with the step
+
+        Result result       = 7; // Result returned from step handler
+
+        message Result {
+            // Result code of step, generally one of "Code" enum below but users can define their own codes greater than RKCY_INTERNAL_MAX
+            Code code = 1;
+
+            // actual time this command result was recorded
+            google.protobuf.Timestamp processed_time = 2;
+
+            // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
+            google.protobuf.Timestamp effective_time = 3;
+
+            // general bucket for log events during a processed event
+            repeated LogEvent logEvents = 4;
+
+            bytes payload = 5; // opaque payload returned from command
+
+            bytes instance = 6; // opaque payload returned from command
+        }
+    }
 }
 
 enum Direction {
     FORWARD = 0;
     REVERSE = 1;
-}
-
-message Step {
-    System system       = 1; // Whether to queue step into Process or Storage code
-    string concern_name = 2; // logical persistence model that's used to partition messages
-    Command command     = 3; // command name, this will map to a piece of code (e.g. function)
-    string key          = 4; // instance key used as the partition key
-    bytes payload       = 5; // opaque payload for command
-    Offset offset       = 6; // when no nil, indicates the process topic offset associated with the step
-
-    Result result       = 7; // Result returned from step handler
-
-    message Result {
-        // Result code of step, generally one of "Code" enum below but users can define their own codes greater than RKCY_INTERNAL_MAX
-        Code code = 1;
-
-        // actual time this command result was recorded
-        google.protobuf.Timestamp processed_time = 2;
-
-        // effective time, useful in some applications as it may make sense to deviate from processed_time for reporting purposes
-        google.protobuf.Timestamp effective_time = 3;
-
-        // general bucket for log events during a processed event
-        repeated LogEvent logEvents = 4;
-
-        bytes payload = 5; // opaque payload returned from command
-
-        bytes instance = 6; // opaque payload returned from command
-    }
 }
 
 enum System {

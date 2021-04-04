@@ -2,11 +2,11 @@
 // source: admin.proto
 
 /*
-Package pb is a reverse proxy.
+Package rkcy is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package pb
+package rkcy
 
 import (
 	"context"
@@ -61,7 +61,7 @@ func RegisterAdminServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.pb.AdminService/Platform")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.AdminService/Platform")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -123,7 +123,7 @@ func RegisterAdminServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.pb.AdminService/Platform")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.AdminService/Platform")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

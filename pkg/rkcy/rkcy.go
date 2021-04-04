@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/pb"
 )
 
 type Handler struct {
@@ -28,16 +27,16 @@ type StepArgs struct {
 	Key           string
 	Instance      []byte
 	Payload       []byte
-	Offset        *pb.Offset
+	Offset        *Offset
 }
 
 type StepResult struct {
-	Code          pb.Code
+	Code          Code
 	EffectiveTime *timestamp.Timestamp
-	LogEvents     []*pb.LogEvent
+	LogEvents     []*LogEvent
 	Instance      []byte
 	Payload       []byte
-	Offset        *pb.Offset
+	Offset        *Offset
 }
 
 // These must be implemented, so we enforce this by requiring clients
@@ -50,7 +49,7 @@ type CrudHandlers interface {
 }
 
 type ConcernHandlers struct {
-	Handlers     map[pb.Command]Handler
+	Handlers     map[Command]Handler
 	CrudHandlers CrudHandlers
 }
 
@@ -71,15 +70,15 @@ func InitAncillary(platformName string) {
 	prepLogging(platformName)
 }
 
-func BuildTopicNamePrefix(platformName string, concernName string, concernType pb.Platform_Concern_Type) string {
-	return fmt.Sprintf("%s.%s.%s.%s", consts.Rkcy, platformName, concernName, pb.Platform_Concern_Type_name[int32(concernType)])
+func BuildTopicNamePrefix(platformName string, concernName string, concernType Platform_Concern_Type) string {
+	return fmt.Sprintf("%s.%s.%s.%s", consts.Rkcy, platformName, concernName, Platform_Concern_Type_name[int32(concernType)])
 }
 
 func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func BuildFullTopicName(platformName string, concernName string, concernType pb.Platform_Concern_Type, name string, generation int32) string {
+func BuildFullTopicName(platformName string, concernName string, concernType Platform_Concern_Type, name string, generation int32) string {
 	prefix := BuildTopicNamePrefix(platformName, concernName, concernType)
 	return fmt.Sprintf("%s.%s.%04d", prefix, name, generation)
 }
@@ -88,8 +87,8 @@ type TopicParts struct {
 	PlatformName string
 	ConcernName  string
 	TopicName    string
-	System       pb.System
-	ConcernType  pb.Platform_Concern_Type
+	System       System
+	ConcernType  Platform_Concern_Type
 	Generation   int32
 }
 
@@ -106,18 +105,18 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	}
 
 	if tp.TopicName == consts.Process {
-		tp.System = pb.System_PROCESS
+		tp.System = System_PROCESS
 	} else if tp.TopicName == consts.Storage {
-		tp.System = pb.System_STORAGE
+		tp.System = System_STORAGE
 	} else {
-		tp.System = pb.System_NO_SYSTEM
+		tp.System = System_NO_SYSTEM
 	}
 
-	concernType, ok := pb.Platform_Concern_Type_value[parts[3]]
+	concernType, ok := Platform_Concern_Type_value[parts[3]]
 	if !ok {
 		return nil, fmt.Errorf("Invalid rkcy topic, unable to parse ConcernType: %s", fullTopic)
 	}
-	tp.ConcernType = pb.Platform_Concern_Type(concernType)
+	tp.ConcernType = Platform_Concern_Type(concernType)
 
 	generation, err := strconv.Atoi(parts[5])
 	if err != nil {
@@ -128,10 +127,10 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	return &tp, nil
 }
 
-func (rslt *StepResult) Log(sev pb.Severity, format string, args ...interface{}) {
+func (rslt *StepResult) Log(sev Severity, format string, args ...interface{}) {
 	rslt.LogEvents = append(
 		rslt.LogEvents,
-		&pb.LogEvent{
+		&LogEvent{
 			Sev: sev,
 			Msg: fmt.Sprintf(format, args...),
 		},
@@ -139,17 +138,17 @@ func (rslt *StepResult) Log(sev pb.Severity, format string, args ...interface{})
 }
 
 func (rslt *StepResult) LogDebug(format string, args ...interface{}) {
-	rslt.Log(pb.Severity_DEBUG, format, args...)
+	rslt.Log(Severity_DEBUG, format, args...)
 }
 
 func (rslt *StepResult) LogInfo(format string, args ...interface{}) {
-	rslt.Log(pb.Severity_INFO, format, args...)
+	rslt.Log(Severity_INFO, format, args...)
 }
 
 func (rslt *StepResult) LogWarn(format string, args ...interface{}) {
-	rslt.Log(pb.Severity_WARN, format, args...)
+	rslt.Log(Severity_WARN, format, args...)
 }
 
 func (rslt *StepResult) LogError(format string, args ...interface{}) {
-	rslt.Log(pb.Severity_ERROR, format, args...)
+	rslt.Log(Severity_ERROR, format, args...)
 }

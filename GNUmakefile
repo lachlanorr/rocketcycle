@@ -32,7 +32,7 @@ clean: ## remove all build artifacts
 .PHONY: proto
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
-	@go generate pkg/rkcy/pb/gen.go
+	@go generate pkg/rkcy/gen.go
 	@go generate examples/rpg/storage/gen.go
 	@go generate examples/rpg/edge/gen.go
 
