@@ -61,25 +61,6 @@ BEGIN
        _mro_generation,
        _mro_partition,
        _mro_offset);
-
-    INSERT INTO rpg.character_currency
-      (character_id,
-       gold,
-       faction_0,
-       faction_1,
-       faction_2,
-       mro_generation,
-       mro_partition,
-       mro_offset)
-    VALUES
-      (_id,
-       0,
-       0,
-       0,
-       0,
-       _mro_generation,
-       _mro_partition,
-       _mro_offset);
   END IF;
 
   COMMIT;

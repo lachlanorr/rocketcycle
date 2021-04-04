@@ -35,3 +35,16 @@ message Character {
         string description = 2;
     }
 }
+
+message FundingRequest {
+    string character_id = 1;
+    Character.Currency currency = 2;
+}
+
+message TransferRequest {
+    string src_character_id = 1;
+    string dest_character_id = 2;
+    Character.Currency currency = 3;
+}
+
+

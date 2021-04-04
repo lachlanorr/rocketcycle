@@ -36,14 +36,14 @@ func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResu
 
 		if player.Username != playerInst.Username {
 			rslt.LogError("Username may not be changed")
-			rslt.Code = rkcy.Code_FAILED_CONSTRAINT
+			rslt.Code = rkcy.Code_INVALID_ARGUMENT
 			return &rslt
 		}
 	}
 
 	if len(player.Username) < 4 {
 		rslt.LogError("Username too short")
-		rslt.Code = rkcy.Code_FAILED_CONSTRAINT
+		rslt.Code = rkcy.Code_INVALID_ARGUMENT
 		return &rslt
 	}
 

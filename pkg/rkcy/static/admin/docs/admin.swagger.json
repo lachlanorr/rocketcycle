@@ -16,7 +16,7 @@
     "application/json"
   ],
   "paths": {
-    "/v1/platform/get": {
+    "/v1/platform/read": {
       "get": {
         "operationId": "AdminService_Platform",
         "responses": {

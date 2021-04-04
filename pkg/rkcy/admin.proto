@@ -16,7 +16,7 @@ message PlatformArgs {
 service AdminService {
     rpc Platform(PlatformArgs) returns (rkcy.Platform) {
         option (google.api.http) = {
-            get: "/v1/platform/get"
+            get: "/v1/platform/read"
         };
     }
 }

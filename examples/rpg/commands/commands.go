@@ -9,5 +9,5 @@ import (
 )
 
 const (
-	Command_SOME_NEW_COMMAND rkcy.Command = rkcy.Command_RKCY_INTERNAL_MAX_COMMAND + 1
+	Command_FUND rkcy.Command = rkcy.Command_RKCY_INTERNAL_MAX_COMMAND + 1
 )

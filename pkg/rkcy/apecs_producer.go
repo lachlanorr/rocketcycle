@@ -158,12 +158,12 @@ func (aprod *ApecsProducer) ExecuteTxn(
 
 func (aprod *ApecsProducer) executeTxn(
 	reqId string,
-	origReqId string,
+	assocReqId string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
 	steps []*ApecsTxn_Step,
 ) error {
-	txn, err := newApecsTxn(reqId, origReqId, rspTgt, canRevert, steps)
+	txn, err := newApecsTxn(reqId, assocReqId, rspTgt, canRevert, steps)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ var systemToTopic = map[System]consts.StandardTopicName{
 
 func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, code Code, logToResult bool, msg string) error {
 	if step == nil {
-		step := rtxn.firstForwardStep()
+		step = rtxn.firstForwardStep()
 		if step == nil {
 			return fmt.Errorf("ApecsProducer.error ReqId=%s: failed to get firstForwardStep", rtxn.txn.ReqId)
 		}

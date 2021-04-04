@@ -54,15 +54,15 @@ func CobraCommand() *cobra.Command {
 		PersistentPreRun: preRunCobra,
 	}
 
-	getCmd := &cobra.Command{
-		Use:       "get resource id",
-		Short:     "get a specific resource from rest api",
-		Run:       cobraGetResource,
+	readCmd := &cobra.Command{
+		Use:       "read resource id",
+		Short:     "read a specific resource from rest api",
+		Run:       cobraReadResource,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
-	getCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
-	rootCmd.AddCommand(getCmd)
+	readCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
+	rootCmd.AddCommand(readCmd)
 
 	createCmd := &cobra.Command{
 		Use:       "create resource [key1=val1] [key2=val2]",
@@ -93,6 +93,16 @@ func CobraCommand() *cobra.Command {
 	}
 	deleteCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(deleteCmd)
+
+	fundCmd := &cobra.Command{
+		Use:       "fund character_id [key1=val1] [key2=val2]",
+		Short:     "funds character with specified currency values",
+		Run:       cobraFundCharacter,
+		Args:      cobra.MinimumNArgs(2),
+		ValidArgs: []string{"character_id"},
+	}
+	fundCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
+	rootCmd.AddCommand(fundCmd)
 
 	serveCmd := &cobra.Command{
 		Use:   "serve",

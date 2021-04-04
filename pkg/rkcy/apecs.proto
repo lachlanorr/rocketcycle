@@ -10,8 +10,8 @@ package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
 message ApecsTxn {
-    string req_id = 1;      // uuid of txn used for tracing and reporting
-    string orig_req_id = 2; // if set, req_id of ApecsTxn that generated this transaction
+    string req_id = 1;       // uuid of txn used for tracing and reporting
+    string assoc_req_id = 2; // req_id of associated transaction
 
     ResponseTarget response_target = 3;
 
@@ -103,8 +103,9 @@ enum Code {
     MARSHAL_FAILED = 2;
     NOT_FOUND = 3;
     CONNECTION = 4;
-    FAILED_CONSTRAINT = 5;
+    CONSTRAINT_VIOLATION = 5;
 	UNKNOWN_COMMAND = 6;
+    INVALID_ARGUMENT = 7;
 
     // User defined codes should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_CODE = 32;

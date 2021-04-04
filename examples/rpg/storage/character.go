@@ -154,6 +154,9 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		return &rslt
 	}
 
+	if mdl.Currency == nil {
+		mdl.Currency = &Character_Currency{}
+	}
 	_, err = conn.Exec(
 		context.Background(),
 		"CALL rpg.sp_upsert_character_currency($1, $2, $3, $4, $5, $6, $7, $8)",
@@ -220,8 +223,13 @@ func (c *Character) upsert(ctx context.Context, args *rkcy.StepArgs) *rkcy.StepR
 		}
 	}
 
+	rslt.Payload, err = proto.Marshal(&mdl)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
 	rslt.Code = rkcy.Code_OK
-	rslt.Payload = args.Payload
 	return &rslt
 }
 

@@ -6,7 +6,7 @@
   },
   "tags": [
     {
-      "name": "MmoService"
+      "name": "RpgService"
     }
   ],
   "consumes": [
@@ -16,9 +16,165 @@
     "application/json"
   ],
   "paths": {
+    "/v1/character/create": {
+      "post": {
+        "operationId": "RpgService_CreateCharacter",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          }
+        ],
+        "tags": [
+          "RpgService"
+        ]
+      }
+    },
+    "/v1/character/delete/{id}": {
+      "post": {
+        "operationId": "RpgService_DeleteCharacter",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.RpgResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RpgService"
+        ]
+      }
+    },
+    "/v1/character/fund": {
+      "post": {
+        "operationId": "RpgService_FundCharacter",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.FundingRequest"
+            }
+          }
+        ],
+        "tags": [
+          "RpgService"
+        ]
+      }
+    },
+    "/v1/character/read/{id}": {
+      "get": {
+        "operationId": "RpgService_ReadCharacter",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RpgService"
+        ]
+      }
+    },
+    "/v1/character/update": {
+      "post": {
+        "operationId": "RpgService_UpdateCharacter",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+            }
+          }
+        ],
+        "tags": [
+          "RpgService"
+        ]
+      }
+    },
     "/v1/player/create": {
       "post": {
-        "operationId": "MmoService_CreatePlayer",
+        "operationId": "RpgService_CreatePlayer",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -44,18 +200,18 @@
           }
         ],
         "tags": [
-          "MmoService"
+          "RpgService"
         ]
       }
     },
     "/v1/player/delete/{id}": {
       "post": {
-        "operationId": "MmoService_DeletePlayer",
+        "operationId": "RpgService_DeletePlayer",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.MmoResponse"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.RpgResponse"
             }
           },
           "default": {
@@ -74,13 +230,13 @@
           }
         ],
         "tags": [
-          "MmoService"
+          "RpgService"
         ]
       }
     },
-    "/v1/player/get/{id}": {
+    "/v1/player/read/{id}": {
       "get": {
-        "operationId": "MmoService_GetPlayer",
+        "operationId": "RpgService_ReadPlayer",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -104,13 +260,13 @@
           }
         ],
         "tags": [
-          "MmoService"
+          "RpgService"
         ]
       }
     },
     "/v1/player/update": {
       "post": {
-        "operationId": "MmoService_UpdatePlayer",
+        "operationId": "RpgService_UpdatePlayer",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -136,7 +292,7 @@
           }
         ],
         "tags": [
-          "MmoService"
+          "RpgService"
         ]
       }
     }
@@ -172,13 +328,82 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.edge.MmoResponse": {
+    "rocketcycle.examples.rpg.edge.RpgResponse": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
           "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.storage.Character": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "playerId": {
+          "type": "string"
+        },
+        "fullname": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "currency": {
+          "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Currency"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Item"
+          }
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.storage.Character.Currency": {
+      "type": "object",
+      "properties": {
+        "gold": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "faction0": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "faction1": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "faction2": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.storage.Character.Item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.storage.FundingRequest": {
+      "type": "object",
+      "properties": {
+        "characterId": {
+          "type": "string"
+        },
+        "currency": {
+          "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Currency"
         }
       }
     },

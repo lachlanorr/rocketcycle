@@ -12,14 +12,14 @@ type rtApecsTxn struct {
 	txn *ApecsTxn
 }
 
-func newApecsTxn(reqId string, origReqId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
+func newApecsTxn(reqId string, assocReqId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
 	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
 		return nil, fmt.Errorf("NewApecsTxn ReqId=%s ResponseTarget=%+v: Invalid ResponseTarget", reqId, rspTgt)
 	}
 
 	txn := ApecsTxn{
 		ReqId:          reqId,
-		OrigReqId:      origReqId,
+		AssocReqId:     assocReqId,
 		ResponseTarget: rspTgt,
 		CurrentStepIdx: 0,
 		Direction:      Direction_FORWARD,

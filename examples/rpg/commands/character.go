@@ -7,31 +7,73 @@ package commands
 import (
 	"context"
 
-	//"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	//"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
 func CharacterValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
 	rslt := rkcy.StepResult{}
 
-	/*
-		player := storage.Player{}
-		err := proto.Unmarshal(stepArgs.Payload, &player)
-		if err != nil {
-			rslt.LogError(err.Error())
-			rslt.Code = rkcy.Code_FAILED_CONSTRAINT
-			return &rslt
-		}
+	character := storage.Character{}
+	err := proto.Unmarshal(stepArgs.Payload, &character)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
 
-		if len(player.Username) < 4 {
-			rslt.LogError("Username too short")
-			rslt.Code = rkcy.Code_FAILED_CONSTRAINT
-			return &rslt
-		}
-	*/
+	if len(character.Fullname) < 2 {
+		rslt.LogError("Fullname too short")
+		rslt.Code = rkcy.Code_INVALID_ARGUMENT
+		return &rslt
+	}
+
 	rslt.Code = rkcy.Code_OK
 	rslt.Payload = stepArgs.Payload
+	return &rslt
+}
+
+func CharacterFund(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResult {
+	rslt := rkcy.StepResult{}
+
+	curr := storage.FundingRequest{}
+	err := proto.Unmarshal(stepArgs.Payload, &curr)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
+
+	if curr.Currency.Gold < 0 || curr.Currency.Faction_0 < 0 || curr.Currency.Faction_1 < 0 || curr.Currency.Faction_2 < 0 {
+		rslt.LogError("Cannot fund with negative currency")
+		rslt.Code = rkcy.Code_INVALID_ARGUMENT
+		return &rslt
+	}
+
+	char := storage.Character{}
+	err = proto.Unmarshal(stepArgs.Instance, &char)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
+
+	char.Currency.Gold += curr.Currency.Gold
+	char.Currency.Faction_0 += curr.Currency.Faction_0
+	char.Currency.Faction_1 += curr.Currency.Faction_1
+	char.Currency.Faction_2 += curr.Currency.Faction_2
+
+	charSer, err := proto.Marshal(&char)
+	if err != nil {
+		rslt.LogError(err.Error())
+		rslt.Code = rkcy.Code_MARSHAL_FAILED
+		return &rslt
+	}
+
+	rslt.Code = rkcy.Code_OK
+	rslt.Instance = charSer
+	rslt.Payload = charSer
 	return &rslt
 }

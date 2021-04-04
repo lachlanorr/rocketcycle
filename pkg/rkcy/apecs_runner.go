@@ -96,8 +96,10 @@ func produceNextStep(
 				}
 			}
 			if storageSteps != nil {
+				storageReqId := uuid.NewString()
+				rtxn.txn.AssocReqId = storageReqId
 				err := aprod.executeTxn(
-					uuid.NewString(),
+					storageReqId,
 					rtxn.txn.ReqId,
 					nil,
 					false,
@@ -139,6 +141,11 @@ func advanceApecsTxn(
 
 	if step.ConcernName != tp.ConcernName {
 		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
+		return
+	}
+
+	if step.System != tp.System {
+		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
 		return
 	}
 

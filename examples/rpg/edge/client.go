@@ -24,11 +24,12 @@ import (
 )
 
 var messageFactory = map[string]func() proto.Message{
-	"player": func() proto.Message { return proto.Message(new(storage.Player)) },
+	"player":    func() proto.Message { return proto.Message(new(storage.Player)) },
+	"character": func() proto.Message { return proto.Message(new(storage.Character)) },
 }
 
-func getResource(resourceName string, id string) (int, []byte, error) {
-	path := fmt.Sprintf("/v1/%s/get/%s?pretty", resourceName, id)
+func readResource(resourceName string, id string) (int, []byte, error) {
+	path := fmt.Sprintf("/v1/%s/read/%s?pretty", resourceName, id)
 
 	resp, err := http.Get(settings.EdgeAddr + path)
 	if err != nil {
@@ -44,14 +45,14 @@ func getResource(resourceName string, id string) (int, []byte, error) {
 	return resp.StatusCode, body, nil
 }
 
-func cobraGetResource(cmd *cobra.Command, args []string) {
-	status, body, err := getResource(args[0], args[1])
+func cobraReadResource(cmd *cobra.Command, args []string) {
+	status, body, err := readResource(args[0], args[1])
 	if err != nil {
 		log.Fatal().
 			Err(err).
 			Str("Resource", args[0]).
 			Str("Id", args[1]).
-			Msg("Failed to GET")
+			Msg("Failed to READ")
 	}
 
 	fmt.Printf("%d %s\n", status, string(body))
@@ -64,7 +65,7 @@ func cobraGetResource(cmd *cobra.Command, args []string) {
 func createOrUpdateResource(verb string, resourceName string, msg proto.Message, fieldsToSet []string) (int, []byte, error) {
 	path := fmt.Sprintf("/v1/%s/%s?pretty", resourceName, verb)
 
-	err := reflectKeyValArgs(msg, resourceName, fieldsToSet, true)
+	err := reflectKeyValArgs(msg, fieldsToSet, true)
 	if err != nil {
 		return 500, nil, err
 	}
@@ -122,30 +123,30 @@ func cobraUpdateResource(cmd *cobra.Command, args []string) {
 	}
 	msg := msgFac()
 
-	// First try to get resource, since we'll be overlaying requested field values
-	statusGet, bodyGet, err := getResource(args[0], args[1])
+	// First try to read resource, since we'll be overlaying requested field values
+	statusRead, bodyRead, err := readResource(args[0], args[1])
 	if err != nil {
 		log.Fatal().
 			Err(err).
 			Str("Resource", args[0]).
 			Str("Id", args[1]).
-			Msg("Failed to GET")
+			Msg("Failed to READ")
 	}
-	if statusGet != 200 {
+	if statusRead != 200 {
 		log.Fatal().
 			Err(err).
 			Str("Resource", args[0]).
 			Str("Id", args[1]).
-			Msg("Error status from GET")
+			Msg("Error status from READ")
 	}
 
-	err = protojson.Unmarshal(bodyGet, msg)
+	err = protojson.Unmarshal(bodyRead, msg)
 	if err != nil {
 		log.Fatal().
 			Err(err).
 			Str("Resource", args[0]).
 			Str("Id", args[1]).
-			Msg("Failed to Unmarshal GET response")
+			Msg("Failed to Unmarshal READ response")
 	}
 
 	status, body, err := createOrUpdateResource("update", args[0], msg, args[2:])
@@ -174,6 +175,51 @@ func deleteResource(resourceName string, id string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func cobraFundCharacter(cmd *cobra.Command, args []string) {
+	path := "/v1/character/fund?pretty"
+
+	fr := storage.FundingRequest{
+		CharacterId: args[0],
+		Currency:    &storage.Character_Currency{},
+	}
+
+	err := reflectKeyValArgs(fr.Currency, args[1:], false)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to reflectKeyValArgs")
+	}
+
+	content, err := protojson.Marshal(&fr)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to Marshal")
+	}
+
+	contentRdr := bytes.NewReader(content)
+	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to http.Post")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+	}
+
+	fmt.Printf("%d %s\n", resp.StatusCode, string(body))
+
+	if resp.StatusCode != 200 {
+		os.Exit(1)
+	}
+}
+
 func cobraDeleteResource(cmd *cobra.Command, args []string) {
 	status, err := deleteResource(args[0], args[1])
 	if err != nil {
@@ -191,7 +237,7 @@ func cobraDeleteResource(cmd *cobra.Command, args []string) {
 	}
 }
 
-func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string, initId bool) error {
+func reflectKeyValArgs(msg proto.Message, keyVals []string, initId bool) error {
 	msgR := msg.ProtoReflect()
 	desc := msgR.Descriptor()
 	fields := desc.Fields()
@@ -205,7 +251,7 @@ func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string,
 
 			field := fields.ByJSONName(toks[0])
 			if field == nil {
-				return errors.New(fmt.Sprintf("Invalid field for %s resource: %s", resourceName, toks[0]))
+				return errors.New(fmt.Sprintf("Invalid field: %s", toks[0]))
 			}
 			switch kind := field.Kind(); kind {
 			case protoreflect.StringKind:
@@ -213,30 +259,21 @@ func reflectKeyValArgs(msg proto.Message, resourceName string, keyVals []string,
 			case protoreflect.BoolKind:
 				valBool, err := strconv.ParseBool(toks[1])
 				if err != nil {
-					return errors.New(fmt.Sprintf("Bad value for %s resource: %s=%s", resourceName, toks[0], toks[1]))
+					return errors.New(fmt.Sprintf("Bad value: %s=%s", toks[0], toks[1]))
 				}
 				msgR.Set(field, protoreflect.ValueOf(valBool))
-			case protoreflect.Int32Kind,
-				protoreflect.Sint32Kind,
-				protoreflect.Uint32Kind,
-				protoreflect.Int64Kind,
-				protoreflect.Sint64Kind,
-				protoreflect.Uint64Kind:
+			case protoreflect.Int32Kind:
 				valInt, err := strconv.Atoi(toks[1])
 				if err != nil {
-					return errors.New(fmt.Sprintf("Bad value for %s resource: %s=%s", resourceName, toks[0], toks[1]))
+					return errors.New(fmt.Sprintf("Bad value: %s=%s", toks[0], toks[1]))
 				}
-				msgR.Set(field, protoreflect.ValueOf(valInt))
+				msgR.Set(field, protoreflect.ValueOf(int32(valInt)))
 
-			case protoreflect.Sfixed32Kind,
-				protoreflect.Fixed32Kind,
-				protoreflect.FloatKind,
-				protoreflect.Sfixed64Kind,
-				protoreflect.Fixed64Kind,
+			case protoreflect.FloatKind,
 				protoreflect.DoubleKind:
 				valFloat, err := strconv.ParseFloat(toks[1], 64)
 				if err != nil {
-					return errors.New(fmt.Sprintf("Bad value for %s resource: %s=%s", resourceName, toks[0], toks[1]))
+					return errors.New(fmt.Sprintf("Bad value: %s=%s", toks[0], toks[1]))
 				}
 				msgR.Set(field, protoreflect.ValueOf(valFloat))
 			}

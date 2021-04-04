@@ -29,6 +29,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
+	"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
@@ -41,7 +42,7 @@ var (
 )
 
 type server struct {
-	UnimplementedMmoServiceServer
+	UnimplementedRpgServiceServer
 
 	httpAddr string
 	grpcAddr string
@@ -64,7 +65,7 @@ func (server) StaticFilesPathPrefix() string {
 }
 
 func (srv server) RegisterServer(srvReg grpc.ServiceRegistrar) {
-	RegisterMmoServiceServer(srvReg, srv)
+	RegisterRpgServiceServer(srvReg, srv)
 }
 
 func (server) RegisterHandlerFromEndpoint(
@@ -73,7 +74,7 @@ func (server) RegisterHandlerFromEndpoint(
 	endpoint string,
 	opts []grpc.DialOption,
 ) (err error) {
-	return RegisterMmoServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
+	return RegisterRpgServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
 func CodeTranslate(code rkcy.Code) codes.Code {
@@ -82,8 +83,11 @@ func CodeTranslate(code rkcy.Code) codes.Code {
 		return codes.OK
 	case rkcy.Code_NOT_FOUND:
 		return codes.NotFound
-	case rkcy.Code_FAILED_CONSTRAINT:
+	case rkcy.Code_CONSTRAINT_VIOLATION:
 		return codes.AlreadyExists
+
+	case rkcy.Code_INVALID_ARGUMENT:
+		return codes.InvalidArgument
 
 	case rkcy.Code_INTERNAL:
 		fallthrough
@@ -372,7 +376,34 @@ func processCrudRequestPlayer(
 	return &playerResult, nil
 }
 
-func (server) GetPlayer(ctx context.Context, in *MmoRequest) (*storage.Player, error) {
+func processCrudRequestCharacter(
+	ctx context.Context,
+	command rkcy.Command,
+	msg proto.Message,
+) (*storage.Character, error) {
+	reqId, result, err := processCrudRequest(ctx, consts.Character, command, msg)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to processCrudRequest")
+		return nil, err
+	}
+
+	characterResult := storage.Character{}
+	err = proto.Unmarshal(result.Payload, &characterResult)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to Unmarshal Payload")
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+
+	return &characterResult, nil
+}
+
+func (server) ReadPlayer(ctx context.Context, in *RpgRequest) (*storage.Player, error) {
 	return processCrudRequestPlayer(ctx, rkcy.Command_READ, in)
 }
 
@@ -384,12 +415,112 @@ func (server) UpdatePlayer(ctx context.Context, in *storage.Player) (*storage.Pl
 	return processCrudRequestPlayer(ctx, rkcy.Command_UPDATE, in)
 }
 
-func (server) DeletePlayer(ctx context.Context, in *MmoRequest) (*MmoResponse, error) {
+func (server) DeletePlayer(ctx context.Context, in *RpgRequest) (*RpgResponse, error) {
 	_, _, err := processCrudRequest(ctx, consts.Player, rkcy.Command_DELETE, in)
 	if err != nil {
 		return nil, err
 	}
-	return &MmoResponse{Id: in.Id}, nil
+	return &RpgResponse{Id: in.Id}, nil
+}
+
+func (server) ReadCharacter(ctx context.Context, in *RpgRequest) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_READ, in)
+}
+
+func (server) CreateCharacter(ctx context.Context, in *storage.Character) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_CREATE, in)
+}
+
+func (server) UpdateCharacter(ctx context.Context, in *storage.Character) (*storage.Character, error) {
+	return processCrudRequestCharacter(ctx, rkcy.Command_UPDATE, in)
+}
+
+func (server) DeleteCharacter(ctx context.Context, in *RpgRequest) (*RpgResponse, error) {
+	_, _, err := processCrudRequest(ctx, consts.Character, rkcy.Command_DELETE, in)
+	if err != nil {
+		return nil, err
+	}
+	return &RpgResponse{Id: in.Id}, nil
+}
+
+func (server) FundCharacter(ctx context.Context, in *storage.FundingRequest) (*storage.Character, error) {
+	reqId := uuid.NewString()
+	inSer, err := proto.Marshal(in)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to Marshal Payload")
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+
+	respChan := RespChan{
+		ReqId:     reqId,
+		RespCh:    make(chan *rkcy.ApecsTxn),
+		StartTime: time.Now(),
+	}
+	registerCh <- &respChan
+
+	err = aprod.ExecuteTxn(
+		reqId,
+		&rkcy.ResponseTarget{
+			BootstrapServers: settings.BootstrapServers,
+			TopicName:        settings.Topic,
+			Partition:        settings.Partition,
+		},
+		false,
+		inSer,
+		[]rkcy.Step{
+			{
+				ConcernName: consts.Character,
+				Command:     commands.Command_FUND,
+				Key:         in.CharacterId,
+			},
+		},
+	)
+	if err != nil {
+		return nil, status.New(codes.Internal, "failed to ExecuteTxn").Err()
+	}
+
+	txnRsp, err := waitForResponse(ctx, respChan.RespCh, settings.TimeoutSecs)
+	if err != nil {
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	if txnRsp == nil {
+		return nil, status.New(codes.Internal, "nil txn received").Err()
+	}
+
+	success, result := rkcy.ApecsTxnResult(txnRsp)
+	if !success {
+		details := make([]*anypb.Any, 0, 1)
+		resultAny, err := anypb.New(result)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("ReqId", reqId).
+				Msg("Unable to convert result to Any")
+		} else {
+			details = append(details, resultAny)
+		}
+		stat := spb.Status{
+			Code:    int32(CodeTranslate(result.Code)),
+			Message: "failure",
+			Details: details,
+		}
+		return nil, status.ErrorProto(&stat)
+	}
+
+	characterResult := storage.Character{}
+	err = proto.Unmarshal(result.Payload, &characterResult)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ReqId", reqId).
+			Msg("Failed to Unmarshal Payload")
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+
+	return &characterResult, nil
 }
 
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {

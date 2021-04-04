@@ -45,6 +45,9 @@ func main() {
 					rkcy.Command_VALIDATE_EXISTING: {
 						Do: commands.CharacterValidate,
 					},
+					commands.Command_FUND: {
+						Do: commands.CharacterFund,
+					},
 				},
 				CrudHandlers: &storage.Character{},
 			},
