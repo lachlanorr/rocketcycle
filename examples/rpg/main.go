@@ -52,6 +52,8 @@ func main() {
 				CrudHandlers: &storage.Character{},
 			},
 		},
+
+		JsonDebugDecoder: storage.JsonDebugDecoder,
 	}
 
 	rkcy.StartPlatform(&impl)

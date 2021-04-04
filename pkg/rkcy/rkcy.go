@@ -59,6 +59,8 @@ type PlatformImpl struct {
 
 	// string key is ConcernName
 	Handlers map[string]ConcernHandlers
+
+	JsonDebugDecoder func(*Buffer) ([]byte, error)
 }
 
 func StartPlatform(impl *PlatformImpl) {

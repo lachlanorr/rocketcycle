@@ -7,8 +7,6 @@ package commands
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
@@ -23,7 +21,6 @@ func PlayerValidate(ctx context.Context, stepArgs *rkcy.StepArgs) *rkcy.StepResu
 		rslt.Code = rkcy.Code_MARSHAL_FAILED
 		return &rslt
 	}
-	log.Info().Msgf("mdl %+v", mdl)
 	player, ok := mdl.(*storage.Player)
 	if !ok {
 		rslt.LogError("Unmarshal returned wrong type")

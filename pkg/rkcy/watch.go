@@ -6,6 +6,8 @@ package rkcy
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -76,9 +78,22 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
-					txnJson := protojson.Format(proto.Message(&txn))
-					log.WithLevel(wt.logLevel).
-						Msg(txnJson)
+					txnJson, err := protojson.Marshal(proto.Message(&txn))
+					if err == nil {
+						txnJsonDec, err := decodeOpaques(txnJson)
+						if err == nil {
+							log.WithLevel(wt.logLevel).
+								Msg(string(txnJsonDec))
+						} else {
+							log.Error().
+								Err(err).
+								Msgf("Failed to decodeOpaques: %s", string(txnJson))
+						}
+					} else {
+						log.Error().
+							Err(err).
+							Msg("Failed to protojson.Marshal")
+					}
 				}
 			}
 		}
@@ -108,6 +123,96 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 		}
 	}
 	return wts
+}
+
+func decodeOpaques(txnJson []byte) ([]byte, error) {
+	if platformImpl.JsonDebugDecoder == nil {
+		return txnJson, nil
+	}
+
+	var txnTopLvl map[string]interface{}
+	err := json.Unmarshal(txnJson, &txnTopLvl)
+	if err != nil {
+		return nil, err
+	}
+
+	var decBuffer = func(iBuff interface{}) {
+		buff, ok := iBuff.(map[string]interface{})
+		if ok {
+			iResourceType, ok := buff["type"]
+			if ok {
+				fResourceType, ok := iResourceType.(float64)
+				if ok {
+					resourceType := int32(fResourceType)
+					iData, ok := buff["data"]
+					if ok {
+						data, ok := iData.(string)
+						if ok {
+							decData, err := base64.StdEncoding.DecodeString(data)
+							if err == nil {
+								jsonDec, err := platformImpl.JsonDebugDecoder(&Buffer{Type: resourceType, Data: decData})
+								if err == nil {
+									// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
+									var dataUnser interface{}
+									err := json.Unmarshal([]byte(jsonDec), &dataUnser)
+									if err == nil {
+										buff["dataDec"] = dataUnser
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	var decSteps = func(iSteps interface{}) {
+		steps, ok := iSteps.([]interface{})
+		if ok {
+			for _, iStep := range steps {
+				step, ok := iStep.(map[string]interface{})
+				if ok {
+					iBuff, ok := step["payload"]
+					if ok {
+						decBuffer(iBuff)
+					}
+
+					iRslt, ok := step["result"]
+					if ok {
+						rslt, ok := iRslt.(map[string]interface{})
+						if ok {
+							iBuff, ok := rslt["payload"]
+							if ok {
+								decBuffer(iBuff)
+							}
+
+							iBuff, ok = rslt["instance"]
+							if ok {
+								decBuffer(iBuff)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	iFwSteps, ok := txnTopLvl["forwardSteps"]
+	if ok {
+		decSteps(iFwSteps)
+	}
+	iRevSteps, ok := txnTopLvl["reverseSteps"]
+	if ok {
+		decSteps(iRevSteps)
+	}
+
+	jsonSer, err := json.MarshalIndent(txnTopLvl, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonSer, nil
 }
 
 func watchResultTopics(ctx context.Context) {

@@ -323,21 +323,17 @@ func processCrudRequestPlayer(
 	plyr *storage.Player,
 ) (*storage.Player, error) {
 
-	var (
-		payload *rkcy.Buffer
-		err     error
-	)
 	if command == rkcy.Command_CREATE {
 		if plyr.Id != "" {
 			return nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 		}
 		plyr.Id = uuid.NewString()
-		payload, err = storage.Marshal(int32(storage.ResourceType_PLAYER), plyr)
 	} else {
 		if plyr.Id == "" {
 			return nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
 		}
 	}
+	payload, err := storage.Marshal(int32(storage.ResourceType_PLAYER), plyr)
 
 	reqId, result, err := processCrudRequest(ctx, consts.Player, command, plyr.Id, payload)
 	if err != nil {
@@ -374,21 +370,17 @@ func processCrudRequestCharacter(
 	char *storage.Character,
 ) (*storage.Character, error) {
 
-	var (
-		payload *rkcy.Buffer
-		err     error
-	)
 	if command == rkcy.Command_CREATE {
 		if char.Id != "" {
 			return nil, status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 		}
 		char.Id = uuid.NewString()
-		payload, err = storage.Marshal(int32(storage.ResourceType_CHARACTER), char)
 	} else {
 		if char.Id == "" {
 			return nil, status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
 		}
 	}
+	payload, err := storage.Marshal(int32(storage.ResourceType_CHARACTER), char)
 
 	reqId, result, err := processCrudRequest(ctx, consts.Character, command, char.Id, payload)
 	if err != nil {

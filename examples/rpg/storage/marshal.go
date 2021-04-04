@@ -7,6 +7,7 @@ package storage
 import (
 	"fmt"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -22,6 +23,18 @@ var messageFactory = map[ResourceType]func() proto.Message{
 var MessageFactory = map[string]func() proto.Message{
 	"player":    messageFactory[ResourceType_PLAYER],
 	"character": messageFactory[ResourceType_CHARACTER],
+}
+
+func JsonDebugDecoder(buffer *rkcy.Buffer) ([]byte, error) {
+	msg, err := Unmarshal(buffer)
+	if err != nil {
+		return nil, err
+	}
+	jsonBytes, err := protojson.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	return jsonBytes, nil
 }
 
 func Unmarshal(buffer *rkcy.Buffer) (proto.Message, error) {
