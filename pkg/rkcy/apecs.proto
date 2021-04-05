@@ -27,7 +27,7 @@ message ApecsTxn {
         string concern_name = 2; // logical persistence model that's used to partition messages
         Command command     = 3; // command name, this will map to a piece of code (e.g. function)
         string key          = 4; // instance key used as the partition key
-        Buffer payload       = 5; // opaque payload for command
+        Buffer payload      = 5; // opaque payload for command
         Offset offset       = 6; // when no nil, indicates the process topic offset associated with the step
 
         Result result       = 7; // Result returned from step handler

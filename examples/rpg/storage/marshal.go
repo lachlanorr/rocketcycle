@@ -40,11 +40,8 @@ func (DebugDecoder) Json(buffer *rkcy.Buffer) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	jsonBytes, err := protojson.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	return jsonBytes, nil
+	jsonStr := protojson.Format(msg)
+	return []byte(jsonStr), nil
 }
 
 func Unmarshal(buffer *rkcy.Buffer) (proto.Message, error) {

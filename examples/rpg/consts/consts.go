@@ -12,5 +12,3 @@ const (
 
 	ZeroUuid string = "00000000-0000-0000-0000-000000000000"
 )
-
-type Type int
