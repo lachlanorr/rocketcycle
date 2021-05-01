@@ -48,21 +48,6 @@ func newRtProgram(program *Program, key string) *rtProgram {
 	return rtProg
 }
 
-func runStorage(ctx context.Context, consumeTopic *Platform_Concern_Topics) {
-	cmd := exec.CommandContext(ctx, "./rcstore")
-
-	stderr, _ := cmd.StderrPipe()
-	cmd.Start()
-
-	scanner := bufio.NewScanner(stderr)
-	for scanner.Scan() {
-		m := scanner.Text()
-		fmt.Fprintf(os.Stderr, colorize("%s %s\n", colorBlue), "rcstore", m)
-	}
-	cmd.Wait()
-	log.Info().Msg("runStorage exit")
-}
-
 func progKey(prog *Program) string {
 	// Combine name and args to a string for key lookup
 	if prog == nil {
@@ -135,6 +120,16 @@ func (rtProg *rtProgram) start(
 	}
 
 	rtProg.cmd = exec.CommandContext(ctx, rtProg.program.Name, rtProg.program.Args...)
+
+	if rtProg.program.Tags != nil {
+		otelResourceAttrs := "OTEL_RESOURCE_ATTRIBUTES="
+		for k, v := range rtProg.program.Tags {
+			otelResourceAttrs += fmt.Sprintf("%s=%s,", k, v)
+		}
+		otelResourceAttrs = otelResourceAttrs[:len(otelResourceAttrs)-1]
+		rtProg.cmd.Env = os.Environ()
+		rtProg.cmd.Env = append(rtProg.cmd.Env, otelResourceAttrs)
+	}
 
 	// only reset color and abbrev if this is the first time through
 	if rtProg.abbrev == "" {

@@ -274,18 +274,24 @@
         },
         "abbrev": {
           "type": "string"
+        },
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       }
     },
     "rkcy.Severity": {
       "type": "string",
       "enum": [
-        "DEBUG",
-        "INFO",
-        "WARN",
-        "ERROR"
+        "DBG",
+        "INF",
+        "WRN",
+        "ERR"
       ],
-      "default": "DEBUG"
+      "default": "DBG"
     }
   }
 }

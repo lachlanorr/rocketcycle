@@ -73,7 +73,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 			} else if !timedOut && msg != nil {
 				log.WithLevel(wt.logLevel).
 					Str("Directive", fmt.Sprintf("0x%08X", int(GetDirective(msg)))).
-					Str("ReqId", GetReqId(msg)).
+					Str("TraceId", GetTraceId(msg)).
 					Msg(wt.topicName)
 				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)

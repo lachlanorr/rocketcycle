@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"unsafe"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -20,6 +22,14 @@ import (
 )
 
 var exists struct{}
+
+func NewTraceId() string {
+	return strings.ReplaceAll(uuid.NewString(), "-", "")
+}
+
+func NewSpanId() string {
+	return strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+}
 
 func prepLogging(platformName string) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
@@ -85,8 +95,8 @@ func GetDirective(msg *kafka.Message) Directive {
 	}
 }
 
-func GetReqId(msg *kafka.Message) string {
-	val := findHeader(msg, consts.ReqIdHeader)
+func GetTraceId(msg *kafka.Message) string {
+	val := findHeader(msg, consts.TraceIdHeader)
 	if val != nil {
 		return string(val)
 	}
@@ -142,15 +152,15 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 	return topicName, nil
 }
 
-func standardHeaders(directive Directive, reqId string) []kafka.Header {
+func standardHeaders(directive Directive, traceId string) []kafka.Header {
 	return []kafka.Header{
 		{
 			Key:   consts.DirectiveHeader,
 			Value: IntToBytes(int(directive)),
 		},
 		{
-			Key:   consts.ReqIdHeader,
-			Value: []byte(reqId),
+			Key:   consts.TraceIdHeader,
+			Value: []byte(traceId),
 		},
 	}
 }

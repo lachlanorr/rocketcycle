@@ -103,7 +103,7 @@ func (aprod *ApecsProducer) produceResponse(txn *ApecsTxn) error {
 			Partition: rspTgt.Partition,
 		},
 		Value:   txnSer,
-		Headers: standardHeaders(Directive_APECS_TXN, txn.ReqId),
+		Headers: standardHeaders(Directive_APECS_TXN, txn.TraceId),
 	}
 
 	err = kProd.Produce(&kMsg, nil)
@@ -129,7 +129,7 @@ func (aprod *ApecsProducer) Close() {
 }
 
 func (aprod *ApecsProducer) ExecuteTxn(
-	reqId string,
+	traceId string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
 	payload *Buffer,
@@ -148,7 +148,7 @@ func (aprod *ApecsProducer) ExecuteTxn(
 		stepsPb[0].Payload = payload
 	}
 	return aprod.executeTxn(
-		reqId,
+		traceId,
 		"",
 		rspTgt,
 		canRevert,
@@ -157,13 +157,13 @@ func (aprod *ApecsProducer) ExecuteTxn(
 }
 
 func (aprod *ApecsProducer) executeTxn(
-	reqId string,
-	assocReqId string,
+	traceId string,
+	assocTraceId string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
 	steps []*ApecsTxn_Step,
 ) error {
-	txn, err := newApecsTxn(reqId, assocReqId, rspTgt, canRevert, steps)
+	txn, err := newApecsTxn(traceId, assocTraceId, rspTgt, canRevert, steps)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 	if step == nil {
 		step = rtxn.firstForwardStep()
 		if step == nil {
-			return fmt.Errorf("ApecsProducer.error ReqId=%s: failed to get firstForwardStep", rtxn.txn.ReqId)
+			return fmt.Errorf("ApecsProducer.error TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
 		}
 		msg = "DEFAULTING TO FIRST FORWARD STEP FOR LOGGING!!! - " + msg
 	}
@@ -198,7 +198,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		step.Result.LogEvents = append(
 			step.Result.LogEvents,
 			&LogEvent{
-				Sev: Severity_ERROR,
+				Sev: Severity_ERR,
 				Msg: msg,
 			},
 		)
@@ -214,7 +214,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.txn.TraceId, []byte(step.Key), txnSer, nil)
 
 	err = aprod.produceResponse(rtxn.txn)
 	if err != nil {
@@ -229,7 +229,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 	// first step, which I think makes sense in most cases
 	step := rtxn.firstForwardStep()
 	if step == nil {
-		return fmt.Errorf("ApecsProducer.complete ReqId=%s: failed to get firstForwardStep", rtxn.txn.ReqId)
+		return fmt.Errorf("ApecsProducer.complete TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
 	}
 
 	prd, err := aprod.getProducer(step.ConcernName, consts.Complete)
@@ -242,7 +242,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.txn.TraceId, []byte(step.Key), txnSer, nil)
 
 	err = aprod.produceResponse(rtxn.txn)
 	if err != nil {
@@ -263,7 +263,7 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn) error {
 	var prd *Producer = nil
 	topicName, ok := systemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsProducer.Process ReqId=%s System=%d: Invalid System", rtxn.txn.ReqId, step.System)
+		return fmt.Errorf("ApecsProducer.Process TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
 	}
 
 	prd, err = aprod.getProducer(step.ConcernName, topicName)
@@ -276,6 +276,6 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, txn.ReqId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, txn.TraceId, []byte(step.Key), txnSer, nil)
 	return nil
 }

@@ -451,13 +451,22 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 	}
 }
 
-func substStr(s string, concernName string, clusterBootstrap string, topicName string, partition int32) string {
+func substStr(s string, concernName string, clusterBootstrap string, shortTopicName string, fullTopicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", platformName)
 	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
 	s = strings.ReplaceAll(s, "@concern", concernName)
-	s = strings.ReplaceAll(s, "@topic", topicName)
+	s = strings.ReplaceAll(s, "@system", shortTopicName)
+	s = strings.ReplaceAll(s, "@topic", fullTopicName)
 	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
 	return s
+}
+
+var stdTags map[string]string = map[string]string{
+	"service.name":   "rkcy.@platform.@concern.@system",
+	"rkcy.concern":   "@concern",
+	"rkcy.system":    "@system",
+	"rkcy.topic":     "@topic",
+	"rkcy.partition": "@partition",
 }
 
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
@@ -466,12 +475,22 @@ func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clu
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.ClusterName]
 		progs[i] = &Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topicName, i),
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topicName, i),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Tags:   make(map[string]string),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+		}
+
+		for k, v := range stdTags {
+			progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+		}
+		if topics.ConsumerProgram.Tags != nil {
+			for k, v := range topics.ConsumerProgram.Tags {
+				progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+			}
 		}
 	}
 	return progs
