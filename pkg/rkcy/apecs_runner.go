@@ -40,10 +40,10 @@ func produceApecsTxnError(
 		Str("TraceId", rtxn.txn.TraceId).
 		Msg(logMsg)
 
-	span.RecordError(errors.New(logMsg))
-	span.SetAttributes(
-		attribute.String("error", "true"),
-	)
+	span.SetStatus(codes.Error, logMsg)
+	if logToResult {
+		span.RecordError(errors.New(logMsg))
+	}
 
 	err := aprod.produceError(rtxn, step, code, logToResult, logMsg)
 	if err != nil {
@@ -81,7 +81,7 @@ func produceNextStep(
 				nextStep.Offset = offset
 			}
 		}
-		err := aprod.produceCurrentStep(rtxn.txn)
+		err := aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
 		if err != nil {
 			produceApecsTxnError(span, rtxn, nextStep, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
@@ -112,6 +112,7 @@ func produceNextStep(
 				err := aprod.executeTxn(
 					storageTraceId,
 					rtxn.txn.TraceId,
+					rtxn.traceParent,
 					nil,
 					false,
 					storageSteps,
@@ -139,6 +140,7 @@ func advanceApecsTxn(
 	handlers map[Command]Handler,
 	aprod *ApecsProducer,
 ) {
+	ctx = InjectTraceParent(ctx, rtxn.traceParent)
 	ctx, span, step := platformImpl.Telem.StartStep(ctx, rtxn)
 	defer span.End()
 
@@ -216,7 +218,7 @@ func advanceApecsTxn(
 					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
 					return
 				}
-				err = aprod.produceCurrentStep(rtxn.txn)
+				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
 				if err != nil {
 					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 					return
@@ -286,15 +288,18 @@ func advanceApecsTxn(
 
 	if step.Result.LogEvents != nil {
 		for _, logEvt := range step.Result.LogEvents {
-			span.AddEvent(fmt.Sprintf("%s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg))
+			sevMsg := fmt.Sprintf("%s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
+			if logEvt.Sev == Severity_ERR {
+				span.RecordError(errors.New(sevMsg))
+			} else {
+				span.AddEvent(sevMsg)
+			}
 		}
 	}
 	span.SetAttributes(
 		attribute.String("rkcy.code", strconv.Itoa(int(step.Result.Code))),
 	)
-	if step.Result.Code == Code_OK {
-		span.SetStatus(codes.Ok, "")
-	} else {
+	if step.Result.Code != Code_OK {
 		produceApecsTxnError(span, rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return
 	}
@@ -381,7 +386,7 @@ func consumeApecsTopic(
 							Offset:     int64(msg.TopicPartition.Offset),
 						}
 
-						rtxn, err := newRtApecsTxn(&txn)
+						rtxn, err := newRtApecsTxn(&txn, GetTraceParent(msg))
 						if err != nil {
 							log.Error().
 								Err(err).

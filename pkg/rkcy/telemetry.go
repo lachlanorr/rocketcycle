@@ -6,7 +6,9 @@ package rkcy
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -112,6 +114,75 @@ func SpanContext(ctx context.Context, traceId string) context.Context {
 	return trace.ContextWithRemoteSpanContext(ctx, sc)
 }
 
+var traceParentRe *regexp.Regexp = regexp.MustCompile("([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})")
+
+func TraceParentIsValid(traceParent string) bool {
+	return traceParentRe.MatchString(traceParent)
+}
+
+func TraceParentParts(traceParent string) []string {
+	matches := traceParentRe.FindAllStringSubmatch(traceParent, -1)
+	if len(matches) != 1 || len(matches[0]) != 5 {
+		return make([]string, 0)
+	}
+	return matches[0][1:]
+}
+
+func TraceIdFromTraceParent(traceParent string) string {
+	parts := TraceParentParts(traceParent)
+	if len(parts) != 4 {
+		log.Warn().Msgf("TraceIdFromTraceParent with invalid traceParent: '%s'", traceParent)
+		return ""
+	}
+	return parts[1]
+}
+
+func ExtractTraceParent(ctx context.Context) string {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return ""
+	}
+	tp := fmt.Sprintf(
+		"00-%s-%s-%s",
+		sc.TraceID(),
+		sc.SpanID(),
+		sc.TraceFlags(),
+	)
+	return tp
+}
+
+func InjectTraceParent(ctx context.Context, traceParent string) context.Context {
+	parts := TraceParentParts(traceParent)
+	if len(parts) != 4 {
+		log.Error().Msgf("InjectTraceParent re match failure, traceParent='%s'", traceParent)
+		return ctx
+	}
+
+	traceIdBytes, err := trace.TraceIDFromHex(parts[1])
+	if err != nil {
+		log.Error().Err(err).Msgf("InjectTraceParent TraceIDFromHex failure, traceParent='%s'", traceParent)
+		return ctx
+	}
+	spanIdBytes, err := trace.SpanIDFromHex(parts[2])
+	if err != nil {
+		log.Error().Err(err).Msgf("InjectTraceParent SpanIDFromHex failure, traceParent='%s'", traceParent)
+		return ctx
+	}
+	flagBytes, err := hex.DecodeString(parts[3])
+	if err != nil {
+		log.Error().Err(err).Msgf("InjectTraceParent decode flags failure, traceParent='%s'", traceParent)
+		return ctx
+	}
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceIdBytes,
+		SpanID:     spanIdBytes,
+		TraceFlags: trace.TraceFlags(flagBytes[0]),
+		Remote:     true,
+	})
+	return trace.ContextWithRemoteSpanContext(ctx, sc)
+}
+
 func Tracer() trace.Tracer {
 	return otel.Tracer("rocketcycle")
 }
@@ -133,6 +204,10 @@ func funcName(skip int) string {
 	return funcName
 }
 
+func (telem *Telemetry) Start(ctx context.Context, name string) (context.Context, trace.Span) {
+	return Tracer().Start(ctx, name)
+}
+
 func (telem *Telemetry) StartFunc(ctx context.Context) (context.Context, trace.Span) {
 	return Tracer().Start(ctx, funcName(1))
 }
@@ -149,7 +224,10 @@ func (telem *Telemetry) StartRequest(ctx context.Context) (context.Context, stri
 }
 
 func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (context.Context, trace.Span, *ApecsTxn_Step) {
-	ctx = SpanContext(ctx, rtxn.txn.TraceId)
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		ctx = SpanContext(ctx, rtxn.txn.TraceId)
+	}
 
 	step := rtxn.currentStep()
 	spanName := fmt.Sprintf("Step %s %d %s", rtxn.txn.DirectionName(), rtxn.txn.CurrentStepIdx, step.CommandName())

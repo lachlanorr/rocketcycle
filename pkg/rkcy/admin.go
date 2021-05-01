@@ -20,7 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -417,14 +416,17 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 				platDiff := rtPlat.diff(oldRtPlat)
 
 				updateTopics(rtPlat)
-				updateRunner(adminProd, adminTopic, platDiff)
+				updateRunner(ctx, adminProd, adminTopic, platDiff)
 				oldRtPlat = rtPlat
 			}
 		}
 	}
 }
 
-func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+	ctx, span := Telem().Start(ctx, "updateRunner")
+	defer span.End()
+	traceParent := ExtractTraceParent(ctx)
 	for _, p := range platDiff.progsToStop {
 		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
@@ -434,7 +436,7 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, traceParent),
 		}, nil)
 	}
 	for _, p := range platDiff.progsToStart {
@@ -446,7 +448,7 @@ func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platfo
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, traceParent),
 		}, nil)
 	}
 }

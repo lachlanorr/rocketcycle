@@ -276,6 +276,7 @@ func processCrudRequest(
 	registerCh <- &respChan
 
 	err := aprod.ExecuteTxn(
+		ctx,
 		traceId,
 		&rkcy.ResponseTarget{
 			BootstrapServers: settings.BootstrapServers,
@@ -525,6 +526,7 @@ func (server) FundCharacter(ctx context.Context, fr *storage.FundingRequest) (*s
 	registerCh <- &respChan
 
 	err = aprod.ExecuteTxn(
+		ctx,
 		traceId,
 		&rkcy.ResponseTarget{
 			BootstrapServers: settings.BootstrapServers,

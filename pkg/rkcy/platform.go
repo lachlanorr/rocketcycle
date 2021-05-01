@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -424,6 +423,9 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *Platform, bootstrapSe
 }
 
 func cobraPlatUpdate(cmd *cobra.Command, args []string) {
+	ctx, span := Telem().Start(context.Background(), "cobraPlatUpdate")
+	defer span.End()
+
 	slog := log.With().
 		Str("BootstrapServers", settings.BootstrapServers).
 		Str("ConfigPath", settings.ConfigFilePath).
@@ -487,7 +489,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        standardHeaders(Directive_PLATFORM, uuid.NewString()),
+		Headers:        standardHeaders(Directive_PLATFORM, ExtractTraceParent(ctx)),
 	}
 
 	produce := func() {

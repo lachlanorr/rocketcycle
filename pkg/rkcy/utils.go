@@ -95,12 +95,16 @@ func GetDirective(msg *kafka.Message) Directive {
 	}
 }
 
-func GetTraceId(msg *kafka.Message) string {
-	val := findHeader(msg, consts.TraceIdHeader)
+func GetTraceParent(msg *kafka.Message) string {
+	val := findHeader(msg, consts.TraceParentHeader)
 	if val != nil {
 		return string(val)
 	}
 	return ""
+}
+
+func GetTraceId(msg *kafka.Message) string {
+	return TraceIdFromTraceParent(GetTraceParent(msg))
 }
 
 func AdminTopic(platformName string) string {
@@ -152,17 +156,21 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 	return topicName, nil
 }
 
-func standardHeaders(directive Directive, traceId string) []kafka.Header {
-	return []kafka.Header{
+func standardHeaders(directive Directive, traceParent string) []kafka.Header {
+	if !TraceParentIsValid(traceParent) {
+		panic("standardHeaders invalid traceParent: " + traceParent)
+	}
+	hdrs := []kafka.Header{
 		{
 			Key:   consts.DirectiveHeader,
 			Value: IntToBytes(int(directive)),
 		},
 		{
-			Key:   consts.TraceIdHeader,
-			Value: []byte(traceId),
+			Key:   consts.TraceParentHeader,
+			Value: []byte(traceParent),
 		},
 	}
+	return hdrs
 }
 
 const (

@@ -10,7 +10,8 @@ import (
 )
 
 type rtApecsTxn struct {
-	txn *ApecsTxn
+	txn         *ApecsTxn
+	traceParent string
 }
 
 func newApecsTxn(traceId string, assocTraceId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
@@ -50,9 +51,13 @@ func newApecsTxn(traceId string, assocTraceId string, rspTgt *ResponseTarget, ca
 	return &txn, nil
 }
 
-func newRtApecsTxn(txn *ApecsTxn) (*rtApecsTxn, error) {
+func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
+	if !TraceParentIsValid(traceParent) {
+		panic("newRtApecsTxn invalid traceParent: " + traceParent)
+	}
 	rtxn := rtApecsTxn{
-		txn: txn,
+		txn:         txn,
+		traceParent: traceParent,
 	}
 
 	err := rtxn.validate()

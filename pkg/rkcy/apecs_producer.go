@@ -72,14 +72,14 @@ func (aprod *ApecsProducer) getProducer(
 	return pdc, nil
 }
 
-func (aprod *ApecsProducer) produceResponse(txn *ApecsTxn) error {
-	if txn.ResponseTarget == nil {
+func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
+	if rtxn.txn.ResponseTarget == nil {
 		return nil
 	}
 
-	rspTgt := txn.ResponseTarget
+	rspTgt := rtxn.txn.ResponseTarget
 
-	txnSer, err := proto.Marshal(txn)
+	txnSer, err := proto.Marshal(rtxn.txn)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (aprod *ApecsProducer) produceResponse(txn *ApecsTxn) error {
 			Partition: rspTgt.Partition,
 		},
 		Value:   txnSer,
-		Headers: standardHeaders(Directive_APECS_TXN, txn.TraceId),
+		Headers: standardHeaders(Directive_APECS_TXN, rtxn.traceParent),
 	}
 
 	err = kProd.Produce(&kMsg, nil)
@@ -129,6 +129,7 @@ func (aprod *ApecsProducer) Close() {
 }
 
 func (aprod *ApecsProducer) ExecuteTxn(
+	ctx context.Context,
 	traceId string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
@@ -150,6 +151,7 @@ func (aprod *ApecsProducer) ExecuteTxn(
 	return aprod.executeTxn(
 		traceId,
 		"",
+		ExtractTraceParent(ctx),
 		rspTgt,
 		canRevert,
 		stepsPb,
@@ -159,6 +161,7 @@ func (aprod *ApecsProducer) ExecuteTxn(
 func (aprod *ApecsProducer) executeTxn(
 	traceId string,
 	assocTraceId string,
+	traceParent string,
 	rspTgt *ResponseTarget,
 	canRevert bool,
 	steps []*ApecsTxn_Step,
@@ -168,7 +171,7 @@ func (aprod *ApecsProducer) executeTxn(
 		return err
 	}
 
-	return aprod.produceCurrentStep(txn)
+	return aprod.produceCurrentStep(txn, traceParent)
 }
 
 var systemToTopic = map[System]consts.StandardTopicName{
@@ -214,9 +217,9 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.txn.TraceId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(rtxn.txn)
+	err = aprod.produceResponse(rtxn)
 	if err != nil {
 		return err
 	}
@@ -242,9 +245,9 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.txn.TraceId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(rtxn.txn)
+	err = aprod.produceResponse(rtxn)
 	if err != nil {
 		return err
 	}
@@ -252,8 +255,8 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 	return nil
 }
 
-func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn) error {
-	rtxn, err := newRtApecsTxn(txn)
+func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn, traceParent string) error {
+	rtxn, err := newRtApecsTxn(txn, traceParent)
 	if err != nil {
 		return err
 	}
@@ -276,6 +279,6 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn) error {
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, txn.TraceId, []byte(step.Key), txnSer, nil)
+	prd.Produce(Directive_APECS_TXN, traceParent, []byte(step.Key), txnSer, nil)
 	return nil
 }
