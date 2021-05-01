@@ -13,7 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
+	otel_codes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -40,7 +40,7 @@ func produceApecsTxnError(
 		Str("TraceId", rtxn.txn.TraceId).
 		Msg(logMsg)
 
-	span.SetStatus(codes.Error, logMsg)
+	span.SetStatus(otel_codes.Error, logMsg)
 	if logToResult {
 		span.RecordError(errors.New(logMsg))
 	}

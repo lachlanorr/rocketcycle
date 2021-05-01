@@ -17,7 +17,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"go.opentelemetry.io/otel/attribute"
+	otel_codes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
@@ -328,10 +328,7 @@ func processCrudRequest(
 }
 
 func recordError(span trace.Span, err error) {
-	span.RecordError(err)
-	span.SetAttributes(
-		attribute.String("error", "true"),
-	)
+	span.SetStatus(otel_codes.Error, err.Error())
 }
 
 func processCrudRequestPlayer(
