@@ -431,6 +431,7 @@ func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic str
 		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
+			span.RecordError(err)
 			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
@@ -443,6 +444,7 @@ func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic str
 		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
+			span.RecordError(err)
 			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
