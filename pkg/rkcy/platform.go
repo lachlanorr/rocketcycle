@@ -424,7 +424,7 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *Platform, bootstrapSe
 }
 
 func cobraPlatUpdate(cmd *cobra.Command, args []string) {
-	ctx, span := Telem().Start(context.Background(), "cobraPlatUpdate")
+	ctx, span := Telem().StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().

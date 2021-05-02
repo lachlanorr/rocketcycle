@@ -113,7 +113,6 @@ func produceNextStep(
 					storageTraceId,
 					rtxn.txn.TraceId,
 					rtxn.traceParent,
-					nil,
 					false,
 					storageSteps,
 				)
@@ -325,7 +324,7 @@ func consumeApecsTopic(
 	tp *TopicParts,
 	handlers map[Command]Handler,
 ) {
-	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName)
+	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName, nil)
 
 	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{

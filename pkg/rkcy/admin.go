@@ -424,7 +424,7 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 }
 
 func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
-	ctx, span := Telem().Start(ctx, "updateRunner")
+	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
 	for _, p := range platDiff.progsToStop {

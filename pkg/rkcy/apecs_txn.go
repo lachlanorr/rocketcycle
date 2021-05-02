@@ -14,9 +14,9 @@ type rtApecsTxn struct {
 	traceParent string
 }
 
-func newApecsTxn(traceId string, assocTraceId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
+func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
 	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
-		return nil, fmt.Errorf("NewApecsTxn TraceId=%s ResponseTarget=%+v: Invalid ResponseTarget", traceId, rspTgt)
+		return nil, fmt.Errorf("NewApecsTxn TraceId=%s TopicTarget=%+v: Invalid TopicTarget", traceId, rspTgt)
 	}
 
 	txn := ApecsTxn{

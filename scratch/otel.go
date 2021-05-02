@@ -102,6 +102,10 @@ func (MyPropagator) Fields() []string {
 func main() {
 	// hack tests
 
+	traceId := NewTraceId()
+	traceIdBytes := TraceIdBytes(traceId)
+	fmt.Printf("%s %s\n", traceId, traceIdBytes.String())
+
 	var traceParentRe *regexp.Regexp = regexp.MustCompile("([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})")
 	matches := traceParentRe.FindAllStringSubmatch("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000002-01", -1)
 	fmt.Printf("matches: %+v\n", matches)
