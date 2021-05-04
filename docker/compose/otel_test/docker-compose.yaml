@@ -45,3 +45,13 @@ services:
       - "./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro"
     depends_on:
       - otel-collector
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    volumes:
+      - ./grafana_datasources.yaml:/etc/grafana/provisioning/datasources/grafana_datasources.yaml
+    ports:
+      - "3000:3000"
+

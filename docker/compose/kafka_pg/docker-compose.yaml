@@ -15,13 +15,16 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
       #POSTGRES_PASSWORD: CHANGEME
 
-#  # Remove grafana for now, should add some dashboards for prometheus at some point
-#  grafana:
-#    image: grafana/grafana
-#    restart: always
-#    container_name: grafana
-#    ports:
-#      - "3000:3000"
+  grafana:
+    image: grafana/grafana
+    restart: always
+    container_name: grafana
+    volumes:
+      - ./grafana_datasources.yaml:/etc/grafana/provisioning/datasources/grafana_datasources.yaml
+      - ./grafana_dashboards.yaml:/etc/grafana/provisioning/dashboards/grafana_dashboards.yaml
+      - ./dashboards:/etc/grafana/provisioning/dashboards/dashboards
+    ports:
+      - "3000:3000"
 
   jaeger:
     image: jaegertracing/all-in-one:latest
