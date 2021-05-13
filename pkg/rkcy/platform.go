@@ -13,9 +13,9 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	otel_codes "go.opentelemetry.io/otel/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -424,6 +424,9 @@ func consumePlatformConfig(ctx context.Context, ch chan<- *Platform, bootstrapSe
 }
 
 func cobraPlatUpdate(cmd *cobra.Command, args []string) {
+	ctx, span := Telem().StartFunc(context.Background())
+	defer span.End()
+
 	slog := log.With().
 		Str("BootstrapServers", settings.BootstrapServers).
 		Str("ConfigPath", settings.ConfigFilePath).
@@ -432,6 +435,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	// read platform conf file and deserialize
 	conf, err := ioutil.ReadFile(settings.ConfigFilePath)
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to ReadFile")
@@ -439,12 +443,14 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	plat := Platform{}
 	err = protojson.Unmarshal(conf, proto.Message(&plat))
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to unmarshal platform")
 	}
 	platMar, err := proto.Marshal(&plat)
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to Marshal platform")
@@ -453,6 +459,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	// create an rtPlatform so we run the validations that involves
 	rtPlat, err := newRtPlatform(&plat)
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to create newRtPlatform")
@@ -465,6 +472,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	// connect to kafka and make sure we have our platform topic
 	adminTopic, err := createAdminTopic(context.Background(), settings.BootstrapServers, plat.Name)
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msgf("Failed to createAdminTopic for platform %s", plat.Name)
@@ -478,6 +486,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	// At this point we are guaranteed to have a platform admin topic
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": settings.BootstrapServers})
 	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to NewProducer")
@@ -487,12 +496,13 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
 		Value:          platMar,
-		Headers:        standardHeaders(Directive_PLATFORM, uuid.NewString()),
+		Headers:        standardHeaders(Directive_PLATFORM, ExtractTraceParent(ctx)),
 	}
 
 	produce := func() {
 		err := prod.Produce(msg, nil)
 		if err != nil {
+			span.SetStatus(otel_codes.Error, err.Error())
 			slog.Fatal().
 				Err(err).
 				Msg("Failed to Produce")

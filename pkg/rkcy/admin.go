@@ -20,7 +20,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -417,47 +416,61 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 				platDiff := rtPlat.diff(oldRtPlat)
 
 				updateTopics(rtPlat)
-				updateRunner(adminProd, adminTopic, platDiff)
+				updateRunner(ctx, adminProd, adminTopic, platDiff)
 				oldRtPlat = rtPlat
 			}
 		}
 	}
 }
 
-func updateRunner(adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+	ctx, span := Telem().StartFunc(ctx)
+	defer span.End()
+	traceParent := ExtractTraceParent(ctx)
 	for _, p := range platDiff.progsToStop {
 		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
+			span.RecordError(err)
 			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, traceParent),
 		}, nil)
 	}
 	for _, p := range platDiff.progsToStart {
 		acd := &AdminConsumerDirective{Program: p}
 		acdSer, err := proto.Marshal(acd)
 		if err != nil {
+			span.RecordError(err)
 			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
 		}
 		adminProd.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
 			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, uuid.NewString()),
+			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, traceParent),
 		}, nil)
 	}
 }
 
-func substStr(s string, concernName string, clusterBootstrap string, topicName string, partition int32) string {
+func substStr(s string, concernName string, clusterBootstrap string, shortTopicName string, fullTopicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", platformName)
 	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
 	s = strings.ReplaceAll(s, "@concern", concernName)
-	s = strings.ReplaceAll(s, "@topic", topicName)
+	s = strings.ReplaceAll(s, "@system", shortTopicName)
+	s = strings.ReplaceAll(s, "@topic", fullTopicName)
 	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
 	return s
+}
+
+var stdTags map[string]string = map[string]string{
+	"service.name":   "rkcy.@platform.@concern.@system",
+	"rkcy.concern":   "@concern",
+	"rkcy.system":    "@system",
+	"rkcy.topic":     "@topic",
+	"rkcy.partition": "@partition",
 }
 
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
@@ -466,12 +479,22 @@ func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clu
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.ClusterName]
 		progs[i] = &Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topicName, i),
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topicName, i),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Tags:   make(map[string]string),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+		}
+
+		for k, v := range stdTags {
+			progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+		}
+		if topics.ConsumerProgram.Tags != nil {
+			for k, v := range topics.ConsumerProgram.Tags {
+				progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+			}
 		}
 	}
 	return progs

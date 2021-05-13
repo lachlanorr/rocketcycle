@@ -5,6 +5,8 @@
 package rkcy
 
 import (
+	"context"
+
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +32,12 @@ var (
 	settings         Settings = Settings{Partition: -1}
 	platformImpl     *PlatformImpl
 	platformHandlers PlatformHandlers
+	telem            *Telemetry
 )
+
+func Telem() *Telemetry {
+	return telem
+}
 
 func GetSettings() Settings {
 	return settings
@@ -225,5 +232,15 @@ func runCobra(impl *PlatformImpl) {
 	for _, addtlCmd := range platformImpl.CobraCommands {
 		rootCmd.AddCommand(addtlCmd)
 	}
+
+	var err error
+	telem, err = NewTelemetry(context.Background())
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to NewTelemetry")
+	}
+	defer telem.Close()
+
 	rootCmd.Execute()
 }

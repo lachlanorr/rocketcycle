@@ -1,0 +1,8 @@
+* Useful curl commands
+** Get datasources
+curl -X GET http://127.0.0.1:3000/api/datasources -H 'Authorization: Basic YWRtaW46YWRtaW4='
+** List all resources
+curl -X GET http://127.0.0.1:3000/api/search -H 'Authorization: Basic YWRtaW46YWRtaW4='
+** Get dashboard by uid
+curl -X GET http://127.0.0.1:3000/api/dashboards/uid/ugEg-rrMk -H 'Authorization: Basic YWRtaW46YWRtaW4='
+

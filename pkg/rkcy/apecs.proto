@@ -10,10 +10,10 @@ package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
 message ApecsTxn {
-    string req_id = 1;       // uuid of txn used for tracing and reporting
-    string assoc_req_id = 2; // req_id of associated transaction
+    string trace_id = 1;       // uuid of txn used for tracing and reporting
+    string assoc_trace_id = 2; // req_id of associated transaction
 
-    ResponseTarget response_target = 3;
+    TopicTarget response_target = 3;
 
     int32 current_step_idx = 4;
     Direction direction = 5; // starts in forward, can potentially go to reverse if the transaction is reversible
@@ -84,7 +84,7 @@ enum Command {
     RKCY_INTERNAL_MAX_COMMAND = 16;
 }
 
-message ResponseTarget {
+message TopicTarget {
     string bootstrap_servers = 1;
     string topic_name = 2;
     int32 partition = 3;
@@ -96,10 +96,10 @@ message LogEvent {
 }
 
 enum Severity {
-    DEBUG = 0;
-    INFO = 1;
-    WARN = 2;
-    ERROR = 3;
+    DBG = 0;
+    INF = 1;
+    WRN = 2;
+    ERR = 3;
 }
 
 enum Code {

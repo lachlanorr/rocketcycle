@@ -6,20 +6,22 @@ package rkcy
 
 import (
 	"fmt"
+	"strings"
 )
 
 type rtApecsTxn struct {
-	txn *ApecsTxn
+	txn         *ApecsTxn
+	traceParent string
 }
 
-func newApecsTxn(reqId string, assocReqId string, rspTgt *ResponseTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
+func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
 	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
-		return nil, fmt.Errorf("NewApecsTxn ReqId=%s ResponseTarget=%+v: Invalid ResponseTarget", reqId, rspTgt)
+		return nil, fmt.Errorf("NewApecsTxn TraceId=%s TopicTarget=%+v: Invalid TopicTarget", traceId, rspTgt)
 	}
 
 	txn := ApecsTxn{
-		ReqId:          reqId,
-		AssocReqId:     assocReqId,
+		TraceId:        traceId,
+		AssocTraceId:   assocTraceId,
 		ResponseTarget: rspTgt,
 		CurrentStepIdx: 0,
 		Direction:      Direction_FORWARD,
@@ -49,9 +51,13 @@ func newApecsTxn(reqId string, assocReqId string, rspTgt *ResponseTarget, canRev
 	return &txn, nil
 }
 
-func newRtApecsTxn(txn *ApecsTxn) (*rtApecsTxn, error) {
+func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
+	if !TraceParentIsValid(traceParent) {
+		panic("newRtApecsTxn invalid traceParent: " + traceParent)
+	}
 	rtxn := rtApecsTxn{
-		txn: txn,
+		txn:         txn,
+		traceParent: traceParent,
 	}
 
 	err := rtxn.validate()
@@ -147,11 +153,11 @@ func ApecsTxnCurrentStep(txn *ApecsTxn) *ApecsTxn_Step {
 	return steps[txn.CurrentStepIdx]
 }
 
-func validateSteps(reqId string, currentStepIdx int32, steps []*ApecsTxn_Step, name string) error {
+func validateSteps(traceId string, currentStepIdx int32, steps []*ApecsTxn_Step, name string) error {
 	if currentStepIdx >= int32(len(steps)) {
 		return fmt.Errorf(
-			"rtApecsTxn.validateSteps ReqId=%s CurrentStepIdx=%d len(%sSteps)=%d: CurrentStepIdx out of bounds",
-			reqId,
+			"rtApecsTxn.validateSteps TraceId=%s CurrentStepIdx=%d len(%sSteps)=%d: CurrentStepIdx out of bounds",
+			traceId,
 			currentStepIdx,
 			name,
 			len(steps),
@@ -159,8 +165,8 @@ func validateSteps(reqId string, currentStepIdx int32, steps []*ApecsTxn_Step, n
 	}
 	if len(steps) == 0 {
 		return fmt.Errorf(
-			"rtApecsTxn.validateSteps ReqId=%s: No %s steps",
-			reqId,
+			"rtApecsTxn.validateSteps TraceId=%s: No %s steps",
+			traceId,
 			name,
 		)
 	}
@@ -168,8 +174,8 @@ func validateSteps(reqId string, currentStepIdx int32, steps []*ApecsTxn_Step, n
 	for _, step := range steps {
 		if step.System != System_PROCESS && step.System != System_STORAGE {
 			return fmt.Errorf(
-				"rtApecsTxn.validateSteps ReqId=%s System=%d: Invalid System",
-				reqId,
+				"rtApecsTxn.validateSteps TraceId=%s System=%d: Invalid System",
+				traceId,
 				step.System,
 			)
 		}
@@ -181,32 +187,44 @@ func (rtxn *rtApecsTxn) validate() error {
 	if rtxn.txn == nil {
 		return fmt.Errorf("Nil ApecsTxn")
 	}
-	if rtxn.txn.ReqId == "" {
-		return fmt.Errorf("ApecsTxn with no ReqId")
+	if rtxn.txn.TraceId == "" {
+		return fmt.Errorf("ApecsTxn with no TraceId")
 	}
 
 	if rtxn.txn.CurrentStepIdx < 0 {
 		return fmt.Errorf(
-			"rtApecsTxn.validate ReqId=%s CurrentStepIdx=%d: Negative CurrentStep",
-			rtxn.txn.ReqId,
+			"rtApecsTxn.validate TraceId=%s CurrentStepIdx=%d: Negative CurrentStep",
+			rtxn.txn.TraceId,
 			rtxn.txn.CurrentStepIdx,
 		)
 	}
 	if rtxn.txn.Direction == Direction_FORWARD {
-		if err := validateSteps(rtxn.txn.ReqId, rtxn.txn.CurrentStepIdx, rtxn.txn.ForwardSteps, "Forward"); err != nil {
+		if err := validateSteps(rtxn.txn.TraceId, rtxn.txn.CurrentStepIdx, rtxn.txn.ForwardSteps, "Forward"); err != nil {
 			return err
 		}
 	} else if rtxn.txn.Direction == Direction_REVERSE {
-		if err := validateSteps(rtxn.txn.ReqId, rtxn.txn.CurrentStepIdx, rtxn.txn.ReverseSteps, "Reverse"); err != nil {
+		if err := validateSteps(rtxn.txn.TraceId, rtxn.txn.CurrentStepIdx, rtxn.txn.ReverseSteps, "Reverse"); err != nil {
 			return err
 		}
 	} else {
 		return fmt.Errorf(
-			"rtApecsTxn.validate ReqId=%s Direction=%d: Invalid Direction",
-			rtxn.txn.ReqId,
+			"rtApecsTxn.validate TraceId=%s Direction=%d: Invalid Direction",
+			rtxn.txn.TraceId,
 			rtxn.txn.Direction,
 		)
 	}
 
 	return nil // all looks good
+}
+
+func (txn *ApecsTxn) DirectionName() string {
+	return strings.Title(strings.ToLower(Direction_name[int32(txn.Direction)]))
+}
+
+func (step *ApecsTxn_Step) SystemName() string {
+	return strings.Title(strings.ToLower(System_name[int32(step.System)]))
+}
+
+func (step *ApecsTxn_Step) CommandName() string {
+	return Command_name[int32(step.Command)]
 }

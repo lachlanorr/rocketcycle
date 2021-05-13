@@ -6,11 +6,15 @@ package rkcy
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
+	otel_codes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -21,6 +25,7 @@ var (
 )
 
 func produceApecsTxnError(
+	span trace.Span,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
 	aprod *ApecsProducer,
@@ -32,19 +37,25 @@ func produceApecsTxnError(
 	logMsg := fmt.Sprintf(format, args...)
 
 	log.Error().
-		Str("ReqId", rtxn.txn.ReqId).
+		Str("TraceId", rtxn.txn.TraceId).
 		Msg(logMsg)
+
+	span.SetStatus(otel_codes.Error, logMsg)
+	if logToResult {
+		span.RecordError(errors.New(logMsg))
+	}
 
 	err := aprod.produceError(rtxn, step, code, logToResult, logMsg)
 	if err != nil {
 		log.Error().
 			Err(err).
-			Str("ReqId", rtxn.txn.ReqId).
+			Str("TraceId", rtxn.txn.TraceId).
 			Msg("produceApecsTxnError: Failed to produce error message")
 	}
 }
 
 func produceNextStep(
+	span trace.Span,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
 	offset *Offset,
@@ -70,9 +81,9 @@ func produceNextStep(
 				nextStep.Offset = offset
 			}
 		}
-		err := aprod.produceCurrentStep(rtxn.txn)
+		err := aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
 		if err != nil {
-			produceApecsTxnError(rtxn, nextStep, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(span, rtxn, nextStep, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
@@ -96,17 +107,17 @@ func produceNextStep(
 				}
 			}
 			if storageSteps != nil {
-				storageReqId := uuid.NewString()
-				rtxn.txn.AssocReqId = storageReqId
+				storageTraceId := NewTraceId()
+				rtxn.txn.AssocTraceId = storageTraceId
 				err := aprod.executeTxn(
-					storageReqId,
-					rtxn.txn.ReqId,
-					nil,
+					storageTraceId,
+					rtxn.txn.TraceId,
+					rtxn.traceParent,
 					false,
 					storageSteps,
 				)
 				if err != nil {
-					produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+					produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 					return
 				}
 			}
@@ -114,7 +125,7 @@ func produceNextStep(
 
 		err := aprod.produceComplete(rtxn)
 		if err != nil {
-			produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
@@ -128,29 +139,31 @@ func advanceApecsTxn(
 	handlers map[Command]Handler,
 	aprod *ApecsProducer,
 ) {
+	ctx = InjectTraceParent(ctx, rtxn.traceParent)
+	ctx, span, step := platformImpl.Telem.StartStep(ctx, rtxn)
+	defer span.End()
+
 	log.Debug().
-		Str("ReqId", rtxn.txn.ReqId).
+		Str("TraceId", rtxn.txn.TraceId).
 		Msgf("Advancing ApecsTxn: %s %d", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx)
 
-	step := rtxn.currentStep()
-
 	if step.Result != nil {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
 		return
 	}
 
 	if step.ConcernName != tp.ConcernName {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
 		return
 	}
 
 	if step.System != tp.System {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
 		return
 	}
 
 	if step.Key == "" {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: No key in step")
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: No key in step")
 		return
 	}
 
@@ -173,7 +186,7 @@ func advanceApecsTxn(
 				EffectiveTime: now,
 				Payload:       step.Payload,
 			}
-			produceNextStep(rtxn, step, offset, aprod)
+			produceNextStep(span, rtxn, step, offset, aprod)
 			return
 		} else {
 			inst = instanceCache.Get(step.Key)
@@ -201,17 +214,17 @@ func advanceApecsTxn(
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("error in insertSteps")
-					produceApecsTxnError(rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
+					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
 					return
 				}
-				err = aprod.produceCurrentStep(rtxn.txn)
+				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
 				if err != nil {
-					produceApecsTxnError(rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 					return
 				}
 				return
 			} else if inst != nil && step.Command == Command_CREATE {
-				produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
+				produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return
 			}
 		}
@@ -219,25 +232,25 @@ func advanceApecsTxn(
 
 	hndlr, ok := handlers[step.Command]
 	if !ok {
-		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
 		return
 	}
 	if rtxn.txn.Direction == Direction_FORWARD && hndlr.Do == nil {
-		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
 		return
 	}
 	if rtxn.txn.Direction == Direction_REVERSE && hndlr.Undo == nil {
-		produceApecsTxnError(rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
 		return
 	}
 
 	if step.Offset == nil {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
 		return
 	}
 
 	args := StepArgs{
-		ReqId:         rtxn.txn.ReqId,
+		TraceId:       rtxn.txn.TraceId,
 		ProcessedTime: now,
 		Key:           step.Key,
 		Instance:      inst,
@@ -253,7 +266,7 @@ func advanceApecsTxn(
 	}
 
 	if rslt == nil {
-		produceApecsTxnError(rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
 		return
 	}
 
@@ -272,8 +285,21 @@ func advanceApecsTxn(
 		Instance:      rslt.Instance,
 	}
 
+	if step.Result.LogEvents != nil {
+		for _, logEvt := range step.Result.LogEvents {
+			sevMsg := fmt.Sprintf("%s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
+			if logEvt.Sev == Severity_ERR {
+				span.RecordError(errors.New(sevMsg))
+			} else {
+				span.AddEvent(sevMsg)
+			}
+		}
+	}
+	span.SetAttributes(
+		attribute.String("rkcy.code", strconv.Itoa(int(step.Result.Code))),
+	)
 	if step.Result.Code != Code_OK {
-		produceApecsTxnError(rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
+		produceApecsTxnError(span, rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return
 	}
 
@@ -287,7 +313,7 @@ func advanceApecsTxn(
 		instanceCache.Set(step.Key, rslt.Instance, offset)
 	}
 
-	produceNextStep(rtxn, step, offset, aprod)
+	produceNextStep(span, rtxn, step, offset, aprod)
 }
 
 func consumeApecsTopic(
@@ -298,7 +324,7 @@ func consumeApecsTopic(
 	tp *TopicParts,
 	handlers map[Command]Handler,
 ) {
-	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName)
+	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName, nil)
 
 	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
@@ -359,7 +385,7 @@ func consumeApecsTopic(
 							Offset:     int64(msg.TopicPartition.Offset),
 						}
 
-						rtxn, err := newRtApecsTxn(&txn)
+						rtxn, err := newRtApecsTxn(&txn, GetTraceParent(msg))
 						if err != nil {
 							log.Error().
 								Err(err).

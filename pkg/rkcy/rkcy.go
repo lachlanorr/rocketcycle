@@ -22,7 +22,7 @@ type Handler struct {
 }
 
 type StepArgs struct {
-	ReqId         string
+	TraceId       string
 	ProcessedTime *timestamp.Timestamp
 	Key           string
 	Instance      *Buffer
@@ -66,6 +66,8 @@ type PlatformImpl struct {
 	Handlers map[string]ConcernHandlers
 
 	DebugDecoder DebugDecoder
+
+	Telem *Telemetry
 }
 
 func StartPlatform(impl *PlatformImpl) {
@@ -145,17 +147,17 @@ func (rslt *StepResult) Log(sev Severity, format string, args ...interface{}) {
 }
 
 func (rslt *StepResult) LogDebug(format string, args ...interface{}) {
-	rslt.Log(Severity_DEBUG, format, args...)
+	rslt.Log(Severity_DBG, format, args...)
 }
 
 func (rslt *StepResult) LogInfo(format string, args ...interface{}) {
-	rslt.Log(Severity_INFO, format, args...)
+	rslt.Log(Severity_INF, format, args...)
 }
 
 func (rslt *StepResult) LogWarn(format string, args ...interface{}) {
-	rslt.Log(Severity_WARN, format, args...)
+	rslt.Log(Severity_WRN, format, args...)
 }
 
 func (rslt *StepResult) LogError(format string, args ...interface{}) {
-	rslt.Log(Severity_ERROR, format, args...)
+	rslt.Log(Severity_ERR, format, args...)
 }

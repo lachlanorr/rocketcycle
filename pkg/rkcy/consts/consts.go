@@ -5,9 +5,13 @@
 package consts
 
 const (
-	Rkcy            string = "rkcy"
-	DirectiveHeader string = "rkcy.directive"
-	ReqIdHeader     string = "rkcy.req_id"
+	Rkcy string = "rkcy"
+
+	DirectiveHeader   string = "rkcy-directive"
+	TraceParentHeader string = "traceparent"
+
+	RkcyTopic     string = "rkcy.topic"
+	RkcyPartition string = "rkcy.partition"
 
 	MaxPartition                int32 = 1024
 	PlatformAdminRetentionBytes int32 = 10 * 1024 * 1024
