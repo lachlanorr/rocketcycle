@@ -5,67 +5,18 @@
 package rkcy
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 )
 
-type Handler struct {
-	Do   func(ctx context.Context, stepInfo *StepArgs) *StepResult
-	Undo func(ctx context.Context, stepInfo *StepArgs) *StepResult
-}
-
-type StepArgs struct {
-	TraceId       string
-	ProcessedTime *timestamp.Timestamp
-	Key           string
-	Instance      *Buffer
-	Payload       *Buffer
-	Offset        *Offset
-}
-
-type StepResult struct {
-	Code          Code
-	EffectiveTime *timestamp.Timestamp
-	LogEvents     []*LogEvent
-	Instance      *Buffer
-	Payload       *Buffer
-	Offset        *Offset
-}
-
-// These must be implemented, so we enforce this by requiring clients
-// to implement this interface.
-type CrudHandlers interface {
-	Create(ctx context.Context, stepArgs *StepArgs) *StepResult
-	Read(ctx context.Context, stepArgs *StepArgs) *StepResult
-	Update(ctx context.Context, stepArgs *StepArgs) *StepResult
-	Delete(ctx context.Context, stepArgs *StepArgs) *StepResult
-}
-
-type ConcernHandlers struct {
-	Handlers     map[Command]Handler
-	CrudHandlers CrudHandlers
-}
-
-type DebugDecoder interface {
-	Type(*Buffer) string
-	Json(*Buffer) ([]byte, error)
-}
-
 type PlatformImpl struct {
 	Name          string
 	CobraCommands []*cobra.Command
-
-	// string key is ConcernName
-	Handlers map[string]ConcernHandlers
-
-	DebugDecoder DebugDecoder
 
 	Telem *Telemetry
 }
@@ -93,12 +44,12 @@ func BuildFullTopicName(platformName string, concernName string, concernType Pla
 }
 
 type TopicParts struct {
-	PlatformName string
-	ConcernName  string
-	TopicName    string
-	System       System
-	ConcernType  Platform_Concern_Type
-	Generation   int32
+	Platform    string
+	Concern     string
+	Topic       string
+	System      System
+	ConcernType Platform_Concern_Type
+	Generation  int32
 }
 
 func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
@@ -108,14 +59,14 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	}
 
 	tp := TopicParts{
-		PlatformName: parts[1],
-		ConcernName:  parts[2],
-		TopicName:    parts[4],
+		Platform: parts[1],
+		Concern:  parts[2],
+		Topic:    parts[4],
 	}
 
-	if tp.TopicName == consts.Process {
+	if tp.Topic == consts.Process {
 		tp.System = System_PROCESS
-	} else if tp.TopicName == consts.Storage {
+	} else if tp.Topic == consts.Storage {
 		tp.System = System_STORAGE
 	} else {
 		tp.System = System_NO_SYSTEM
@@ -136,7 +87,7 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	return &tp, nil
 }
 
-func (rslt *StepResult) Log(sev Severity, format string, args ...interface{}) {
+func (rslt *ApecsTxn_Step_Result) Log(sev Severity, format string, args ...interface{}) {
 	rslt.LogEvents = append(
 		rslt.LogEvents,
 		&LogEvent{
@@ -146,18 +97,18 @@ func (rslt *StepResult) Log(sev Severity, format string, args ...interface{}) {
 	)
 }
 
-func (rslt *StepResult) LogDebug(format string, args ...interface{}) {
+func (rslt *ApecsTxn_Step_Result) LogDebug(format string, args ...interface{}) {
 	rslt.Log(Severity_DBG, format, args...)
 }
 
-func (rslt *StepResult) LogInfo(format string, args ...interface{}) {
+func (rslt *ApecsTxn_Step_Result) LogInfo(format string, args ...interface{}) {
 	rslt.Log(Severity_INF, format, args...)
 }
 
-func (rslt *StepResult) LogWarn(format string, args ...interface{}) {
+func (rslt *ApecsTxn_Step_Result) LogWarn(format string, args ...interface{}) {
 	rslt.Log(Severity_WRN, format, args...)
 }
 
-func (rslt *StepResult) LogError(format string, args ...interface{}) {
+func (rslt *ApecsTxn_Step_Result) LogError(format string, args ...interface{}) {
 	rslt.Log(Severity_ERR, format, args...)
 }

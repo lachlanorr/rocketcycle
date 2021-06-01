@@ -23,10 +23,10 @@ import (
 )
 
 type Step struct {
-	ConcernName string
-	Command     Command
-	Key         string
-	Payload     []byte
+	Concern string
+	Command string
+	Key     string
+	Payload []byte
 }
 
 type ApecsProducer struct {
@@ -145,7 +145,7 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 
 	kMsg := kafka.Message{
 		TopicPartition: kafka.TopicPartition{
-			Topic:     &respTgt.TopicName,
+			Topic:     &respTgt.Topic,
 			Partition: respTgt.Partition,
 		},
 		Value:   txnSer,
@@ -163,7 +163,7 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget *TopicTarget) {
 	reqMap := make(map[string]*RespChan)
 
-	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", aprod.platformName, respTarget.TopicName, respTarget.Partition)
+	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", aprod.platformName, respTarget.Topic, respTarget.Partition)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        respTarget.BootstrapServers,
@@ -182,7 +182,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
-			Topic:     &respTarget.TopicName,
+			Topic:     &respTarget.Topic,
 			Partition: respTarget.Partition,
 			Offset:    kafka.OffsetStored,
 		},
@@ -309,7 +309,7 @@ func CodeTranslate(code Code) codes.Code {
 func (aprod *ApecsProducer) ExecuteTxnSync(
 	ctx context.Context,
 	canRevert bool,
-	payload *Buffer,
+	payload proto.Message,
 	steps []Step,
 	timeout time.Duration,
 ) (*ApecsTxn_Step_Result, error) {
@@ -372,20 +372,25 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 func (aprod *ApecsProducer) ExecuteTxnAsync(
 	ctx context.Context,
 	canRevert bool,
-	payload *Buffer,
+	payload proto.Message,
 	steps []Step,
 ) error {
 	stepsPb := make([]*ApecsTxn_Step, len(steps))
 	for i, step := range steps {
 		stepsPb[i] = &ApecsTxn_Step{
-			System:      System_PROCESS,
-			ConcernName: step.ConcernName,
-			Command:     step.Command,
-			Key:         step.Key,
+			System:  System_PROCESS,
+			Concern: step.Concern,
+			Command: step.Command,
+			Key:     step.Key,
 		}
 	}
+
 	if payload != nil && len(stepsPb) > 0 {
-		stepsPb[0].Payload = payload
+		payloadBytes, err := proto.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		stepsPb[0].Payload = payloadBytes
 	}
 
 	traceParent := ExtractTraceParent(ctx)
@@ -451,7 +456,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		)
 	}
 
-	prd, err := aprod.getProducer(step.ConcernName, consts.Error)
+	prd, err := aprod.getProducer(step.Concern, consts.Error)
 	if err != nil {
 		return err
 	}
@@ -479,7 +484,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return fmt.Errorf("ApecsProducer.complete TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
 	}
 
-	prd, err := aprod.getProducer(step.ConcernName, consts.Complete)
+	prd, err := aprod.getProducer(step.Concern, consts.Complete)
 	if err != nil {
 		return err
 	}
@@ -513,7 +518,7 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn, traceParent string
 		return fmt.Errorf("ApecsProducer.Process TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
 	}
 
-	prd, err = aprod.getProducer(step.ConcernName, topicName)
+	prd, err = aprod.getProducer(step.Concern, topicName)
 	if err != nil {
 		return err
 	}

@@ -2,15 +2,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package storage
+package concerns
 
 import (
-	"fmt"
+	//"fmt"
 
-	"google.golang.org/protobuf/encoding/protojson"
+	//	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	//"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+)
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+type ResourceType int
+
+const (
+	ResourceType_PLAYER ResourceType = iota
+	ResourceType_CHARACTER
+	ResourceType_FUNDING_REQUEST
+	ResourceType_TRANSFER_REQUEST
 )
 
 var messageFactory = map[ResourceType]func() proto.Message{
@@ -25,6 +33,7 @@ var MessageFactory = map[string]func() proto.Message{
 	"character": messageFactory[ResourceType_CHARACTER],
 }
 
+/*
 type DebugDecoder struct{}
 
 func (DebugDecoder) Type(buffer *rkcy.Buffer) string {
@@ -43,7 +52,9 @@ func (DebugDecoder) Json(buffer *rkcy.Buffer) ([]byte, error) {
 	jsonStr := protojson.Format(msg)
 	return []byte(jsonStr), nil
 }
+*/
 
+/*
 func Unmarshal(buffer *rkcy.Buffer) (proto.Message, error) {
 	if buffer == nil {
 		return nil, fmt.Errorf("Unmarshal failed, nil buffer")
@@ -80,3 +91,4 @@ func Marshal(resourceType int32, msg proto.Message) (*rkcy.Buffer, error) {
 		Data: ser,
 	}, nil
 }
+*/

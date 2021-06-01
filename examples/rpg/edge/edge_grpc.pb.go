@@ -4,7 +4,7 @@ package edge
 
 import (
 	context "context"
-	storage "github.com/lachlanorr/rocketcycle/examples/rpg/storage"
+	concerns "github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -18,15 +18,15 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RpgServiceClient interface {
-	ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*storage.Player, error)
-	CreatePlayer(ctx context.Context, in *storage.Player, opts ...grpc.CallOption) (*storage.Player, error)
-	UpdatePlayer(ctx context.Context, in *storage.Player, opts ...grpc.CallOption) (*storage.Player, error)
+	ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*concerns.Player, error)
+	CreatePlayer(ctx context.Context, in *concerns.Player, opts ...grpc.CallOption) (*concerns.Player, error)
+	UpdatePlayer(ctx context.Context, in *concerns.Player, opts ...grpc.CallOption) (*concerns.Player, error)
 	DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error)
-	ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*storage.Character, error)
-	CreateCharacter(ctx context.Context, in *storage.Character, opts ...grpc.CallOption) (*storage.Character, error)
-	UpdateCharacter(ctx context.Context, in *storage.Character, opts ...grpc.CallOption) (*storage.Character, error)
+	ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*concerns.Character, error)
+	CreateCharacter(ctx context.Context, in *concerns.Character, opts ...grpc.CallOption) (*concerns.Character, error)
+	UpdateCharacter(ctx context.Context, in *concerns.Character, opts ...grpc.CallOption) (*concerns.Character, error)
 	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error)
-	FundCharacter(ctx context.Context, in *storage.FundingRequest, opts ...grpc.CallOption) (*storage.Character, error)
+	FundCharacter(ctx context.Context, in *concerns.FundingRequest, opts ...grpc.CallOption) (*concerns.Character, error)
 }
 
 type rpgServiceClient struct {
@@ -37,8 +37,8 @@ func NewRpgServiceClient(cc grpc.ClientConnInterface) RpgServiceClient {
 	return &rpgServiceClient{cc}
 }
 
-func (c *rpgServiceClient) ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*storage.Player, error) {
-	out := new(storage.Player)
+func (c *rpgServiceClient) ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*concerns.Player, error) {
+	out := new(concerns.Player)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/ReadPlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -46,8 +46,8 @@ func (c *rpgServiceClient) ReadPlayer(ctx context.Context, in *RpgRequest, opts 
 	return out, nil
 }
 
-func (c *rpgServiceClient) CreatePlayer(ctx context.Context, in *storage.Player, opts ...grpc.CallOption) (*storage.Player, error) {
-	out := new(storage.Player)
+func (c *rpgServiceClient) CreatePlayer(ctx context.Context, in *concerns.Player, opts ...grpc.CallOption) (*concerns.Player, error) {
+	out := new(concerns.Player)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/CreatePlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -55,8 +55,8 @@ func (c *rpgServiceClient) CreatePlayer(ctx context.Context, in *storage.Player,
 	return out, nil
 }
 
-func (c *rpgServiceClient) UpdatePlayer(ctx context.Context, in *storage.Player, opts ...grpc.CallOption) (*storage.Player, error) {
-	out := new(storage.Player)
+func (c *rpgServiceClient) UpdatePlayer(ctx context.Context, in *concerns.Player, opts ...grpc.CallOption) (*concerns.Player, error) {
+	out := new(concerns.Player)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/UpdatePlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -73,8 +73,8 @@ func (c *rpgServiceClient) DeletePlayer(ctx context.Context, in *RpgRequest, opt
 	return out, nil
 }
 
-func (c *rpgServiceClient) ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*storage.Character, error) {
-	out := new(storage.Character)
+func (c *rpgServiceClient) ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*concerns.Character, error) {
+	out := new(concerns.Character)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/ReadCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -82,8 +82,8 @@ func (c *rpgServiceClient) ReadCharacter(ctx context.Context, in *RpgRequest, op
 	return out, nil
 }
 
-func (c *rpgServiceClient) CreateCharacter(ctx context.Context, in *storage.Character, opts ...grpc.CallOption) (*storage.Character, error) {
-	out := new(storage.Character)
+func (c *rpgServiceClient) CreateCharacter(ctx context.Context, in *concerns.Character, opts ...grpc.CallOption) (*concerns.Character, error) {
+	out := new(concerns.Character)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/CreateCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -91,8 +91,8 @@ func (c *rpgServiceClient) CreateCharacter(ctx context.Context, in *storage.Char
 	return out, nil
 }
 
-func (c *rpgServiceClient) UpdateCharacter(ctx context.Context, in *storage.Character, opts ...grpc.CallOption) (*storage.Character, error) {
-	out := new(storage.Character)
+func (c *rpgServiceClient) UpdateCharacter(ctx context.Context, in *concerns.Character, opts ...grpc.CallOption) (*concerns.Character, error) {
+	out := new(concerns.Character)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/UpdateCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -109,8 +109,8 @@ func (c *rpgServiceClient) DeleteCharacter(ctx context.Context, in *RpgRequest, 
 	return out, nil
 }
 
-func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *storage.FundingRequest, opts ...grpc.CallOption) (*storage.Character, error) {
-	out := new(storage.Character)
+func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *concerns.FundingRequest, opts ...grpc.CallOption) (*concerns.Character, error) {
+	out := new(concerns.Character)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/FundCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -122,15 +122,15 @@ func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *storage.Fundin
 // All implementations must embed UnimplementedRpgServiceServer
 // for forward compatibility
 type RpgServiceServer interface {
-	ReadPlayer(context.Context, *RpgRequest) (*storage.Player, error)
-	CreatePlayer(context.Context, *storage.Player) (*storage.Player, error)
-	UpdatePlayer(context.Context, *storage.Player) (*storage.Player, error)
+	ReadPlayer(context.Context, *RpgRequest) (*concerns.Player, error)
+	CreatePlayer(context.Context, *concerns.Player) (*concerns.Player, error)
+	UpdatePlayer(context.Context, *concerns.Player) (*concerns.Player, error)
 	DeletePlayer(context.Context, *RpgRequest) (*RpgResponse, error)
-	ReadCharacter(context.Context, *RpgRequest) (*storage.Character, error)
-	CreateCharacter(context.Context, *storage.Character) (*storage.Character, error)
-	UpdateCharacter(context.Context, *storage.Character) (*storage.Character, error)
+	ReadCharacter(context.Context, *RpgRequest) (*concerns.Character, error)
+	CreateCharacter(context.Context, *concerns.Character) (*concerns.Character, error)
+	UpdateCharacter(context.Context, *concerns.Character) (*concerns.Character, error)
 	DeleteCharacter(context.Context, *RpgRequest) (*RpgResponse, error)
-	FundCharacter(context.Context, *storage.FundingRequest) (*storage.Character, error)
+	FundCharacter(context.Context, *concerns.FundingRequest) (*concerns.Character, error)
 	mustEmbedUnimplementedRpgServiceServer()
 }
 
@@ -138,31 +138,31 @@ type RpgServiceServer interface {
 type UnimplementedRpgServiceServer struct {
 }
 
-func (UnimplementedRpgServiceServer) ReadPlayer(context.Context, *RpgRequest) (*storage.Player, error) {
+func (UnimplementedRpgServiceServer) ReadPlayer(context.Context, *RpgRequest) (*concerns.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadPlayer not implemented")
 }
-func (UnimplementedRpgServiceServer) CreatePlayer(context.Context, *storage.Player) (*storage.Player, error) {
+func (UnimplementedRpgServiceServer) CreatePlayer(context.Context, *concerns.Player) (*concerns.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreatePlayer not implemented")
 }
-func (UnimplementedRpgServiceServer) UpdatePlayer(context.Context, *storage.Player) (*storage.Player, error) {
+func (UnimplementedRpgServiceServer) UpdatePlayer(context.Context, *concerns.Player) (*concerns.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdatePlayer not implemented")
 }
 func (UnimplementedRpgServiceServer) DeletePlayer(context.Context, *RpgRequest) (*RpgResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeletePlayer not implemented")
 }
-func (UnimplementedRpgServiceServer) ReadCharacter(context.Context, *RpgRequest) (*storage.Character, error) {
+func (UnimplementedRpgServiceServer) ReadCharacter(context.Context, *RpgRequest) (*concerns.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) CreateCharacter(context.Context, *storage.Character) (*storage.Character, error) {
+func (UnimplementedRpgServiceServer) CreateCharacter(context.Context, *concerns.Character) (*concerns.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) UpdateCharacter(context.Context, *storage.Character) (*storage.Character, error) {
+func (UnimplementedRpgServiceServer) UpdateCharacter(context.Context, *concerns.Character) (*concerns.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCharacter not implemented")
 }
 func (UnimplementedRpgServiceServer) DeleteCharacter(context.Context, *RpgRequest) (*RpgResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) FundCharacter(context.Context, *storage.FundingRequest) (*storage.Character, error) {
+func (UnimplementedRpgServiceServer) FundCharacter(context.Context, *concerns.FundingRequest) (*concerns.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FundCharacter not implemented")
 }
 func (UnimplementedRpgServiceServer) mustEmbedUnimplementedRpgServiceServer() {}
@@ -197,7 +197,7 @@ func _RpgService_ReadPlayer_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _RpgService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(storage.Player)
+	in := new(concerns.Player)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -209,13 +209,13 @@ func _RpgService_CreatePlayer_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/CreatePlayer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).CreatePlayer(ctx, req.(*storage.Player))
+		return srv.(RpgServiceServer).CreatePlayer(ctx, req.(*concerns.Player))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _RpgService_UpdatePlayer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(storage.Player)
+	in := new(concerns.Player)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func _RpgService_UpdatePlayer_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/UpdatePlayer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).UpdatePlayer(ctx, req.(*storage.Player))
+		return srv.(RpgServiceServer).UpdatePlayer(ctx, req.(*concerns.Player))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -269,7 +269,7 @@ func _RpgService_ReadCharacter_Handler(srv interface{}, ctx context.Context, dec
 }
 
 func _RpgService_CreateCharacter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(storage.Character)
+	in := new(concerns.Character)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -281,13 +281,13 @@ func _RpgService_CreateCharacter_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/CreateCharacter",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).CreateCharacter(ctx, req.(*storage.Character))
+		return srv.(RpgServiceServer).CreateCharacter(ctx, req.(*concerns.Character))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _RpgService_UpdateCharacter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(storage.Character)
+	in := new(concerns.Character)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func _RpgService_UpdateCharacter_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/UpdateCharacter",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).UpdateCharacter(ctx, req.(*storage.Character))
+		return srv.(RpgServiceServer).UpdateCharacter(ctx, req.(*concerns.Character))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -323,7 +323,7 @@ func _RpgService_DeleteCharacter_Handler(srv interface{}, ctx context.Context, d
 }
 
 func _RpgService_FundCharacter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(storage.FundingRequest)
+	in := new(concerns.FundingRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func _RpgService_FundCharacter_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/FundCharacter",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).FundCharacter(ctx, req.(*storage.FundingRequest))
+		return srv.(RpgServiceServer).FundCharacter(ctx, req.(*concerns.FundingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

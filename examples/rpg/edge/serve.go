@@ -21,13 +21,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
-	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
 //go:embed static/docs
@@ -76,35 +76,35 @@ func (server) RegisterHandlerFromEndpoint(
 func processCrudRequest(
 	ctx context.Context,
 	traceId string,
-	concernName string,
-	command rkcy.Command,
+	concern string,
+	command string,
 	key string,
-	payload *rkcy.Buffer,
+	payload proto.Message,
 ) (*rkcy.ApecsTxn_Step_Result, error) {
 
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
 	var steps []rkcy.Step
-	if command == rkcy.Command_CREATE || command == rkcy.Command_UPDATE {
-		var validateCmd rkcy.Command
-		if command == rkcy.Command_CREATE {
-			validateCmd = rkcy.Command_VALIDATE_NEW
+	if command == rkcy.CmdCreate || command == rkcy.CmdUpdate {
+		var validateCmd string
+		if command == rkcy.CmdCreate {
+			validateCmd = rkcy.CmdValidateCreate
 		} else {
-			validateCmd = rkcy.Command_VALIDATE_EXISTING
+			validateCmd = rkcy.CmdValidateUpdate
 		}
 
 		// CREATE/UPDATE get a validate step first
 		steps = append(steps, rkcy.Step{
-			ConcernName: concernName,
-			Command:     validateCmd,
-			Key:         key,
+			Concern: concern,
+			Command: validateCmd,
+			Key:     key,
 		})
 	}
 	steps = append(steps, rkcy.Step{
-		ConcernName: concernName,
-		Command:     command,
-		Key:         key,
+		Concern: concern,
+		Command: command,
+		Key:     key,
 	})
 
 	result, err := aprod.ExecuteTxnSync(
@@ -129,13 +129,13 @@ func recordError(span trace.Span, err error) {
 func processCrudRequestPlayer(
 	ctx context.Context,
 	traceId string,
-	command rkcy.Command,
-	plyr *storage.Player,
-) (*storage.Player, error) {
+	command string,
+	plyr *concerns.Player,
+) (*concerns.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	if command == rkcy.Command_CREATE {
+	if command == rkcy.CmdCreate {
 		if plyr.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 			recordError(span, err)
@@ -149,9 +149,8 @@ func processCrudRequestPlayer(
 			return nil, err
 		}
 	}
-	payload, err := storage.Marshal(int32(storage.ResourceType_PLAYER), plyr)
 
-	result, err := processCrudRequest(ctx, traceId, consts.Player, command, plyr.Id, payload)
+	result, err := processCrudRequest(ctx, traceId, consts.Player, command, plyr.Id, plyr)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -161,7 +160,8 @@ func processCrudRequestPlayer(
 		return nil, err
 	}
 
-	mdl, err := storage.Unmarshal(result.Payload)
+	playerResult := &concerns.Player{}
+	err = proto.Unmarshal(result.Payload, playerResult)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -170,15 +170,6 @@ func processCrudRequestPlayer(
 		recordError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-	playerResult, ok := mdl.(*storage.Player)
-	if !ok {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Unmarshal returned wrong type")
-		recordError(span, err)
-		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
-	}
 
 	return playerResult, nil
 }
@@ -186,14 +177,14 @@ func processCrudRequestPlayer(
 func processCrudRequestCharacter(
 	ctx context.Context,
 	traceId string,
-	command rkcy.Command,
-	char *storage.Character,
-) (*storage.Character, error) {
+	command string,
+	char *concerns.Character,
+) (*concerns.Character, error) {
 
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	if command == rkcy.Command_CREATE {
+	if command == rkcy.CmdCreate {
 		if char.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 			recordError(span, err)
@@ -207,9 +198,8 @@ func processCrudRequestCharacter(
 			return nil, err
 		}
 	}
-	payload, err := storage.Marshal(int32(storage.ResourceType_CHARACTER), char)
 
-	result, err := processCrudRequest(ctx, traceId, consts.Character, command, char.Id, payload)
+	result, err := processCrudRequest(ctx, traceId, consts.Character, command, char.Id, char)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -219,7 +209,8 @@ func processCrudRequestCharacter(
 		return nil, err
 	}
 
-	mdl, err := storage.Unmarshal(result.Payload)
+	characterResult := &concerns.Character{}
+	err = proto.Unmarshal(result.Payload, characterResult)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -228,99 +219,80 @@ func processCrudRequestCharacter(
 		recordError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-	characterResult, ok := mdl.(*storage.Character)
-	if !ok {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Unmarshal returned wrong type")
-		recordError(span, err)
-		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
-	}
 
 	return characterResult, nil
 }
 
-func (server) ReadPlayer(ctx context.Context, req *RpgRequest) (*storage.Player, error) {
+func (server) ReadPlayer(ctx context.Context, req *RpgRequest) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.Command_READ, &storage.Player{Id: req.Id})
+	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdRead, &concerns.Player{Id: req.Id})
 }
 
-func (server) CreatePlayer(ctx context.Context, plyr *storage.Player) (*storage.Player, error) {
+func (server) CreatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.Command_CREATE, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdCreate, plyr)
 }
 
-func (server) UpdatePlayer(ctx context.Context, plyr *storage.Player) (*storage.Player, error) {
+func (server) UpdatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.Command_UPDATE, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdUpdate, plyr)
 }
 
 func (server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.Command_DELETE, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.CmdDelete, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) ReadCharacter(ctx context.Context, req *RpgRequest) (*storage.Character, error) {
+func (server) ReadCharacter(ctx context.Context, req *RpgRequest) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.Command_READ, &storage.Character{Id: req.Id})
+	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdRead, &concerns.Character{Id: req.Id})
 }
 
-func (server) CreateCharacter(ctx context.Context, char *storage.Character) (*storage.Character, error) {
+func (server) CreateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.Command_CREATE, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdCreate, char)
 }
 
-func (server) UpdateCharacter(ctx context.Context, char *storage.Character) (*storage.Character, error) {
+func (server) UpdateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.Command_UPDATE, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdUpdate, char)
 }
 
 func (server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.Command_DELETE, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.CmdDelete, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) FundCharacter(ctx context.Context, fr *storage.FundingRequest) (*storage.Character, error) {
+func (server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*concerns.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 	traceId := span.SpanContext().TraceID().String()
 
-	payload, err := storage.Marshal(int32(storage.ResourceType_FUNDING_REQUEST), fr)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to Marshal Payload")
-		recordError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-
 	result, err := aprod.ExecuteTxnSync(
 		ctx,
 		false,
-		payload,
+		fr,
 		[]rkcy.Step{
 			{
-				ConcernName: consts.Character,
-				Command:     commands.Command_FUND,
-				Key:         fr.CharacterId,
+				Concern: consts.Character,
+				Command: "Fund",
+				Key:     fr.CharacterId,
 			},
 		},
 		time.Duration(settings.TimeoutSecs)*time.Second,
@@ -330,7 +302,8 @@ func (server) FundCharacter(ctx context.Context, fr *storage.FundingRequest) (*s
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
-	mdl, err := storage.Unmarshal(result.Payload)
+	characterResult := &concerns.Character{}
+	err = proto.Unmarshal(result.Payload, characterResult)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -338,15 +311,6 @@ func (server) FundCharacter(ctx context.Context, fr *storage.FundingRequest) (*s
 			Msg("Failed to Unmarshal Payload")
 		recordError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-	characterResult, ok := mdl.(*storage.Character)
-	if !ok {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Unmarshal returned wrong type")
-		recordError(span, err)
-		return nil, status.New(codes.Internal, "Unmarshal returned wrong type").Err()
 	}
 	return characterResult, nil
 }
@@ -371,7 +335,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 		rkcy.PlatformName(),
 		&rkcy.TopicTarget{
 			BootstrapServers: settings.BootstrapServers,
-			TopicName:        settings.Topic,
+			Topic:            settings.Topic,
 			Partition:        settings.Partition,
 		},
 	)

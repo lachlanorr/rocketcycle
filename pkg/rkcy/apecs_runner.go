@@ -5,6 +5,7 @@
 package rkcy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -91,16 +92,16 @@ func produceNextStep(
 		if rtxn.txn.Direction == Direction_FORWARD {
 			var storageSteps []*ApecsTxn_Step
 			for _, step := range rtxn.txn.ForwardSteps {
-				if step.Result.Instance != nil {
+				if step.System == System_PROCESS && step.Result.Instance != nil {
 					storageSteps = append(
 						storageSteps,
 						&ApecsTxn_Step{
-							System:      System_STORAGE,
-							ConcernName: step.ConcernName,
-							Command:     Command_UPDATE,
-							Key:         step.Key,
-							Payload:     step.Result.Instance,
-							Offset:      step.Offset,
+							System:  System_STORAGE,
+							Concern: step.Concern,
+							Command: CmdUpdate,
+							Key:     step.Key,
+							Payload: step.Result.Instance,
+							Offset:  step.Offset,
 						},
 					)
 
@@ -136,7 +137,6 @@ func advanceApecsTxn(
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
 	offset *Offset,
-	handlers map[Command]Handler,
 	aprod *ApecsProducer,
 ) {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
@@ -145,15 +145,15 @@ func advanceApecsTxn(
 
 	log.Debug().
 		Str("TraceId", rtxn.txn.TraceId).
-		Msgf("Advancing ApecsTxn: %s %d", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx)
+		Msgf("Advancing ApecsTxn: %s %d %+v", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, step)
 
 	if step.Result != nil {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
 		return
 	}
 
-	if step.ConcernName != tp.ConcernName {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.ConcernName, step.ConcernName)
+	if step.Concern != tp.Concern {
+		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
 		return
 	}
 
@@ -171,14 +171,14 @@ func advanceApecsTxn(
 	now := timestamppb.Now()
 
 	// Read instance from InstanceCache
-	var inst *Buffer
-	if tp.System == System_PROCESS {
+	var inst []byte
+	if step.System == System_PROCESS {
 		step.Offset = offset
 
 		// Special case "REFRESH" command
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
-		if step.Command == Command_REFRESH {
+		if step.Command == CmdRefresh {
 			instanceCache.Set(step.Key, step.Payload, offset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
@@ -191,7 +191,7 @@ func advanceApecsTxn(
 		} else {
 			inst = instanceCache.Get(step.Key)
 
-			nilOk := step.Command == Command_CREATE || step.Command == Command_VALIDATE_NEW
+			nilOk := step.Command == CmdCreate || step.Command == CmdValidateCreate
 			if inst == nil && !nilOk {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
@@ -199,17 +199,17 @@ func advanceApecsTxn(
 				err := rtxn.insertSteps(
 					rtxn.txn.CurrentStepIdx,
 					&ApecsTxn_Step{
-						System:      System_STORAGE,
-						ConcernName: step.ConcernName,
-						Command:     Command_READ,
-						Key:         step.Key,
-						Offset:      offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
+						System:  System_STORAGE,
+						Concern: step.Concern,
+						Command: CmdRead,
+						Key:     step.Key,
+						Offset:  offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 					&ApecsTxn_Step{
-						System:      System_PROCESS,
-						ConcernName: step.ConcernName,
-						Command:     Command_REFRESH,
-						Key:         step.Key,
+						System:  System_PROCESS,
+						Concern: step.Concern,
+						Command: CmdRefresh,
+						Key:     step.Key,
 					},
 				)
 				if err != nil {
@@ -223,25 +223,11 @@ func advanceApecsTxn(
 					return
 				}
 				return
-			} else if inst != nil && step.Command == Command_CREATE {
+			} else if inst != nil && step.Command == CmdCreate {
 				produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return
 			}
 		}
-	}
-
-	hndlr, ok := handlers[step.Command]
-	if !ok {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No handler for command", step.Command)
-		return
-	}
-	if rtxn.txn.Direction == Direction_FORWARD && hndlr.Do == nil {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Do handler function for command", step.Command)
-		return
-	}
-	if rtxn.txn.Direction == Direction_REVERSE && hndlr.Undo == nil {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_UNKNOWN_COMMAND, true, "advanceApecsTxn Command=%d: No Undo handler function for command", step.Command)
-		return
 	}
 
 	if step.Offset == nil {
@@ -249,7 +235,7 @@ func advanceApecsTxn(
 		return
 	}
 
-	args := StepArgs{
+	args := &StepArgs{
 		TraceId:       rtxn.txn.TraceId,
 		ProcessedTime: now,
 		Key:           step.Key,
@@ -258,31 +244,16 @@ func advanceApecsTxn(
 		Offset:        step.Offset,
 	}
 
-	var rslt *StepResult
-	if rtxn.txn.Direction == Direction_FORWARD {
-		rslt = hndlr.Do(ctx, &args)
-	} else {
-		rslt = hndlr.Undo(ctx, &args)
-	}
+	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
 
-	if rslt == nil {
+	if step.Result == nil {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
 		return
 	}
 
-	effectiveTime := now
-	// if handler set EffectiveTime in result, we pick up the change here
-	if rslt.EffectiveTime != nil {
-		effectiveTime = rslt.EffectiveTime
-	}
-
-	step.Result = &ApecsTxn_Step_Result{
-		Code:          rslt.Code,
-		ProcessedTime: now,
-		EffectiveTime: effectiveTime,
-		LogEvents:     rslt.LogEvents,
-		Payload:       rslt.Payload,
-		Instance:      rslt.Instance,
+	step.Result.ProcessedTime = now
+	if step.Result.EffectiveTime == nil {
+		step.Result.EffectiveTime = now
 	}
 
 	if step.Result.LogEvents != nil {
@@ -305,12 +276,13 @@ func advanceApecsTxn(
 
 	// Unless explcitly set by the handler, always assume we should
 	// pass step payload in result to next step
-	if rslt.Payload == nil {
-		rslt.Payload = step.Payload
+	if step.Result.Payload == nil {
+		step.Result.Payload = step.Payload
 	}
 
-	if tp.System == System_PROCESS && rslt.Instance != nil {
-		instanceCache.Set(step.Key, rslt.Instance, offset)
+	// Update InstanceCache if instance contents have changed
+	if tp.System == System_PROCESS && step.Result.Instance != nil && !bytes.Equal(step.Result.Instance, args.Instance) {
+		instanceCache.Set(step.Key, step.Result.Instance, offset)
 	}
 
 	produceNextStep(span, rtxn, step, offset, aprod)
@@ -322,7 +294,6 @@ func consumeApecsTopic(
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
-	handlers map[Command]Handler,
 ) {
 	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName, nil)
 
@@ -391,7 +362,7 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							advanceApecsTxn(ctx, rtxn, tp, offset, handlers, aprod)
+							advanceApecsTxn(ctx, rtxn, tp, offset, aprod)
 						}
 					}
 				} else {
@@ -417,78 +388,8 @@ func consumeApecsTopic(
 	}
 }
 
-type PlatformHandlers map[string]map[System]map[Command]Handler
-
-func processHandlerPayloadToInstance(ctx context.Context, stepInfo *StepArgs) *StepResult {
-	return &StepResult{
-		Code:     Code_OK,
-		Payload:  stepInfo.Payload,
-		Instance: stepInfo.Payload,
-	}
-}
-
-func processHandlerRead(ctx context.Context, stepInfo *StepArgs) *StepResult {
-	return &StepResult{
-		Code:    Code_OK,
-		Payload: stepInfo.Instance,
-	}
-}
-
-func processHandlerDelete(ctx context.Context, stepInfo *StepArgs) *StepResult {
-	instanceCache.Remove(stepInfo.Key)
-	return &StepResult{
-		Code: Code_OK,
-	}
-}
-
-func registerProcessCrudHandlers(handlers map[Command]Handler) {
-	_, ok := handlers[Command_REFRESH]
-	if ok {
-		// Command_REFRESH is always handled explicitly in advanceApecsTxn
-		log.Warn().
-			Msg("Command_REFRESH should never be specified, ignoring")
-	}
-
-	_, ok = handlers[Command_CREATE]
-	if ok {
-		log.Warn().
-			Msg("Overriding Command_CREATE handler")
-	}
-	handlers[Command_CREATE] = Handler{
-		Do: processHandlerPayloadToInstance,
-	}
-
-	_, ok = handlers[Command_UPDATE]
-	if ok {
-		log.Warn().
-			Msg("Overriding Command_UPDATE handler")
-	}
-	handlers[Command_UPDATE] = Handler{
-		Do: processHandlerPayloadToInstance,
-	}
-
-	_, ok = handlers[Command_READ]
-	if ok {
-		log.Warn().
-			Msg("Overriding Command_READ handler")
-	}
-	handlers[Command_READ] = Handler{
-		Do: processHandlerRead,
-	}
-
-	_, ok = handlers[Command_DELETE]
-	if ok {
-		log.Warn().
-			Msg("Overriding Command_DELETE handler")
-	}
-	handlers[Command_DELETE] = Handler{
-		Do: processHandlerDelete,
-	}
-}
-
 func startApecsRunner(
 	ctx context.Context,
-	platHndlrs PlatformHandlers,
 	clusterBootstrap string,
 	fullTopic string,
 	partition int32,
@@ -508,45 +409,11 @@ func startApecsRunner(
 			Msg("startApecsRunner: not an APECS topic")
 	}
 
-	concernHandlers, ok := platHndlrs[tp.ConcernName]
-	if !ok {
-		log.Fatal().
-			Err(err).
-			Str("Topic", fullTopic).
-			Str("Concern", tp.ConcernName).
-			Msg("startApecsRunner: no handlers for concern")
-	}
-
-	var handlers map[Command]Handler
-	if tp.System == System_PROCESS {
-		handlers = concernHandlers[System_PROCESS]
-
-		// Insert handlers for process CRUD ops
-		registerProcessCrudHandlers(handlers)
-	} else if tp.System == System_STORAGE {
-		handlers = concernHandlers[System_STORAGE]
-	} else {
-		log.Fatal().
-			Err(err).
-			Str("Topic", fullTopic).
-			Int("System", int(tp.System)).
-			Msg("startApecsRunner: invalid system")
-	}
-
-	if handlers == nil || len(handlers) == 0 {
-		log.Fatal().
-			Str("Topic", fullTopic).
-			Str("Concern", tp.ConcernName).
-			Int("System", int(tp.System)).
-			Msg("startApecsRunner: empty handlers")
-	}
-
 	go consumeApecsTopic(
 		ctx,
 		clusterBootstrap,
 		fullTopic,
 		partition,
 		tp,
-		handlers,
 	)
 }

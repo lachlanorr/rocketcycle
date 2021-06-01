@@ -26,11 +26,11 @@ BEGIN
       IF _mro_partition != _mro_partition_existing THEN
         RAISE EXCEPTION 'mro_partition (%) != existing (%) for the same generation (%)', _mro_partition, _mro_partition_existing, _mro_generation;
       END IF;
-      IF _mro_offset <= _mro_offset_existing THEN
-        RAISE EXCEPTION 'mro_offset (%) <= existing (%)', _mro_offset, _mro_offset_existing;
+      IF _mro_offset < _mro_offset_existing THEN
+        RAISE EXCEPTION 'mro_offset (%) < existing (%)', _mro_offset, _mro_offset_existing;
       END IF;
     ELSIF _mro_generation < _mro_generation_existing THEN
-      RAISE EXCEPTION 'mro_generation (%) <= existing (%)', _mro_generation, _mro_generation_existing;
+      RAISE EXCEPTION 'mro_generation (%) < existing (%)', _mro_generation, _mro_generation_existing;
     END IF;
 
     UPDATE rpg.player
@@ -85,11 +85,11 @@ BEGIN
       IF _mro_partition != _mro_partition_existing THEN
         RAISE EXCEPTION 'mro_partition (%) != existing (%) for the same generation (%)', _mro_partition, _mro_partition_existing, _mro_generation;
       END IF;
-      IF _mro_offset <= _mro_offset_existing THEN
-        RAISE EXCEPTION 'mro_offset (%) <= existing (%)', _mro_offset, _mro_offset_existing;
+      IF _mro_offset < _mro_offset_existing THEN
+        RAISE EXCEPTION 'mro_offset (%) < existing (%)', _mro_offset, _mro_offset_existing;
       END IF;
     ELSIF _mro_generation < _mro_generation_existing THEN
-      RAISE EXCEPTION 'mro_generation (%) <= existing (%)', _mro_generation, _mro_generation_existing;
+      RAISE EXCEPTION 'mro_generation (%) < existing (%)', _mro_generation, _mro_generation_existing;
     END IF;
 
     DELETE FROM rpg.player WHERE id = _id;

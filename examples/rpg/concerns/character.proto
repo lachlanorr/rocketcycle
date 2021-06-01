@@ -4,23 +4,8 @@
 
 syntax = "proto3";
 
-package rocketcycle.examples.rpg.storage;
-option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/storage";
-
-enum ResourceType {
-    UNDEFINED = 0;
-
-    PLAYER           = 1;
-    CHARACTER        = 2;
-    FUNDING_REQUEST  = 3;
-    TRANSFER_REQUEST = 4;
-}
-
-message Player {
-    string id = 1;
-    string username = 2;
-    bool active = 3;
-}
+package rocketcycle.examples.rpg.concerns;
+option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/concerns";
 
 message Character {
     string id = 1;
@@ -56,4 +41,6 @@ message TransferRequest {
     Character.Currency currency = 3;
 }
 
-
+service CharacterCommands {
+    rpc Fund(FundingRequest) returns (Character);
+}

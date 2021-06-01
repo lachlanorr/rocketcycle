@@ -22,7 +22,7 @@
         },
         {
             "type": "APECS",
-            "name": "player",
+            "name": "Player",
 
             "topics": [
                 {
@@ -41,7 +41,7 @@
         },
         {
             "type": "APECS",
-            "name": "character",
+            "name": "Character",
 
             "topics": [
                 {

@@ -33,10 +33,10 @@ enum Directive {
 }
 
 message AdminProducerDirective {
-    string concern_name = 1;
-    string topic_name   = 2;
-    int32 generation    = 3;
-    int32 partition     = 4;
+    string concern   = 1;
+    string topic     = 2;
+    int32 generation = 3;
+    int32 partition  = 4;
 }
 
 message AdminConsumerDirective {

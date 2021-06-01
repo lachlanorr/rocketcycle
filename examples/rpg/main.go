@@ -9,11 +9,9 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/commands"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
-	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
 )
 
 func main() {
@@ -24,36 +22,6 @@ func main() {
 			edge.CobraCommand(),
 			sim.CobraCommand(),
 		},
-
-		Handlers: map[string]rkcy.ConcernHandlers{
-			consts.Player: {
-				Handlers: map[rkcy.Command]rkcy.Handler{
-					rkcy.Command_VALIDATE_NEW: {
-						Do: commands.PlayerValidate,
-					},
-					rkcy.Command_VALIDATE_EXISTING: {
-						Do: commands.PlayerValidate,
-					},
-				},
-				CrudHandlers: &storage.Player{},
-			},
-			consts.Character: {
-				Handlers: map[rkcy.Command]rkcy.Handler{
-					rkcy.Command_VALIDATE_NEW: {
-						Do: commands.CharacterValidate,
-					},
-					rkcy.Command_VALIDATE_EXISTING: {
-						Do: commands.CharacterValidate,
-					},
-					commands.Command_FUND: {
-						Do: commands.CharacterFund,
-					},
-				},
-				CrudHandlers: &storage.Character{},
-			},
-		},
-
-		DebugDecoder: &storage.DebugDecoder{},
 	}
 
 	rkcy.StartPlatform(&impl)

@@ -15,7 +15,7 @@ type rtApecsTxn struct {
 }
 
 func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
-	if rspTgt != nil && (rspTgt.TopicName == "" || rspTgt.Partition < 0) {
+	if rspTgt != nil && (rspTgt.Topic == "" || rspTgt.Partition < 0) {
 		return nil, fmt.Errorf("NewApecsTxn TraceId=%s TopicTarget=%+v: Invalid TopicTarget", traceId, rspTgt)
 	}
 
@@ -30,15 +30,15 @@ func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRe
 	}
 
 	for _, step := range steps {
-		if step.System == System_PROCESS && step.Command == Command_CREATE {
-			// Inject a refresh step so the cache gets updated in storage CREATE succeeds
+		if step.System == System_PROCESS && step.Command == CmdCreate {
+			// Inject a refresh step so the cache gets updated if storage Create succeeds
 			refreshStep := *step
-			refreshStep.Command = Command_REFRESH
+			refreshStep.Command = CmdRefresh
 			refreshStep.System = System_PROCESS
 			step.System = System_STORAGE // switch to storage CREATE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 			txn.ForwardSteps = append(txn.ForwardSteps, &refreshStep)
-		} else if step.System == System_PROCESS && step.Command == Command_DELETE {
+		} else if step.System == System_PROCESS && step.Command == CmdDelete {
 			storStep := *step
 			storStep.System = System_STORAGE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
@@ -83,7 +83,8 @@ func (rtxn *rtApecsTxn) firstForwardStep() *ApecsTxn_Step {
 
 func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 	currSteps := rtxn.getSteps()
-	if idx >= int32(len(steps)) {
+
+	if idx >= int32(len(currSteps)) {
 		return fmt.Errorf("Index out of range")
 	}
 	newSteps := make([]*ApecsTxn_Step, len(currSteps)+len(steps))
@@ -223,8 +224,4 @@ func (txn *ApecsTxn) DirectionName() string {
 
 func (step *ApecsTxn_Step) SystemName() string {
 	return strings.Title(strings.ToLower(System_name[int32(step.System)]))
-}
-
-func (step *ApecsTxn_Step) CommandName() string {
-	return Command_name[int32(step.Command)]
 }

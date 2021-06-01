@@ -6,7 +6,6 @@ package rkcy
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -80,7 +79,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				if err == nil {
 					txnJson := protojson.Format(proto.Message(&txn))
 					if settings.WatchDecode {
-						txnJsonDec, err := decodeOpaques([]byte(txnJson))
+						txnJsonDec, err := decodeOpaques(ctx, []byte(txnJson))
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -105,13 +104,13 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 		for _, topic := range concern.Topics {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
-				if tp.TopicName == consts.Error || tp.TopicName == consts.Complete {
+				if tp.Topic == consts.Error || tp.Topic == consts.Complete {
 					wt := watchTopic{
 						clusterName:      topic.CurrentCluster.Name,
 						bootstrapServers: topic.CurrentCluster.BootstrapServers,
 						topicName:        topic.CurrentTopic,
 					}
-					if tp.TopicName == consts.Error {
+					if tp.Topic == consts.Error {
 						wt.logLevel = zerolog.ErrorLevel
 					} else {
 						wt.logLevel = zerolog.DebugLevel
@@ -124,46 +123,11 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 	return wts
 }
 
-func decodeOpaques(txnJson []byte) ([]byte, error) {
-	if platformImpl.DebugDecoder.Json == nil {
-		return txnJson, nil
-	}
-
+func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 	var txnTopLvl map[string]interface{}
 	err := json.Unmarshal(txnJson, &txnTopLvl)
 	if err != nil {
 		return nil, err
-	}
-
-	var decBuffer = func(iBuff interface{}) {
-		buff, ok := iBuff.(map[string]interface{})
-		if ok {
-			iResourceType, ok := buff["type"]
-			if ok {
-				fResourceType, ok := iResourceType.(float64)
-				if ok {
-					resourceType := int32(fResourceType)
-					iData, ok := buff["data"]
-					if ok {
-						data, ok := iData.(string)
-						if ok {
-							decData, err := base64.StdEncoding.DecodeString(data)
-							if err == nil {
-								jsonDec, err := platformImpl.DebugDecoder.Json(&Buffer{Type: resourceType, Data: decData})
-								if err == nil {
-									// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
-									var dataUnser interface{}
-									err := json.Unmarshal([]byte(jsonDec), &dataUnser)
-									if err == nil {
-										buff["dataDec"] = dataUnser
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 
 	var decSteps = func(iSteps interface{}) {
@@ -172,23 +136,94 @@ func decodeOpaques(txnJson []byte) ([]byte, error) {
 			for _, iStep := range steps {
 				step, ok := iStep.(map[string]interface{})
 				if ok {
-					iBuff, ok := step["payload"]
+					iConcern, ok := step["concern"]
+					if !ok {
+						continue
+					}
+					concern, ok := iConcern.(string)
+					if !ok {
+						continue
+					}
+
+					iSystem, ok := step["system"]
+					if !ok {
+						continue
+					}
+					systemStr, ok := iSystem.(string)
+					if !ok {
+						continue
+					}
+					systemInt32, ok := System_value[systemStr]
+					if !ok {
+						continue
+					}
+					system := System(systemInt32)
+
+					iCommand, ok := step["command"]
+					if !ok {
+						continue
+					}
+					command, ok := iCommand.(string)
+					if !ok {
+						continue
+					}
+
+					iB64, ok := step["payload"]
 					if ok {
-						decBuffer(iBuff)
+						b64, ok := iB64.(string)
+						if ok {
+							dec, err := decodeArgPayload64(ctx, concern, system, command, b64)
+							if err == nil {
+								// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
+								var dataUnser interface{}
+								err := json.Unmarshal([]byte(dec), &dataUnser)
+								if err == nil {
+									step["payload_decoded"] = dataUnser
+								}
+							} else {
+								step["payload_decode_err"] = err.Error()
+							}
+						}
 					}
 
 					iRslt, ok := step["result"]
 					if ok {
 						rslt, ok := iRslt.(map[string]interface{})
 						if ok {
-							iBuff, ok := rslt["payload"]
+							iB64, ok := rslt["payload"]
 							if ok {
-								decBuffer(iBuff)
+								b64, ok := iB64.(string)
+								if ok {
+									dec, err := decodeResultPayload64(ctx, concern, system, command, b64)
+									if err == nil {
+										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
+										var dataUnser interface{}
+										err := json.Unmarshal([]byte(dec), &dataUnser)
+										if err == nil {
+											rslt["payload_decoded"] = dataUnser
+										}
+									} else {
+										step["payload_decode_err"] = err.Error()
+									}
+								}
 							}
 
-							iBuff, ok = rslt["instance"]
+							iB64, ok = rslt["instance"]
 							if ok {
-								decBuffer(iBuff)
+								b64, ok := iB64.(string)
+								if ok {
+									dec, err := decodeInstance64(ctx, concern, b64)
+									if err == nil {
+										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
+										var dataUnser interface{}
+										err := json.Unmarshal([]byte(dec), &dataUnser)
+										if err == nil {
+											rslt["instance_decoded"] = dataUnser
+										}
+									} else {
+										step["payload_decode_err"] = err.Error()
+									}
+								}
 							}
 						}
 					}

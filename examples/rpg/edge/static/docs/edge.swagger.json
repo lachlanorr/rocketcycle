@@ -23,7 +23,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           },
           "default": {
@@ -39,7 +39,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           }
         ],
@@ -85,7 +85,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           },
           "default": {
@@ -101,7 +101,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.FundingRequest"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.FundingRequest"
             }
           }
         ],
@@ -117,7 +117,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           },
           "default": {
@@ -147,7 +147,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           },
           "default": {
@@ -163,7 +163,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character"
             }
           }
         ],
@@ -179,7 +179,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Player"
             }
           },
           "default": {
@@ -195,7 +195,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Player"
             }
           }
         ],
@@ -241,7 +241,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Player"
             }
           },
           "default": {
@@ -271,7 +271,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Player"
             }
           },
           "default": {
@@ -287,7 +287,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Player"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Player"
             }
           }
         ],
@@ -328,17 +328,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.edge.RpgResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
-        }
-      }
-    },
-    "rocketcycle.examples.rpg.storage.Character": {
+    "rocketcycle.examples.rpg.concerns.Character": {
       "type": "object",
       "properties": {
         "id": {
@@ -354,17 +344,17 @@
           "type": "boolean"
         },
         "currency": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Currency"
+          "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character.Currency"
         },
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Item"
+            "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character.Item"
           }
         }
       }
     },
-    "rocketcycle.examples.rpg.storage.Character.Currency": {
+    "rocketcycle.examples.rpg.concerns.Character.Currency": {
       "type": "object",
       "properties": {
         "gold": {
@@ -385,7 +375,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.storage.Character.Item": {
+    "rocketcycle.examples.rpg.concerns.Character.Item": {
       "type": "object",
       "properties": {
         "id": {
@@ -396,18 +386,18 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.storage.FundingRequest": {
+    "rocketcycle.examples.rpg.concerns.FundingRequest": {
       "type": "object",
       "properties": {
         "characterId": {
           "type": "string"
         },
         "currency": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.storage.Character.Currency"
+          "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Character.Currency"
         }
       }
     },
-    "rocketcycle.examples.rpg.storage.Player": {
+    "rocketcycle.examples.rpg.concerns.Player": {
       "type": "object",
       "properties": {
         "id": {
@@ -418,6 +408,16 @@
         },
         "active": {
           "type": "boolean"
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.edge.RpgResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
         }
       }
     }
