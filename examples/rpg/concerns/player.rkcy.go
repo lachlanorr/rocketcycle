@@ -2,6 +2,84 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/*
+// Implement the following functions to enable this concern:
+
+package concerns
+
+import (
+	"context"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+)
+
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers
+// -----------------------------------------------------------------------------
+func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+    // Read Player instance from storage system and set in inst
+    // Return Offset as well, as was presented on last Create/Update
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
+}
+
+func (inst *Player) Create(ctx context.Context, offset *rkcy.Offset) error {
+    // Create new Player instance in the storage system, store offset as well.
+    // If storage offset is less than offset argument, do not create,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Create")
+}
+
+func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
+    // Update existsing Player instance in the storage system,
+    // store offset as well.
+    // If storage offset is less than offset argument, do not update,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Update")
+}
+
+func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+    // Delete existsing Player instance in the storage system.
+    // If storage offset is less than offset argument, do not delete,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Delete")
+}
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers
+// -----------------------------------------------------------------------------
+func (*Player) ValidateCreate(ctx context.Context, payload *Player) (*Player, error) {
+    // Validate contents of Player 'payload', make any changes appropriately, and return it.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateCreate")
+}
+
+func (inst *Player) ValidateUpdate(ctx context.Context, payload *Player) (*Player, error) {
+    // Validate contents of Player 'payload', make any changes, and return it.
+    // 'inst' contains current instance if that is important for validation.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateUpdate")
+}
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers (END)
+// -----------------------------------------------------------------------------
+*/
+
 package concerns
 
 import (

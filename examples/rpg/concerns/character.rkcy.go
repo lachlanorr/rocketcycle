@@ -2,6 +2,87 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+/*
+// Implement the following functions to enable this concern:
+
+package concerns
+
+import (
+	"context"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+)
+
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers
+// -----------------------------------------------------------------------------
+func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+    // Read Character instance from storage system and set in inst
+    // Return Offset as well, as was presented on last Create/Update
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Read")
+}
+
+func (inst *Character) Create(ctx context.Context, offset *rkcy.Offset) error {
+    // Create new Character instance in the storage system, store offset as well.
+    // If storage offset is less than offset argument, do not create,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Create")
+}
+
+func (inst *Character) Update(ctx context.Context, offset *rkcy.Offset) error {
+    // Update existsing Character instance in the storage system,
+    // store offset as well.
+    // If storage offset is less than offset argument, do not update,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Update")
+}
+
+func (inst *Character) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+    // Delete existsing Character instance in the storage system.
+    // If storage offset is less than offset argument, do not delete,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Delete")
+}
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers
+// -----------------------------------------------------------------------------
+func (*Character) ValidateCreate(ctx context.Context, payload *Character) (*Character, error) {
+    // Validate contents of Character 'payload', make any changes appropriately, and return it.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.ValidateCreate")
+}
+
+func (inst *Character) ValidateUpdate(ctx context.Context, payload *Character) (*Character, error) {
+    // Validate contents of Character 'payload', make any changes, and return it.
+    // 'inst' contains current instance if that is important for validation.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.ValidateUpdate")
+}
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers
+// -----------------------------------------------------------------------------
+func (inst *Character) Fund(ctx context.Context, payload *FundingRequest) (*Character, error) {
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Fund")
+}
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers (END)
+// -----------------------------------------------------------------------------
+*/
+
 package concerns
 
 import (

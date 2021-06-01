@@ -95,6 +95,7 @@ enum Code {
     CONSTRAINT_VIOLATION = 5;
 	UNKNOWN_COMMAND = 6;
     INVALID_ARGUMENT = 7;
+    NOT_IMPLEMENTED = 8;
 
     // User defined codes should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_CODE = 32;

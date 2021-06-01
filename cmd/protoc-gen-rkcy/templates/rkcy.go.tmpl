@@ -1,5 +1,89 @@
 {{ .LeadingComments }}
 
+/*
+// Implement the following functions to enable this concern:
+
+package {{ .Package }}
+
+import (
+	"context"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+)
+
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers
+// -----------------------------------------------------------------------------
+func (inst *{{ .Name }}) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+    // Read {{ .Name }} instance from storage system and set in inst
+    // Return Offset as well, as was presented on last Create/Update
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Read")
+}
+
+func (inst *{{ .Name }}) Create(ctx context.Context, offset *rkcy.Offset) error {
+    // Create new {{ .Name }} instance in the storage system, store offset as well.
+    // If storage offset is less than offset argument, do not create,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Create")
+}
+
+func (inst *{{ .Name }}) Update(ctx context.Context, offset *rkcy.Offset) error {
+    // Update existsing {{ .Name }} instance in the storage system,
+    // store offset as well.
+    // If storage offset is less than offset argument, do not update,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Update")
+}
+
+func (inst *{{ .Name }}) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+    // Delete existsing {{ .Name }} instance in the storage system.
+    // If storage offset is less than offset argument, do not delete,
+    // as this is indicative of a message duplicate.
+
+    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Delete")
+}
+// -----------------------------------------------------------------------------
+// STORAGE CRUD Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers
+// -----------------------------------------------------------------------------
+func (*{{ .Name }}) ValidateCreate(ctx context.Context, payload *{{ .Name }}) (*{{ .Name }}, error) {
+    // Validate contents of {{ .Name }} 'payload', make any changes appropriately, and return it.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateCreate")
+}
+
+func (inst *{{ .Name }}) ValidateUpdate(ctx context.Context, payload *{{ .Name }}) (*{{ .Name }}, error) {
+    // Validate contents of {{ .Name }} 'payload', make any changes, and return it.
+    // 'inst' contains current instance if that is important for validation.
+
+    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateUpdate")
+}
+// -----------------------------------------------------------------------------
+// PROCESS Standard Handlers (END)
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers
+// -----------------------------------------------------------------------------
+{{- range .Commands }}
+func (inst *{{ $.Name }}) {{ .Name }}(ctx context.Context{{ if .HasInput }}, payload *{{ .InputType }}{{ end }}) {{ if .HasOutput }}(*{{ .OutputType }}, error){{ else }}error{{ end }} {
+    return {{ if .HasInput }}nil, {{ end }}rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $.Name }}.{{ .Name }}")
+}
+
+{{- end }}
+// -----------------------------------------------------------------------------
+// PROCESS Command Handlers (END)
+// -----------------------------------------------------------------------------
+*/
+
 package {{ .Package }}
 
 import (
