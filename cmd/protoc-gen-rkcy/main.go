@@ -23,6 +23,7 @@ var templates embed.FS
 
 type concernInfo struct {
 	Name            string
+	Package         string
 	Message         *descriptorpb.DescriptorProto
 	Service         *descriptorpb.ServiceDescriptorProto
 	Commands        []*commandInfo
@@ -38,9 +39,12 @@ type commandInfo struct {
 }
 
 func findConcern(fdp *descriptorpb.FileDescriptorProto) (*concernInfo, error) {
-	typePrefix := "." + *fdp.Package + "."
 
 	ci := concernInfo{Commands: make([]*commandInfo, 0)}
+
+	typePrefix := "." + *fdp.Package + "."
+	packageParts := strings.Split(*fdp.Package, ".")
+	ci.Package = packageParts[len(packageParts)-1]
 
 	for _, svc := range fdp.Service {
 		if strings.HasSuffix(*svc.Name, "Commands") {
