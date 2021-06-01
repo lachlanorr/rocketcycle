@@ -1,6 +1,4 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+{{ .LeadingComments }}
 
 package concerns
 
@@ -15,21 +13,21 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-func (*Player) Concern() string {
-	return "Player"
+func (*{{ .Name }}) Concern() string {
+	return "{{ .Name }}"
 }
 
-func (inst *Player) Key() string {
+func (inst *{{ .Name }}) Key() string {
 	return inst.Id
 }
 
-func (inst *Player) SetKey(key string) {
+func (inst *{{ .Name }}) SetKey(key string) {
 	inst.Id = key
 }
 
 func init() {
 	decodeInst := func(ctx context.Context, buffer []byte) (string, error) {
-		pb := &Player{}
+		pb := &{{ .Name }}{}
 		err := proto.Unmarshal(buffer, pb)
 		if err != nil {
 			return "", err
@@ -42,7 +40,7 @@ func init() {
 	}
 
 	rkcy.RegisterConcernHandler(
-		"Player",
+		"{{ .Name }}",
 		// Handler
 		func(ctx context.Context, system rkcy.System, command string, direction rkcy.Direction, args *rkcy.StepArgs) *rkcy.ApecsTxn_Step_Result {
 			var err error
@@ -60,7 +58,7 @@ func init() {
 				case rkcy.CmdCreate:
 					{
 						if direction == rkcy.Direction_FORWARD {
-							payloadIn := &Player{}
+							payloadIn := &{{ .Name }}{}
 							err = proto.Unmarshal(args.Payload, payloadIn)
 							rslt.SetResult(err)
 							if err == nil {
@@ -73,7 +71,7 @@ func init() {
 								}
 							}
 						} else {
-							del := &Player{}
+							del := &{{ .Name }}{}
 							err = del.Delete(ctx, args.Key, args.ForwardResult.Offset)
 							rslt.SetResult(err)
 						}
@@ -81,7 +79,7 @@ func init() {
 				case rkcy.CmdRead:
 					{
 						if direction == rkcy.Direction_FORWARD {
-							inst := &Player{}
+							inst := &{{ .Name }}{}
 							rslt.Offset, err = inst.Read(ctx, args.Key)
 							rslt.SetResult(err)
 							if err == nil {
@@ -93,11 +91,11 @@ func init() {
 					{
 						if direction == rkcy.Direction_FORWARD {
 							// capture orig so we can roll this back
-							orig := &Player{}
+							orig := &{{ .Name }}{}
 							_, err := orig.Read(ctx, args.Key)
 							rslt.SetResult(err)
 							if err == nil {
-								payloadIn := &Player{}
+								payloadIn := &{{ .Name }}{}
 								err = proto.Unmarshal(args.Payload, payloadIn)
 								rslt.SetResult(err)
 								if err == nil {
@@ -115,7 +113,7 @@ func init() {
 								}
 							}
 						} else {
-							orig := &Player{}
+							orig := &{{ .Name }}{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
 							rslt.SetResult(err)
 							if err == nil {
@@ -128,11 +126,11 @@ func init() {
 					{
 						if direction == rkcy.Direction_FORWARD {
 							// capture orig so we can roll this back
-							orig := &Player{}
+							orig := &{{ .Name }}{}
 							_, err := orig.Read(ctx, args.Key)
 							rslt.SetResult(err)
 							if err == nil {
-								del := &Player{}
+								del := &{{ .Name }}{}
 								err = del.Delete(ctx, args.Key, args.Offset)
 								rslt.SetResult(err)
 								if err == nil {
@@ -143,7 +141,7 @@ func init() {
 								}
 							}
 						} else {
-							orig := &Player{}
+							orig := &{{ .Name }}{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
 							rslt.SetResult(err)
 							if err == nil {
@@ -157,7 +155,7 @@ func init() {
 					return rslt
 				}
 			} else if system == rkcy.System_PROCESS {
-				inst := &Player{}
+				inst := &{{ .Name }}{}
 				if args.Instance != nil {
 					err = proto.Unmarshal(args.Instance, inst)
 					if err != nil {
@@ -175,7 +173,7 @@ func init() {
 				// process handlers
 				case rkcy.CmdValidateCreate:
 					{
-						payloadIn := &Player{}
+						payloadIn := &{{ .Name }}{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
 						rslt.SetResult(err)
 						if err == nil {
@@ -189,7 +187,7 @@ func init() {
 					}
 				case rkcy.CmdValidateUpdate:
 					{
-						payloadIn := &Player{}
+						payloadIn := &{{ .Name }}{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
 						rslt.SetResult(err)
 						if err == nil {
@@ -201,6 +199,28 @@ func init() {
 							}
 						}
 					}
+{{- range .Commands }}
+				case "{{ .Name }}":
+					{
+						{{- if .HasInput }}
+						payloadIn := &{{ .InputType }}{}
+						err = proto.Unmarshal(args.Payload, payloadIn)
+						rslt.SetResult(err)
+						if err == nil {
+						{{- end }}
+							{{ if .HasOutput }}payloadOut, {{ end }}err := inst.{{ .Name }}(ctx{{ if .HasInput }}, payloadIn{{ end }})
+							rslt.SetResult(err)
+							{{- if .HasOutput }}
+							if err == nil {
+								rslt.Payload, err = proto.Marshal(payloadOut)
+								rslt.SetResult(err)
+							}
+							{{- end }}
+						{{- if .HasInput }}
+						}
+						{{- end }}
+					}
+{{- end }}
 				default:
 					rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
 					return rslt
@@ -249,6 +269,27 @@ func init() {
 					fallthrough
 				case rkcy.CmdValidateUpdate:
 					return decodeInst(ctx, buffer)
+{{- range .Commands }}
+				{{- if .HasInput }}
+				case "{{ .Name }}":
+					{{- if eq .InputType $.Name }}
+					return decodeInst(ctx, buffer)
+					{{ else }}
+					{
+						pb := &{{ .InputType }}{}
+						err := proto.Unmarshal(buffer, pb)
+						if err != nil {
+							return "", err
+						}
+						decoded, err := protojson.Marshal(pb)
+						if err != nil {
+							return "", err
+						}
+						return string(decoded), nil
+					}
+					{{- end }}
+				{{- end }}
+{{- end }}
 				default:
 					return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 				}
@@ -280,6 +321,27 @@ func init() {
 					fallthrough
 				case rkcy.CmdValidateUpdate:
 					return decodeInst(ctx, buffer)
+{{- range .Commands }}
+				{{- if .HasOutput }}
+				case "{{ .Name }}":
+					{{- if eq .OutputType $.Name }}
+					return decodeInst(ctx, buffer)
+					{{- else }}
+					{
+						pb := &{{ .OutputType }}{}
+						err := proto.Unmarshal(buffer, pb)
+						if err != nil {
+							return "", err
+						}
+						decoded, err := protojson.Marshal(pb)
+						if err != nil {
+							return "", err
+						}
+						return string(decoded), nil
+					}
+					{{- end }}
+				{{- end }}
+{{- end }}
 				default:
 					return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 				}

@@ -15,7 +15,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-func (*Character) Type() string {
+func (*Character) Concern() string {
 	return "Character"
 }
 
@@ -306,7 +306,7 @@ func init() {
 				case rkcy.CmdValidateCreate:
 					fallthrough
 				case rkcy.CmdValidateUpdate:
-					fallthrough
+					return decodeInst(ctx, buffer)
 				case "Fund":
 					return decodeInst(ctx, buffer)
 				default:

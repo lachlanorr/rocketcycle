@@ -12,3 +12,5 @@ message Player {
     string username = 2;
     bool active = 3;
 }
+
+service PlayerCommands {}
