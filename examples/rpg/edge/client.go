@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/storage"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 )
 
 func readResource(resourceName string, id string) (int, []byte, error) {
@@ -86,7 +86,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 }
 
 func cobraCreateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := storage.MessageFactory[args[0]]
+	msgFac, ok := concerns.MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -110,7 +110,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 }
 
 func cobraUpdateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := storage.MessageFactory[args[0]]
+	msgFac, ok := concerns.MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -173,9 +173,9 @@ func deleteResource(resourceName string, id string) (int, error) {
 func cobraFundCharacter(cmd *cobra.Command, args []string) {
 	path := "/v1/character/fund?pretty"
 
-	fr := storage.FundingRequest{
+	fr := concerns.FundingRequest{
 		CharacterId: args[0],
-		Currency:    &storage.Character_Currency{},
+		Currency:    &concerns.Character_Currency{},
 	}
 
 	err := reflectKeyValArgs(fr.Currency, args[1:], false)

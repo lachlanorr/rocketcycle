@@ -87,16 +87,16 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 	var ok bool
 
 	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
-	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.ClusterName]
+	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.Cluster]
 	if !ok {
-		return nil, fmt.Errorf("Topic '%s' has invalid Current ClusterName '%s'", topics.Name, topics.Current.ClusterName)
+		return nil, fmt.Errorf("Topic '%s' has invalid Current Cluster '%s'", topics.Name, topics.Current.Cluster)
 	}
 
 	if topics.Future != nil {
 		rtTops.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
-		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.ClusterName]
+		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.Cluster]
 		if !ok {
-			return nil, fmt.Errorf("Topic '%s' has invalid Future ClusterName '%s'", topics.Name, topics.Future.ClusterName)
+			return nil, fmt.Errorf("Topic '%s' has invalid Future Cluster '%s'", topics.Name, topics.Future.Cluster)
 		}
 	}
 	return &rtTops, nil
@@ -110,8 +110,8 @@ func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_C
 	if topic.Generation <= 0 {
 		topic.Generation = 1
 	}
-	if topic.ClusterName == "" {
-		topic.ClusterName = defaultCluster
+	if topic.Cluster == "" {
+		topic.Cluster = defaultCluster
 	}
 	if topic.PartitionCount <= 0 {
 		topic.PartitionCount = 1
@@ -203,7 +203,7 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 		for _, topics := range concern.Topics {
 			topicNames = append(topicNames, topics.Name)
 			if defaultCluster == "" && topics.Current != nil {
-				defaultCluster = topics.Current.ClusterName
+				defaultCluster = topics.Current.Cluster
 			}
 		}
 
@@ -286,11 +286,11 @@ func validateTopic(topic *Platform_Concern_Topic, clusters map[string]*Platform_
 	if topic.Generation == 0 {
 		return errors.New("Topic missing Generation field")
 	}
-	if topic.ClusterName == "" {
-		return errors.New("Topic missing ClusterName field")
+	if topic.Cluster == "" {
+		return errors.New("Topic missing Cluster field")
 	}
-	if _, ok := clusters[topic.ClusterName]; !ok {
-		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.ClusterName)
+	if _, ok := clusters[topic.Cluster]; !ok {
+		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.Cluster)
 	}
 	if topic.PartitionCount < 1 || topic.PartitionCount > consts.MaxPartition {
 		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)

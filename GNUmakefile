@@ -14,10 +14,13 @@ GIT_DIRTY := $(if $(shell git status --porcelain),+)
 
 GO_LDFLAGS := "-X github.com/lachlanorr/rocketcycle/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
+# Make sure our compiled protoc-gen-rkcy is available for protoc
+export PATH := $(BUILD_BIN_DIR):$(PATH)
+
 default: all
 
 .PHONY: all
-all: check proto examples ## build everything
+all: check protoc-gen-rkcy proto examples ## build everything
 
 .PHONY: check
 check: ## check license headers in files
@@ -29,12 +32,20 @@ clean: ## remove all build artifacts
 	@rm -rf ./pkg/rkcy/pb/*.pb.go ./pkg/rkcy/pb/*_grpc.pb.go ./pkg/rkcy/pb/*.pb.gw.go
 	@rm -rf ./examples/rpg/pb/*.pb.go ./examples/rpg/pb/*_grpc.pb.go ./examples/rpg/pb/*.pb.gw.go
 
-.PHONY: proto
+.PHONY: proto protoc-gen-rkcy
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
 	@go generate pkg/rkcy/gen.go
-	@go generate examples/rpg/storage/gen.go
+	@go generate examples/rpg/concerns/gen.go
 	@go generate examples/rpg/edge/gen.go
+
+.PHONY: protoc-gen-rkcy
+protoc-gen-rkcy: ## compile rkcy mgmt app
+	@echo "==> Building $@..."
+	@go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o $(BUILD_BIN_DIR)/protoc-gen-rkcy \
+	./cmd/protoc-gen-rkcy
 
 .PHONY: examples
 examples: rpg ## compile rpg example

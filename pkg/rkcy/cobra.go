@@ -29,10 +29,9 @@ type Settings struct {
 }
 
 var (
-	settings         Settings = Settings{Partition: -1}
-	platformImpl     *PlatformImpl
-	platformHandlers PlatformHandlers
-	telem            *Telemetry
+	settings     Settings = Settings{Partition: -1}
+	platformImpl *PlatformImpl
+	telem        *Telemetry
 )
 
 func Telem() *Telemetry {
@@ -52,70 +51,14 @@ func prepPlatformImpl(impl *PlatformImpl) {
 	platformImpl = impl
 	initPlatformName(impl.Name)
 	prepLogging(impl.Name)
-
-	platformHandlers = make(map[string]map[System]map[Command]Handler)
-
-	if impl.Handlers == nil {
-		log.Fatal().
-			Msg("No PlatformImpl.Handlers specificed")
-	}
-	for concernName, concernHandlers := range impl.Handlers {
-		platformHandlers[concernName] = make(map[System]map[Command]Handler)
-		if concernHandlers.CrudHandlers == nil {
-			log.Fatal().
-				Str("Concern", concernName).
-				Msg("No CrudHandlers for concern")
-		}
-		if concernHandlers.Handlers == nil || len(concernHandlers.Handlers) == 0 {
-			log.Fatal().
-				Str("Concern", concernName).
-				Msg("No ProcessHandlers specified for concern")
-		}
-		platformHandlers[concernName][System_PROCESS] = concernHandlers.Handlers
-		// Apply CrudHandlers into storage handlers
-		platformHandlers[concernName][System_STORAGE] = make(map[Command]Handler)
-		platformHandlers[concernName][System_STORAGE][Command_CREATE] = Handler{
-			Do: concernHandlers.CrudHandlers.Create,
-		}
-		platformHandlers[concernName][System_STORAGE][Command_READ] = Handler{
-			Do: concernHandlers.CrudHandlers.Read,
-		}
-		platformHandlers[concernName][System_STORAGE][Command_UPDATE] = Handler{
-			Do: concernHandlers.CrudHandlers.Update,
-		}
-		platformHandlers[concernName][System_STORAGE][Command_DELETE] = Handler{
-			Do: concernHandlers.CrudHandlers.Delete,
-		}
-	}
-}
-
-func preRunCobra(cmd *cobra.Command, args []string) {
-	/*
-		if settings.BootstrapServers != "" {
-			log.Logger = log.With().
-				Str("BootstrapServers", settings.BootstrapServers).
-				Logger()
-		}
-		if settings.Topic != "" {
-			log.Logger = log.With().
-				Str("Topic", settings.Topic).
-				Logger()
-		}
-		if settings.Partition != -1 {
-			log.Logger = log.With().
-				Int32("Partition", settings.Partition).
-				Logger()
-		}
-	*/
 }
 
 func runCobra(impl *PlatformImpl) {
 	prepPlatformImpl(impl)
 
 	rootCmd := &cobra.Command{
-		Use:              platformName,
-		Short:            "Rocketcycle Platform - " + platformName,
-		PersistentPreRun: preRunCobra,
+		Use:   platformName,
+		Short: "Rocketcycle Platform - " + platformName,
 	}
 
 	// admin sub command
@@ -140,14 +83,20 @@ func runCobra(impl *PlatformImpl) {
 	adminReadCmd.AddCommand(adminReadPlatformCmd)
 
 	adminDecodeCmd := &cobra.Command{
-		Use:       "decode resource_id base64_payload",
-		Short:     "decode and print base64 payload using JsonDebugDecoder",
-		Run:       cobraAdminDecode,
-		Args:      cobra.MinimumNArgs(2),
-		ValidArgs: []string{"resource_id", "base64_payload"},
+		Use:   "decode",
+		Short: "decode base64 opaque payloads",
 	}
-	adminDecodeCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
 	adminCmd.AddCommand(adminDecodeCmd)
+	adminDecodeCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+
+	adminDecodeInstanceCmd := &cobra.Command{
+		Use:       "instance concern base64_payload",
+		Short:     "decode and print base64 payload",
+		Run:       cobraAdminDecodeInstance,
+		Args:      cobra.MinimumNArgs(2),
+		ValidArgs: []string{"concern", "base64_payload"},
+	}
+	adminDecodeCmd.AddCommand(adminDecodeInstanceCmd)
 
 	adminServeCmd := &cobra.Command{
 		Use:   "serve",

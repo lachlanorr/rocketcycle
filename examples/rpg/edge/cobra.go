@@ -26,32 +26,11 @@ var (
 	settings Settings = Settings{Partition: -1}
 )
 
-func preRunCobra(cmd *cobra.Command, args []string) {
-	/*
-		if settings.BootstrapServers != "" {
-			log.Logger = log.With().
-				Str("BootstrapServers", settings.BootstrapServers).
-				Logger()
-		}
-		if settings.Topic != "" {
-			log.Logger = log.With().
-				Str("Topic", settings.Topic).
-				Logger()
-		}
-		if settings.Partition != -1 {
-			log.Logger = log.With().
-				Int32("Partition", settings.Partition).
-				Logger()
-		}
-	*/
-}
-
 func CobraCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:              "edge",
-		Short:            "RPG Edge Rest Api",
-		Long:             "Client interaction rest api that provides synchronous access over http",
-		PersistentPreRun: preRunCobra,
+		Use:   "edge",
+		Short: "RPG Edge Rest Api",
+		Long:  "Client interaction rest api that provides synchronous access over http",
 	}
 
 	readCmd := &cobra.Command{

@@ -11,24 +11,46 @@ import "google/api/annotations.proto";
 import "apecs.proto";
 import "platform.proto";
 
-message PlatformArgs {
+message DecodeInstanceArgs {
+    string concern = 1;
+    string payload64 = 2;
+}
+
+message DecodePayloadArgs {
+    string concern = 1;
+    System system = 2;
+    string command = 3;
+    string payload64 = 4;
 }
 
 message DecodeResponse {
-    string type = 1;
-    bytes json = 2;
+    string json = 2;
 }
 
 service AdminService {
-    rpc Platform(PlatformArgs) returns (rkcy.Platform) {
+    rpc Platform(Void) returns (rkcy.Platform) {
         option (google.api.http) = {
             get: "/v1/platform/read"
         };
     }
 
-    rpc Decode(Buffer) returns (DecodeResponse) {
+    rpc DecodeInstance(DecodeInstanceArgs) returns (DecodeResponse) {
         option (google.api.http) = {
-            post: "/v1/decode"
+            post: "/v1/decode/instance"
+            body: "*"
+        };
+    }
+
+    rpc DecodeArgPayload(DecodePayloadArgs) returns (DecodeResponse) {
+        option (google.api.http) = {
+            post: "/v1/decode/arg"
+            body: "*"
+        };
+    }
+
+    rpc DecodeResultPayload(DecodePayloadArgs) returns (DecodeResponse) {
+        option (google.api.http) = {
+            post: "/v1/decode/result"
             body: "*"
         };
     }

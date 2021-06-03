@@ -89,7 +89,7 @@ message Platform {
             // incrementing generation id, +1 every time we migrate a logical topic
             int32 generation      = 1;
             // kafka cluster topic exists within
-            string cluster_name   = 2;
+            string cluster        = 2;
             int32 partition_count = 3;
 
             // How to determine which partiton messages are produced to

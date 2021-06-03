@@ -10,7 +10,8 @@ option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/edge";
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
-import "examples/rpg/storage/storage.proto";
+import "examples/rpg/concerns/player.proto";
+import "examples/rpg/concerns/character.proto";
 
 message RpgRequest {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
@@ -21,18 +22,18 @@ message RpgResponse {
 }
 
 service RpgService {
-    rpc ReadPlayer(RpgRequest) returns (rocketcycle.examples.rpg.storage.Player) {
+    rpc ReadPlayer(RpgRequest) returns (rocketcycle.examples.rpg.concerns.Player) {
         option (google.api.http) = {
             get: "/v1/player/read/{id}"
         };
     }
-    rpc CreatePlayer(rocketcycle.examples.rpg.storage.Player) returns (rocketcycle.examples.rpg.storage.Player) {
+    rpc CreatePlayer(rocketcycle.examples.rpg.concerns.Player) returns (rocketcycle.examples.rpg.concerns.Player) {
         option (google.api.http) = {
             post: "/v1/player/create"
             body: "*"
         };
     }
-    rpc UpdatePlayer(rocketcycle.examples.rpg.storage.Player) returns (rocketcycle.examples.rpg.storage.Player) {
+    rpc UpdatePlayer(rocketcycle.examples.rpg.concerns.Player) returns (rocketcycle.examples.rpg.concerns.Player) {
         option (google.api.http) = {
             post: "/v1/player/update"
             body: "*"
@@ -45,18 +46,18 @@ service RpgService {
     }
 
 
-    rpc ReadCharacter(RpgRequest) returns (rocketcycle.examples.rpg.storage.Character) {
+    rpc ReadCharacter(RpgRequest) returns (rocketcycle.examples.rpg.concerns.Character) {
         option (google.api.http) = {
             get: "/v1/character/read/{id}"
         };
     }
-    rpc CreateCharacter(rocketcycle.examples.rpg.storage.Character) returns (rocketcycle.examples.rpg.storage.Character) {
+    rpc CreateCharacter(rocketcycle.examples.rpg.concerns.Character) returns (rocketcycle.examples.rpg.concerns.Character) {
         option (google.api.http) = {
             post: "/v1/character/create"
             body: "*"
         };
     }
-    rpc UpdateCharacter(rocketcycle.examples.rpg.storage.Character) returns (rocketcycle.examples.rpg.storage.Character) {
+    rpc UpdateCharacter(rocketcycle.examples.rpg.concerns.Character) returns (rocketcycle.examples.rpg.concerns.Character) {
         option (google.api.http) = {
             post: "/v1/character/update"
             body: "*"
@@ -68,7 +69,7 @@ service RpgService {
         };
     }
 
-    rpc FundCharacter(rocketcycle.examples.rpg.storage.FundingRequest) returns (rocketcycle.examples.rpg.storage.Character) {
+    rpc FundCharacter(rocketcycle.examples.rpg.concerns.FundingRequest) returns (rocketcycle.examples.rpg.concerns.Character) {
         option (google.api.http) = {
             post: "/v1/character/fund"
             body: "*"

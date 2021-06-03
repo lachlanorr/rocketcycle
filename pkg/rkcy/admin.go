@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"embed"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -80,39 +79,27 @@ func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
 	fmt.Println(string(body))
 }
 
-func cobraAdminDecode(cmd *cobra.Command, args []string) {
-	path := "/v1/decode"
-
+func cobraAdminDecodeInstance(cmd *cobra.Command, args []string) {
+	path := "/v1/decode/instance"
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
 	var err error
 
-	intType, err := strconv.Atoi(args[0])
+	rpcArgs := DecodeInstanceArgs{
+		Concern:   args[0],
+		Payload64: args[1],
+	}
+
+	rpcArgsSer, err := protojson.Marshal(&rpcArgs)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
-			Msg("Failed to parse Type arg")
+			Msg("Failed to marshal rpcArgs")
 	}
 
-	buff := Buffer{}
-	buff.Type = int32(intType)
-	buff.Data, err = base64.StdEncoding.DecodeString(args[1])
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to decode data")
-	}
-
-	buffSer, err := protojson.Marshal(&buff)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to marshal Buffer")
-	}
-
-	contentRdr := bytes.NewReader(buffSer)
+	contentRdr := bytes.NewReader(rpcArgsSer)
 	resp, err := http.Post(settings.AdminAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
@@ -136,7 +123,7 @@ func cobraAdminDecode(cmd *cobra.Command, args []string) {
 			Msg("Failed to Unmarshal DecodeResponse")
 	}
 
-	fmt.Printf("%s:\n%s\n", decodeRsp.Type, decodeRsp.Json)
+	fmt.Printf("%s\n", decodeRsp.Json)
 }
 
 type adminServer struct {
@@ -175,23 +162,39 @@ func (adminServer) RegisterHandlerFromEndpoint(
 	return RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (adminServer) Platform(ctx context.Context, pa *PlatformArgs) (*Platform, error) {
+func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
 	if oldRtPlat != nil {
 		return oldRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
 }
 
-func (adminServer) Decode(ctx context.Context, buffer *Buffer) (*DecodeResponse, error) {
-	dec, err := platformImpl.DebugDecoder.Json(buffer)
+func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
+	dec, err := decodeInstance64(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
-
-	typeStr := platformImpl.DebugDecoder.Type(buffer)
-
 	return &DecodeResponse{
-		Type: typeStr,
+		Json: dec,
+	}, nil
+}
+
+func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+	dec, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	if err != nil {
+		return nil, err
+	}
+	return &DecodeResponse{
+		Json: dec,
+	}, nil
+}
+
+func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+	dec, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	if err != nil {
+		return nil, err
+	}
+	return &DecodeResponse{
 		Json: dec,
 	}, nil
 }
@@ -244,7 +247,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 		return errors.New(strings.Join(errs, "\n"))
 	}
 	log.Info().
-		Str("ClusterName", ci.cluster.Name).
+		Str("Cluster", ci.cluster.Name).
 		Str("Topic", name).
 		Int("NumPartitions", numPartitions).
 		Int("ReplicationFactor", replicationFactor).
@@ -285,7 +288,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	sort.Strings(sortedTopics)
 	for _, topicName := range sortedTopics {
 		log.Info().
-			Str("ClusterName", cluster.Name).
+			Str("Cluster", cluster.Name).
 			Str("Topic", topicName).
 			Msg("Topic found")
 	}
@@ -294,11 +297,11 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 }
 
 func createMissingTopic(topicName string, topic *Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
-	ci, ok := clusterInfos[topic.ClusterName]
+	ci, ok := clusterInfos[topic.Cluster]
 	if !ok {
 		log.Error().
-			Str("ClusterName", topic.ClusterName).
-			Msg("Topic with invalid ClusterName")
+			Str("Cluster", topic.Cluster).
+			Msg("Topic with invalid Cluster")
 		return
 	}
 	if _, c := ci.existingTopics[topicName]; !c {
@@ -309,7 +312,7 @@ func createMissingTopic(topicName string, topic *Platform_Concern_Topic, cluster
 		if err != nil {
 			log.Error().
 				Err(err).
-				Str("ClusterName", topic.ClusterName).
+				Str("Cluster", topic.Cluster).
 				Str("Topic", topicName).
 				Msg("Topic creation failure")
 			return
@@ -348,7 +351,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		clusterInfos[cluster.Name] = ci
 		defer ci.Close()
 		log.Info().
-			Str("ClusterName", cluster.Name).
+			Str("Cluster", cluster.Name).
 			Str("BootstrapServers", cluster.BootstrapServers).
 			Msg("Connected to cluster")
 	}
@@ -477,7 +480,7 @@ func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clu
 	progs := make([]*Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
 		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
-		cluster := clusters[topics.Current.ClusterName]
+		cluster := clusters[topics.Current.Cluster]
 		progs[i] = &Program{
 			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),

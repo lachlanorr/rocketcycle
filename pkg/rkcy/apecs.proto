@@ -9,6 +9,9 @@ import "google/protobuf/timestamp.proto";
 package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
+// Convenience empty message for services that return or accept no data
+message Void {}
+
 message ApecsTxn {
     string trace_id = 1;       // uuid of txn used for tracing and reporting
     string assoc_trace_id = 2; // req_id of associated transaction
@@ -23,14 +26,14 @@ message ApecsTxn {
     repeated Step reverse_steps = 8;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
 
     message Step {
-        System system       = 1; // Whether to queue step into Process or Storage code
-        string concern_name = 2; // logical persistence model that's used to partition messages
-        Command command     = 3; // command name, this will map to a piece of code (e.g. function)
-        string key          = 4; // instance key used as the partition key
-        Buffer payload      = 5; // opaque payload for command
-        Offset offset       = 6; // when no nil, indicates the process topic offset associated with the step
+        System system  = 1; // Whether to queue step into Process or Storage code
+        string concern = 2; // logical persistence model that's used to partition messages
+        string command = 3; // command name, this will map to a piece of code (e.g. function)
+        string key     = 4; // instance key used as the partition key
+        bytes payload  = 5; // opaque payload for command
+        Offset offset  = 6; // when no nil, indicates the process topic offset associated with the step
 
-        Result result       = 7; // Result returned from step handler
+        Result result  = 7; // Result returned from step handler
 
         message Result {
             // Result code of step, generally one of "Code" enum below but users can define their own codes greater than RKCY_INTERNAL_MAX
@@ -45,16 +48,13 @@ message ApecsTxn {
             // general bucket for log events during a processed event
             repeated LogEvent logEvents = 4;
 
-            Buffer payload = 5; // opaque payload returned from command
+            bytes payload  = 5; // opaque payload returned from command, will be the input payload of next step
 
-            Buffer instance = 6; // opaque payload returned from command
+            bytes instance = 6; // opaque payload returned from command
+
+            Offset offset  = 7;
         }
     }
-}
-
-message Buffer {
-    int32 type = 1;
-    bytes data = 2;
 }
 
 enum Direction {
@@ -68,25 +68,9 @@ enum System {
     STORAGE = 2;
 }
 
-enum Command {
-    NO_COMMAND = 0;
-
-    CREATE = 1;
-    READ   = 2;
-    UPDATE = 3;
-    DELETE = 4;
-
-    VALIDATE_NEW = 6;
-    VALIDATE_EXISTING = 7;
-    REFRESH = 8;
-
-    // User defined commands should be greater than RKCY_INTERNAL_MAX
-    RKCY_INTERNAL_MAX_COMMAND = 16;
-}
-
 message TopicTarget {
     string bootstrap_servers = 1;
-    string topic_name = 2;
+    string topic = 2;
     int32 partition = 3;
 }
 
@@ -111,6 +95,7 @@ enum Code {
     CONSTRAINT_VIOLATION = 5;
 	UNKNOWN_COMMAND = 6;
     INVALID_ARGUMENT = 7;
+    NOT_IMPLEMENTED = 8;
 
     // User defined codes should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_CODE = 32;

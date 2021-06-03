@@ -230,13 +230,13 @@ func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (contex
 	}
 
 	step := rtxn.currentStep()
-	spanName := fmt.Sprintf("Step %s %d %s", rtxn.txn.DirectionName(), rtxn.txn.CurrentStepIdx, step.CommandName())
+	spanName := fmt.Sprintf("Step %s %d %s", rtxn.txn.DirectionName(), rtxn.txn.CurrentStepIdx, step.Command)
 
 	ctx, span := Tracer().Start(
 		ctx,
 		spanName,
 		trace.WithAttributes(
-			attribute.String("rkcy.command", step.CommandName()),
+			attribute.String("rkcy.command", step.Command),
 			attribute.String("rkcy.key", step.Key),
 		),
 	)

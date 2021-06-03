@@ -9,7 +9,7 @@ import (
 )
 
 type cachedBuffer struct {
-	buffer *Buffer
+	buffer []byte
 	offset *Offset
 }
 
@@ -24,7 +24,7 @@ func NewInstanceCache() *InstanceCache {
 	return &instCache
 }
 
-func (instCache *InstanceCache) Get(key string) *Buffer {
+func (instCache *InstanceCache) Get(key string) []byte {
 	val, ok := instCache.instances[key]
 	if ok {
 		return val.buffer
@@ -32,7 +32,7 @@ func (instCache *InstanceCache) Get(key string) *Buffer {
 	return nil
 }
 
-func (instCache *InstanceCache) Set(key string, val *Buffer, offset *Offset) {
+func (instCache *InstanceCache) Set(key string, val []byte, offset *Offset) {
 	oldVal, ok := instCache.instances[key]
 	if ok {
 		if !OffsetGreaterThan(offset, oldVal.offset) {

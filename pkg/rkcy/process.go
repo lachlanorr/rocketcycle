@@ -26,7 +26,6 @@ func cobraProcess(cmd *cobra.Command, args []string) {
 
 	go startApecsRunner(
 		ctx,
-		platformHandlers,
 		settings.BootstrapServers,
 		settings.Topic,
 		settings.Partition,
