@@ -160,6 +160,17 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 	return nil
 }
 
+func respondThroughChannel(traceId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Str("TraceId", traceId).
+				Msgf("recover while sending to respCh '%s'", r)
+		}
+	}()
+	respCh <- txn
+}
+
 func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget *TopicTarget) {
 	reqMap := make(map[string]*RespChan)
 
@@ -255,7 +266,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 								Str("TraceId", traceId).
 								Msg("Failed to Unmarshal ApecsTxn")
 						} else {
-							respCh.RespCh <- &txn
+							respondThroughChannel(traceId, respCh.RespCh, &txn)
 						}
 					}
 				} else {
@@ -327,6 +338,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		RespCh:    make(chan *ApecsTxn),
 		StartTime: time.Now(),
 	}
+	defer close(respCh.RespCh)
 	aprod.respRegisterCh <- &respCh
 
 	err := aprod.ExecuteTxnAsync(

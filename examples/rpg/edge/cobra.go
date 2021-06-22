@@ -14,7 +14,7 @@ type Settings struct {
 	BootstrapServers string
 	HttpAddr         string
 	GrpcAddr         string
-	EdgeAddr         string
+	EdgeHttpAddr     string
 
 	Topic     string
 	Partition int32
@@ -32,6 +32,7 @@ func CobraCommand() *cobra.Command {
 		Short: "RPG Edge Rest Api",
 		Long:  "Client interaction rest api that provides synchronous access over http",
 	}
+	rootCmd.PersistentFlags().StringVarP(&settings.EdgeHttpAddr, "edge_http_addr", "", "http://localhost:11350", "Address against which to make edge http requests")
 
 	readCmd := &cobra.Command{
 		Use:       "read resource id",
@@ -40,7 +41,6 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
-	readCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(readCmd)
 
 	createCmd := &cobra.Command{
@@ -50,7 +50,6 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"resource"},
 	}
-	createCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(createCmd)
 
 	updateCmd := &cobra.Command{
@@ -60,7 +59,6 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.MinimumNArgs(3),
 		ValidArgs: []string{"resource", "id"},
 	}
-	updateCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(updateCmd)
 
 	deleteCmd := &cobra.Command{
@@ -70,7 +68,6 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{"resource", "id"},
 	}
-	deleteCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(deleteCmd)
 
 	fundCmd := &cobra.Command{
@@ -80,7 +77,6 @@ func CobraCommand() *cobra.Command {
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"character_id"},
 	}
-	fundCmd.PersistentFlags().StringVarP(&settings.EdgeAddr, "edge_addr", "", "http://localhost:11350", "Address against which to make client requests")
 	rootCmd.AddCommand(fundCmd)
 
 	serveCmd := &cobra.Command{

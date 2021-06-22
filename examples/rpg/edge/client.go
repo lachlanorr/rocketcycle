@@ -26,7 +26,7 @@ import (
 func readResource(resourceName string, id string) (int, []byte, error) {
 	path := fmt.Sprintf("/v1/%s/read/%s?pretty", resourceName, id)
 
-	resp, err := http.Get(settings.EdgeAddr + path)
+	resp, err := http.Get(settings.EdgeHttpAddr + path)
 	if err != nil {
 		return 500, nil, err
 	}
@@ -71,7 +71,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 	}
 
 	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", contentRdr)
 	if err != nil {
 		return 500, nil, err
 	}
@@ -161,7 +161,7 @@ func cobraUpdateResource(cmd *cobra.Command, args []string) {
 func deleteResource(resourceName string, id string) (int, error) {
 	path := fmt.Sprintf("/v1/%s/delete/%s", resourceName, id)
 
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", nil)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", nil)
 	if err != nil {
 		return 500, err
 	}
@@ -193,7 +193,7 @@ func cobraFundCharacter(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", contentRdr)
 	if err != nil {
 		log.Fatal().
 			Err(err).

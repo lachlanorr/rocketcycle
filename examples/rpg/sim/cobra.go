@@ -5,9 +5,20 @@
 package sim
 
 import (
-	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
+)
+
+type Settings struct {
+	EdgeGrpcAddr    string
+	RunnerCount     uint
+	SimulationCount uint
+	RandomSeed      int64
+}
+
+var (
+	settings Settings
 )
 
 func CobraCommand() *cobra.Command {
@@ -15,10 +26,24 @@ func CobraCommand() *cobra.Command {
 		Use:   "sim",
 		Short: "RPG Simulator",
 		Long:  "Provides client application simulation for RPG example",
+	}
+	rootCmd.PersistentFlags().StringVar(&settings.EdgeGrpcAddr, "edge_grpc_addr", "localhost:11360", "Address against which to make edge grpc requests")
+	rootCmd.PersistentFlags().UintVar(&settings.RunnerCount, "runner_count", 1, "Number of runners to spawn")
+	rootCmd.PersistentFlags().UintVar(&settings.SimulationCount, "simulation_count", 1, "Number of overall iterations each runner should complete of simulation")
+	rootCmd.PersistentFlags().Int64Var(&settings.RandomSeed, "random_seed", -1, "Seed for run, same seed will run exactly the same simulation")
+
+	createCharactersCmd := &cobra.Command{
+		Use:   "create_characters",
+		Short: "create characters",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("test\n")
+			if settings.RandomSeed == -1 {
+				settings.RandomSeed = time.Now().UnixNano()
+			}
+
+			start(CmdCreateCharacters, &settings)
 		},
 	}
+	rootCmd.AddCommand(createCharactersCmd)
 
 	return rootCmd
 }

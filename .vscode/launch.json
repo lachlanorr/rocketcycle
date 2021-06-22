@@ -43,6 +43,16 @@
             "cwd": "${workspaceFolder}/examples/rpg/rpg_edge",
             "env": {},
             "args": ["create", "player", "username=lorr", "active=true"]
+        },
+        {
+            "name": "sim create_characters",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/examples/rpg",
+            "cwd": "${workspaceFolder}/examples/rpg",
+            "env": {},
+            "args": ["sim", "create_characters"]
         }
     ]
 }
