@@ -23,6 +23,25 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 )
 
+type ResourceType int
+
+const (
+	ResourceType_PLAYER ResourceType = iota
+	ResourceType_CHARACTER
+	ResourceType_FUNDING_REQUEST
+)
+
+var messageFactory = map[ResourceType]func() proto.Message{
+	ResourceType_PLAYER:          func() proto.Message { return proto.Message(new(concerns.Player)) },
+	ResourceType_CHARACTER:       func() proto.Message { return proto.Message(new(concerns.Character)) },
+	ResourceType_FUNDING_REQUEST: func() proto.Message { return proto.Message(new(concerns.FundingRequest)) },
+}
+
+var MessageFactory = map[string]func() proto.Message{
+	"player":    messageFactory[ResourceType_PLAYER],
+	"character": messageFactory[ResourceType_CHARACTER],
+}
+
 func readResource(resourceName string, id string) (int, []byte, error) {
 	path := fmt.Sprintf("/v1/%s/read/%s?pretty", resourceName, id)
 
@@ -86,7 +105,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 }
 
 func cobraCreateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := concerns.MessageFactory[args[0]]
+	msgFac, ok := MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -110,7 +129,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 }
 
 func cobraUpdateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := concerns.MessageFactory[args[0]]
+	msgFac, ok := MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
