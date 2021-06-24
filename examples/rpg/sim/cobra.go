@@ -11,10 +11,12 @@ import (
 )
 
 type Settings struct {
-	EdgeGrpcAddr    string
-	RunnerCount     uint
-	SimulationCount uint
-	RandomSeed      int64
+	EdgeGrpcAddr       string
+	RunnerCount        uint
+	SimulationCount    uint
+	RandomSeed         int64
+	Ratios             string
+	InitCharacterCount uint
 }
 
 var (
@@ -26,24 +28,20 @@ func CobraCommand() *cobra.Command {
 		Use:   "sim",
 		Short: "RPG Simulator",
 		Long:  "Provides client application simulation for RPG example",
-	}
-	rootCmd.PersistentFlags().StringVar(&settings.EdgeGrpcAddr, "edge_grpc_addr", "localhost:11360", "Address against which to make edge grpc requests")
-	rootCmd.PersistentFlags().UintVar(&settings.RunnerCount, "runner_count", 1, "Number of runners to spawn")
-	rootCmd.PersistentFlags().UintVar(&settings.SimulationCount, "simulation_count", 1, "Number of overall iterations each runner should complete of simulation")
-	rootCmd.PersistentFlags().Int64Var(&settings.RandomSeed, "random_seed", -1, "Seed for run, same seed will run exactly the same simulation")
-
-	createCharactersCmd := &cobra.Command{
-		Use:   "create_characters",
-		Short: "create characters",
 		Run: func(cmd *cobra.Command, args []string) {
 			if settings.RandomSeed == -1 {
 				settings.RandomSeed = time.Now().UnixNano()
 			}
 
-			start(CmdCreateCharacters, &settings)
+			start(&settings)
 		},
 	}
-	rootCmd.AddCommand(createCharactersCmd)
+	rootCmd.PersistentFlags().StringVar(&settings.EdgeGrpcAddr, "edge_grpc_addr", "localhost:11360", "Address against which to make edge grpc requests")
+	rootCmd.PersistentFlags().UintVar(&settings.RunnerCount, "runner_count", 1, "Number of runners to spawn")
+	rootCmd.PersistentFlags().UintVar(&settings.SimulationCount, "simulation_count", 10, "Number of overall iterations each runner should complete of simulation")
+	rootCmd.PersistentFlags().Int64Var(&settings.RandomSeed, "random_seed", -1, "Seed for run, same seed will run exactly the same simulation")
+	rootCmd.PersistentFlags().StringVar(&settings.Ratios, "ratios", "", "Command ratios used for simulation")
+	rootCmd.PersistentFlags().UintVar(&settings.InitCharacterCount, "init_character_count", 10, "Number characters to create before random simulation begins")
 
 	return rootCmd
 }

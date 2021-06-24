@@ -19,85 +19,140 @@ import (
 
 type CommandId int
 
-const (
-	CmdCreateCharacters CommandId = iota
-)
-
-type Command struct {
-	Name    string
-	Handler func(context.Context, edge.RpgServiceClient, *rand.Rand, uint)
+type RunnerArgs struct {
+	RunnerIdx          uint
+	EdgeGrpcAddr       string
+	SimulationCount    uint
+	RandomSeed         int64
+	Ratios             []float64
+	InitCharacterCount uint
 }
 
-type SimCmd struct {
-	CommandId       CommandId
-	RunnerIdx       uint
-	EdgeGrpcAddr    string
-	SimulationCount uint
-	RandomSeed      int64
+const (
+	CmdCreateCharacter CommandId = iota
+	CmdFund
+	CmdTrade
+
+	Cmd_COUNT
+)
+
+type Handler func(context.Context, edge.RpgServiceClient, *rand.Rand, *StateDb) (string, error)
+
+type Command struct {
+	Handler Handler
+	Ratio   float64
 }
 
 var commands = map[CommandId]Command{
-	CmdCreateCharacters: {"CreateCharacters", cmdCreateCharacters},
+	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 3},
+	CmdFund:            {Handler: cmdFund, Ratio: 3},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 94},
 }
 
-func simRunner(ctx context.Context, cmdCh <-chan *SimCmd, wg *sync.WaitGroup) {
+func computeRatios(commands map[CommandId]Command) []float64 {
+	ratios := make([]float64, Cmd_COUNT)
+
+	ratioSum := 0.0
+	for i := CommandId(0); i < Cmd_COUNT; i++ {
+		ratioSum += commands[i].Ratio
+		ratios[i] = ratioSum
+	}
+	if ratioSum != 100.0 {
+		log.Fatal().
+			Msgf("Invalid ratios, not summing to 100.0")
+	}
+	return ratios
+}
+
+func logResult(msg string, err error, simIdx uint, args *RunnerArgs) {
+}
+
+func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	initCmd := <-cmdCh
-	slog := log.With().
-		Str("Command", commands[initCmd.CommandId].Name).
-		Uint("RunnerIdx", initCmd.RunnerIdx).
-		Uint("SimulationCount", initCmd.SimulationCount).
-		Int64("RandomSeed", initCmd.RandomSeed).
-		Logger()
+	log.Info().
+		Msgf("%d RUNNER BEGIN", args.RunnerIdx)
 
-	ctx = context.WithValue(ctx, "logger", slog)
+	stateDb := NewStateDb()
 
-	slog.Info().
-		Msg("simRunner BEGIN")
-
-	conn, err := grpc.Dial(initCmd.EdgeGrpcAddr, grpc.WithInsecure())
+	conn, err := grpc.Dial(args.EdgeGrpcAddr, grpc.WithInsecure())
 	if err != nil {
-		slog.Fatal().
+		log.Fatal().
 			Err(err).
+			Str("EdgeGrpcAddr", args.EdgeGrpcAddr).
 			Msg("Failed to grpc.Dial")
 	}
 	defer conn.Close()
 	client := edge.NewRpgServiceClient(conn)
 
-	r := rand.New(rand.NewSource(initCmd.RandomSeed))
-	commands[initCmd.CommandId].Handler(ctx, client, r, initCmd.SimulationCount)
+	r := rand.New(rand.NewSource(args.RandomSeed))
 
-	slog.Info().
-		Msg("simRunner END")
+	for i := uint(1); i <= args.InitCharacterCount; i++ {
+		msg, err := cmdCreateCharacter(ctx, client, r, stateDb)
+		if err != nil {
+			log.Fatal().
+				Err(err).
+				Msg("Failed to creat initial characters")
+		} else {
+			log.Info().
+				Msgf("%d:%d/%d INIT %s", args.RunnerIdx, i, args.InitCharacterCount, msg)
+		}
+	}
+
+	for simIdx := uint(1); simIdx <= args.SimulationCount; simIdx++ {
+		pct := r.Float64() * 100.0
+		for cmdId := CommandId(0); cmdId < Cmd_COUNT; cmdId++ {
+			if pct <= args.Ratios[cmdId] {
+				msg, err := commands[cmdId].Handler(ctx, client, r, stateDb)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msgf("%d:%d/%d Error", args.RunnerIdx, simIdx, args.SimulationCount)
+				} else {
+					log.Info().
+						Msgf("%d:%d/%d %s", args.RunnerIdx, simIdx, args.SimulationCount, msg)
+				}
+				break
+			}
+		}
+
+	}
+
+	log.Info().
+		Msgf("%d RUNNER END", args.RunnerIdx)
 }
 
-func start(commandId CommandId, settings *Settings) {
-	var wg sync.WaitGroup
+func start(settings *Settings) {
+	ctx := context.Background()
 
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Str("Command", commands[commandId].Name).
 		Str("EdgeGrpcAddr", settings.EdgeGrpcAddr).
 		Uint("RunnerCount", settings.RunnerCount).
 		Uint("SimulationCount", settings.SimulationCount).
 		Int64("RandomSeed", settings.RandomSeed).
 		Msg("simulation starting")
 
+	// consider ratios
+	ratios := computeRatios(commands)
+
 	r := rand.New(rand.NewSource(settings.RandomSeed))
 
-	cmdChans := make([]chan *SimCmd, settings.RunnerCount)
+	var wg sync.WaitGroup
 	for i := uint(0); i < settings.RunnerCount; i++ {
-		cmdChans[i] = make(chan *SimCmd)
 		wg.Add(1)
-		go simRunner(context.Background(), cmdChans[i], &wg)
-		cmdChans[i] <- &SimCmd{
-			CommandId:       commandId,
-			RunnerIdx:       i,
-			EdgeGrpcAddr:    settings.EdgeGrpcAddr,
-			SimulationCount: settings.SimulationCount,
-			RandomSeed:      r.Int63(),
-		}
+		go simRunner(
+			ctx,
+			&RunnerArgs{
+				RunnerIdx:          i,
+				EdgeGrpcAddr:       settings.EdgeGrpcAddr,
+				SimulationCount:    settings.SimulationCount,
+				RandomSeed:         r.Int63(),
+				Ratios:             ratios,
+				InitCharacterCount: settings.InitCharacterCount,
+			},
+			&wg,
+		)
 	}
 
 	wg.Wait()
