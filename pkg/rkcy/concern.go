@@ -8,6 +8,9 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"runtime/debug"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 )
@@ -112,6 +115,18 @@ func handleCommand(
 	direction Direction,
 	args *StepArgs,
 ) *ApecsTxn_Step_Result {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Str("Concern", concern).
+				Str("System", system.String()).
+				Str("Command", command).
+				Str("Direction", direction.String()).
+				Msgf("panic during handleCommand, %s, args: %+v", r, args)
+			debug.PrintStack()
+		}
+	}()
+
 	if system == System_PROCESS {
 		switch command {
 		case CmdCreate:

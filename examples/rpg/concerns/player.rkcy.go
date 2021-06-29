@@ -17,35 +17,35 @@ import (
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
 func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
-    // Read Player instance from storage system and set in inst
-    // Return Offset as well, as was presented on last Create/Update
+	// Read Player instance from storage system and set in inst
+	// Return Offset as well, as was presented on last Create/Update
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
 }
 
 func (inst *Player) Create(ctx context.Context, offset *rkcy.Offset) error {
-    // Create new Player instance in the storage system, store offset as well.
-    // If storage offset is less than offset argument, do not create,
-    // as this is indicative of a message duplicate.
+	// Create new Player instance in the storage system, store offset as well.
+	// If storage offset is less than offset argument, do not create,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Create")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Create")
 }
 
 func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
-    // Update existsing Player instance in the storage system,
-    // store offset as well.
-    // If storage offset is less than offset argument, do not update,
-    // as this is indicative of a message duplicate.
+	// Update existsing Player instance in the storage system,
+	// store offset as well.
+	// If storage offset is less than offset argument, do not update,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Update")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Update")
 }
 
 func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
-    // Delete existsing Player instance in the storage system.
-    // If storage offset is less than offset argument, do not delete,
-    // as this is indicative of a message duplicate.
+	// Delete existsing Player instance in the storage system.
+	// If storage offset is less than offset argument, do not delete,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Delete")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Delete")
 }
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers (END)
@@ -56,16 +56,16 @@ func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset)
 // PROCESS Standard Handlers
 // -----------------------------------------------------------------------------
 func (*Player) ValidateCreate(ctx context.Context, payload *Player) (*Player, error) {
-    // Validate contents of Player 'payload', make any changes appropriately, and return it.
+	// Validate contents of Player 'payload', make any changes appropriately, and return it.
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateCreate")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateCreate")
 }
 
 func (inst *Player) ValidateUpdate(ctx context.Context, payload *Player) (*Player, error) {
-    // Validate contents of Player 'payload', make any changes, and return it.
-    // 'inst' contains current instance if that is important for validation.
+	// Validate contents of Player 'payload', make any changes, and return it.
+	// 'inst' contains current instance if that is important for validation.
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateUpdate")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.ValidateUpdate")
 }
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers (END)
@@ -140,20 +140,28 @@ func init() {
 						if direction == rkcy.Direction_FORWARD {
 							payloadIn := &Player{}
 							err = proto.Unmarshal(args.Payload, payloadIn)
-							rslt.SetResult(err)
-							if err == nil {
-								err = payloadIn.Create(ctx, args.Offset)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									rslt.Offset = args.Offset // for possible delete in rollback
-									rslt.Payload, err = proto.Marshal(payloadIn)
-									rslt.SetResult(err)
-								}
+								return rslt
+							}
+							err = payloadIn.Create(ctx, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Offset = args.Offset // for possible delete in rollback
+							rslt.Payload, err = proto.Marshal(payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							del := &Player{}
 							err = del.Delete(ctx, args.Key, args.ForwardResult.Offset)
-							rslt.SetResult(err)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
 						}
 					}
 				case rkcy.CmdRead:
@@ -161,9 +169,14 @@ func init() {
 						if direction == rkcy.Direction_FORWARD {
 							inst := &Player{}
 							rslt.Offset, err = inst.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(inst)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Payload, err = proto.Marshal(inst)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -173,32 +186,44 @@ func init() {
 							// capture orig so we can roll this back
 							orig := &Player{}
 							_, err := orig.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								payloadIn := &Player{}
-								err = proto.Unmarshal(args.Payload, payloadIn)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									err = payloadIn.Update(ctx, args.Offset)
-									rslt.SetResult(err)
-									if err == nil {
-										rslt.Payload, err = proto.Marshal(payloadIn)
-										if err == nil {
-											// Set original value into rslt.Instance so we can restore it in the event of a rollback
-											rslt.Offset = args.Offset
-											rslt.Instance, err = proto.Marshal(orig)
-											rslt.SetResult(err)
-										}
-									}
-								}
+								return rslt
+							}
+							payloadIn := &Player{}
+							err = proto.Unmarshal(args.Payload, payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							err = payloadIn.Update(ctx, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Payload, err = proto.Marshal(payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							// Set original value into rslt.Instance so we can restore it in the event of a rollback
+							rslt.Offset = args.Offset
+							rslt.Instance, err = proto.Marshal(orig)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							orig := &Player{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							rslt.SetResult(err)
-							if err == nil {
-								err = orig.Update(ctx, args.ForwardResult.Offset)
+							if err != nil {
 								rslt.SetResult(err)
+								return rslt
+							}
+							err = orig.Update(ctx, args.ForwardResult.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -208,25 +233,34 @@ func init() {
 							// capture orig so we can roll this back
 							orig := &Player{}
 							_, err := orig.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								del := &Player{}
-								err = del.Delete(ctx, args.Key, args.Offset)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									// Set original value into rslt.Instance so we can restore it in the event of a rollback
-									rslt.Offset = args.Offset
-									rslt.Instance, err = proto.Marshal(orig)
-									rslt.SetResult(err)
-								}
+								return rslt
+							}
+							del := &Player{}
+							err = del.Delete(ctx, args.Key, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							// Set original value into rslt.Instance so we can restore it in the event of a rollback
+							rslt.Offset = args.Offset
+							rslt.Instance, err = proto.Marshal(orig)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							orig := &Player{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							rslt.SetResult(err)
-							if err == nil {
-								err = orig.Create(ctx, args.ForwardResult.Offset)
+							if err != nil {
 								rslt.SetResult(err)
+								return rslt
+							}
+							err = orig.Create(ctx, args.ForwardResult.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -255,28 +289,38 @@ func init() {
 					{
 						payloadIn := &Player{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
-						rslt.SetResult(err)
-						if err == nil {
-							payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+						if err != nil {
 							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(payloadOut)
-								rslt.SetResult(err)
-							}
+							return rslt
+						}
+						payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
+						}
+						rslt.Payload, err = proto.Marshal(payloadOut)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
 						}
 					}
 				case rkcy.CmdValidateUpdate:
 					{
 						payloadIn := &Player{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
-						rslt.SetResult(err)
-						if err == nil {
-							payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+						if err != nil {
 							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(payloadOut)
-								rslt.SetResult(err)
-							}
+							return rslt
+						}
+						payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
+						}
+						rslt.Payload, err = proto.Marshal(payloadOut)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
 						}
 					}
 				default:
@@ -286,11 +330,12 @@ func init() {
 
 				// compare inst to see if it has changed
 				instSer, err := proto.Marshal(inst)
-				rslt.SetResult(err)
-				if err == nil {
-					if !bytes.Equal(instSer, args.Instance) {
-						rslt.Instance = instSer
-					}
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				if !bytes.Equal(instSer, args.Instance) {
+					rslt.Instance = instSer
 				}
 			} else {
 				rslt.SetResult(fmt.Errorf("Invalid system: %d", system))

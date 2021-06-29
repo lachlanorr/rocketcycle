@@ -47,7 +47,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 	stateDb.UpsertCharacter(character)
 
 	return fmt.Sprintf(
-		"Created Player(%s) and Character(%s) %d/%d/%d/%d",
+		"Created Player(%s) and Character(%s) Currency(%d/%d/%d/%d)",
 		player.Id,
 		character.Id,
 		currency.Gold,
@@ -86,15 +86,31 @@ func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, st
 }
 
 func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
-	/*
-		charLhs := stateDb.RandomCharacter(r)
-		var charRhs *concerns.Character
-		for {
-			charRhs = stateDb.RandomCharacter(r)
-			if charRhs.Id != charLhs.Id {
-				break
-			}
+	charLhs := stateDb.RandomCharacter(r)
+	var charRhs *concerns.Character
+	for {
+		charRhs = stateDb.RandomCharacter(r)
+		if charRhs.Id != charLhs.Id {
+			break
 		}
-	*/
-	return fmt.Sprintf("Trade conducted NOT IMPLEMENTED"), nil
+	}
+
+	_, err := client.ConductTrade(
+		ctx,
+		&edge.TradeRequest{
+			Lhs: &concerns.FundingRequest{
+				CharacterId: charLhs.Id,
+				Currency:    &concerns.Character_Currency{Gold: 10},
+			},
+			Rhs: &concerns.FundingRequest{
+				CharacterId: charRhs.Id,
+				Currency:    &concerns.Character_Currency{Faction_0: 20},
+			},
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("Trade conducted %s %s", charLhs.Id, charRhs.Id), nil
 }

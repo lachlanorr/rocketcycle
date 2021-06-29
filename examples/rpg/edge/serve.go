@@ -315,6 +315,62 @@ func (server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*
 	return characterResult, nil
 }
 
+func (server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, error) {
+	ctx, span := rkcy.Telem().StartFunc(ctx)
+	defer span.End()
+	traceId := span.SpanContext().TraceID().String()
+
+	result, err := aprod.ExecuteTxnSync(
+		ctx,
+		true,
+		nil,
+		[]rkcy.Step{
+			{
+				Concern: "Character",
+				Command: "DebitFunds",
+				Key:     tr.Lhs.CharacterId,
+				Payload: tr.Lhs,
+			},
+			{
+				Concern: "Character",
+				Command: "DebitFunds",
+				Key:     tr.Rhs.CharacterId,
+				Payload: tr.Rhs,
+			},
+			{
+				Concern: "Character",
+				Command: "CreditFunds",
+				Key:     tr.Lhs.CharacterId,
+				Payload: tr.Rhs,
+			},
+			{
+				Concern: "Character",
+				Command: "CreditFunds",
+				Key:     tr.Rhs.CharacterId,
+				Payload: tr.Lhs,
+			},
+		},
+		time.Duration(settings.TimeoutSecs)*time.Second,
+	)
+
+	if err != nil {
+		recordError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+
+	characterResult := &concerns.Character{}
+	err = proto.Unmarshal(result.Payload, characterResult)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("TraceId", traceId).
+			Msg("Failed to Unmarshal Payload")
+		recordError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return &rkcy.Void{}, nil
+}
+
 func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
 	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	rkcy.ServeGrpcGateway(ctx, srv)

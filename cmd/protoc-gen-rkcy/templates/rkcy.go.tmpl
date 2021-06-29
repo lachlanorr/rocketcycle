@@ -15,35 +15,35 @@ import (
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
 func (inst *{{ .Name }}) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
-    // Read {{ .Name }} instance from storage system and set in inst
-    // Return Offset as well, as was presented on last Create/Update
+	// Read {{ .Name }} instance from storage system and set in inst
+	// Return Offset as well, as was presented on last Create/Update
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Read")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Read")
 }
 
 func (inst *{{ .Name }}) Create(ctx context.Context, offset *rkcy.Offset) error {
-    // Create new {{ .Name }} instance in the storage system, store offset as well.
-    // If storage offset is less than offset argument, do not create,
-    // as this is indicative of a message duplicate.
+	// Create new {{ .Name }} instance in the storage system, store offset as well.
+	// If storage offset is less than offset argument, do not create,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Create")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Create")
 }
 
 func (inst *{{ .Name }}) Update(ctx context.Context, offset *rkcy.Offset) error {
-    // Update existsing {{ .Name }} instance in the storage system,
-    // store offset as well.
-    // If storage offset is less than offset argument, do not update,
-    // as this is indicative of a message duplicate.
+	// Update existsing {{ .Name }} instance in the storage system,
+	// store offset as well.
+	// If storage offset is less than offset argument, do not update,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Update")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Update")
 }
 
 func (inst *{{ .Name }}) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
-    // Delete existsing {{ .Name }} instance in the storage system.
-    // If storage offset is less than offset argument, do not delete,
-    // as this is indicative of a message duplicate.
+	// Delete existsing {{ .Name }} instance in the storage system.
+	// If storage offset is less than offset argument, do not delete,
+	// as this is indicative of a message duplicate.
 
-    return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Delete")
+	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.Delete")
 }
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers (END)
@@ -54,16 +54,16 @@ func (inst *{{ .Name }}) Delete(ctx context.Context, key string, offset *rkcy.Of
 // PROCESS Standard Handlers
 // -----------------------------------------------------------------------------
 func (*{{ .Name }}) ValidateCreate(ctx context.Context, payload *{{ .Name }}) (*{{ .Name }}, error) {
-    // Validate contents of {{ .Name }} 'payload', make any changes appropriately, and return it.
+	// Validate contents of {{ .Name }} 'payload', make any changes appropriately, and return it.
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateCreate")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateCreate")
 }
 
 func (inst *{{ .Name }}) ValidateUpdate(ctx context.Context, payload *{{ .Name }}) (*{{ .Name }}, error) {
-    // Validate contents of {{ .Name }} 'payload', make any changes, and return it.
-    // 'inst' contains current instance if that is important for validation.
+	// Validate contents of {{ .Name }} 'payload', make any changes, and return it.
+	// 'inst' contains current instance if that is important for validation.
 
-    return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateUpdate")
+	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ .Name }}.ValidateUpdate")
 }
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers (END)
@@ -75,7 +75,7 @@ func (inst *{{ .Name }}) ValidateUpdate(ctx context.Context, payload *{{ .Name }
 // -----------------------------------------------------------------------------
 {{- range .Commands }}
 func (inst *{{ $.Name }}) {{ .Name }}(ctx context.Context{{ if .HasInput }}, payload *{{ .InputType }}{{ end }}) {{ if .HasOutput }}(*{{ .OutputType }}, error){{ else }}error{{ end }} {
-    return {{ if .HasInput }}nil, {{ end }}rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $.Name }}.{{ .Name }}")
+	return {{ if .HasInput }}nil, {{ end }}rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $.Name }}.{{ .Name }}")
 }
 
 {{- end }}
@@ -144,20 +144,28 @@ func init() {
 						if direction == rkcy.Direction_FORWARD {
 							payloadIn := &{{ .Name }}{}
 							err = proto.Unmarshal(args.Payload, payloadIn)
-							rslt.SetResult(err)
-							if err == nil {
-								err = payloadIn.Create(ctx, args.Offset)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									rslt.Offset = args.Offset // for possible delete in rollback
-									rslt.Payload, err = proto.Marshal(payloadIn)
-									rslt.SetResult(err)
-								}
+								return rslt
+							}
+							err = payloadIn.Create(ctx, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Offset = args.Offset // for possible delete in rollback
+							rslt.Payload, err = proto.Marshal(payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							del := &{{ .Name }}{}
 							err = del.Delete(ctx, args.Key, args.ForwardResult.Offset)
-							rslt.SetResult(err)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
 						}
 					}
 				case rkcy.CmdRead:
@@ -165,9 +173,14 @@ func init() {
 						if direction == rkcy.Direction_FORWARD {
 							inst := &{{ .Name }}{}
 							rslt.Offset, err = inst.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(inst)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Payload, err = proto.Marshal(inst)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -177,32 +190,44 @@ func init() {
 							// capture orig so we can roll this back
 							orig := &{{ .Name }}{}
 							_, err := orig.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								payloadIn := &{{ .Name }}{}
-								err = proto.Unmarshal(args.Payload, payloadIn)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									err = payloadIn.Update(ctx, args.Offset)
-									rslt.SetResult(err)
-									if err == nil {
-										rslt.Payload, err = proto.Marshal(payloadIn)
-										if err == nil {
-											// Set original value into rslt.Instance so we can restore it in the event of a rollback
-											rslt.Offset = args.Offset
-											rslt.Instance, err = proto.Marshal(orig)
-											rslt.SetResult(err)
-										}
-									}
-								}
+								return rslt
+							}
+							payloadIn := &{{ .Name }}{}
+							err = proto.Unmarshal(args.Payload, payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							err = payloadIn.Update(ctx, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							rslt.Payload, err = proto.Marshal(payloadIn)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							// Set original value into rslt.Instance so we can restore it in the event of a rollback
+							rslt.Offset = args.Offset
+							rslt.Instance, err = proto.Marshal(orig)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							orig := &{{ .Name }}{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							rslt.SetResult(err)
-							if err == nil {
-								err = orig.Update(ctx, args.ForwardResult.Offset)
+							if err != nil {
 								rslt.SetResult(err)
+								return rslt
+							}
+							err = orig.Update(ctx, args.ForwardResult.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -212,25 +237,34 @@ func init() {
 							// capture orig so we can roll this back
 							orig := &{{ .Name }}{}
 							_, err := orig.Read(ctx, args.Key)
-							rslt.SetResult(err)
-							if err == nil {
-								del := &{{ .Name }}{}
-								err = del.Delete(ctx, args.Key, args.Offset)
+							if err != nil {
 								rslt.SetResult(err)
-								if err == nil {
-									// Set original value into rslt.Instance so we can restore it in the event of a rollback
-									rslt.Offset = args.Offset
-									rslt.Instance, err = proto.Marshal(orig)
-									rslt.SetResult(err)
-								}
+								return rslt
+							}
+							del := &{{ .Name }}{}
+							err = del.Delete(ctx, args.Key, args.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
+							}
+							// Set original value into rslt.Instance so we can restore it in the event of a rollback
+							rslt.Offset = args.Offset
+							rslt.Instance, err = proto.Marshal(orig)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						} else {
 							orig := &{{ .Name }}{}
 							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							rslt.SetResult(err)
-							if err == nil {
-								err = orig.Create(ctx, args.ForwardResult.Offset)
+							if err != nil {
 								rslt.SetResult(err)
+								return rslt
+							}
+							err = orig.Create(ctx, args.ForwardResult.Offset)
+							if err != nil {
+								rslt.SetResult(err)
+								return rslt
 							}
 						}
 					}
@@ -259,28 +293,38 @@ func init() {
 					{
 						payloadIn := &{{ .Name }}{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
-						rslt.SetResult(err)
-						if err == nil {
-							payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+						if err != nil {
 							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(payloadOut)
-								rslt.SetResult(err)
-							}
+							return rslt
+						}
+						payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
+						}
+						rslt.Payload, err = proto.Marshal(payloadOut)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
 						}
 					}
 				case rkcy.CmdValidateUpdate:
 					{
 						payloadIn := &{{ .Name }}{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
-						rslt.SetResult(err)
-						if err == nil {
-							payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+						if err != nil {
 							rslt.SetResult(err)
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(payloadOut)
-								rslt.SetResult(err)
-							}
+							return rslt
+						}
+						payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
+						}
+						rslt.Payload, err = proto.Marshal(payloadOut)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
 						}
 					}
 {{- range .Commands }}
@@ -289,18 +333,21 @@ func init() {
 						{{- if .HasInput }}
 						payloadIn := &{{ .InputType }}{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
-						rslt.SetResult(err)
-						if err == nil {
-						{{- end }}
-							{{ if .HasOutput }}payloadOut, {{ end }}err := inst.{{ .Name }}(ctx{{ if .HasInput }}, payloadIn{{ end }})
+						if err != nil {
 							rslt.SetResult(err)
-							{{- if .HasOutput }}
-							if err == nil {
-								rslt.Payload, err = proto.Marshal(payloadOut)
-								rslt.SetResult(err)
-							}
-							{{- end }}
-						{{- if .HasInput }}
+							return rslt
+						}
+						{{- end }}
+						{{ if .HasOutput }}payloadOut, {{ end }}err := inst.{{ .Name }}(ctx{{ if .HasInput }}, payloadIn{{ end }})
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
+						}
+						{{- if .HasOutput }}
+						rslt.Payload, err = proto.Marshal(payloadOut)
+						if err != nil {
+							rslt.SetResult(err)
+							return rslt
 						}
 						{{- end }}
 					}
@@ -312,11 +359,12 @@ func init() {
 
 				// compare inst to see if it has changed
 				instSer, err := proto.Marshal(inst)
-				rslt.SetResult(err)
-				if err == nil {
-					if !bytes.Equal(instSer, args.Instance) {
-						rslt.Instance = instSer
-					}
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				if !bytes.Equal(instSer, args.Instance) {
+					rslt.Instance = instSer
 				}
 			} else {
 				rslt.SetResult(fmt.Errorf("Invalid system: %d", system))

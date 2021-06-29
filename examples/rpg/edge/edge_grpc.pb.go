@@ -5,6 +5,7 @@ package edge
 import (
 	context "context"
 	concerns "github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
+	rkcy "github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -27,6 +28,7 @@ type RpgServiceClient interface {
 	UpdateCharacter(ctx context.Context, in *concerns.Character, opts ...grpc.CallOption) (*concerns.Character, error)
 	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error)
 	FundCharacter(ctx context.Context, in *concerns.FundingRequest, opts ...grpc.CallOption) (*concerns.Character, error)
+	ConductTrade(ctx context.Context, in *TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error)
 }
 
 type rpgServiceClient struct {
@@ -118,6 +120,15 @@ func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *concerns.Fundi
 	return out, nil
 }
 
+func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error) {
+	out := new(rkcy.Void)
+	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/ConductTrade", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RpgServiceServer is the server API for RpgService service.
 // All implementations must embed UnimplementedRpgServiceServer
 // for forward compatibility
@@ -131,6 +142,7 @@ type RpgServiceServer interface {
 	UpdateCharacter(context.Context, *concerns.Character) (*concerns.Character, error)
 	DeleteCharacter(context.Context, *RpgRequest) (*RpgResponse, error)
 	FundCharacter(context.Context, *concerns.FundingRequest) (*concerns.Character, error)
+	ConductTrade(context.Context, *TradeRequest) (*rkcy.Void, error)
 	mustEmbedUnimplementedRpgServiceServer()
 }
 
@@ -164,6 +176,9 @@ func (UnimplementedRpgServiceServer) DeleteCharacter(context.Context, *RpgReques
 }
 func (UnimplementedRpgServiceServer) FundCharacter(context.Context, *concerns.FundingRequest) (*concerns.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FundCharacter not implemented")
+}
+func (UnimplementedRpgServiceServer) ConductTrade(context.Context, *TradeRequest) (*rkcy.Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConductTrade not implemented")
 }
 func (UnimplementedRpgServiceServer) mustEmbedUnimplementedRpgServiceServer() {}
 
@@ -340,6 +355,24 @@ func _RpgService_FundCharacter_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RpgService_ConductTrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TradeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RpgServiceServer).ConductTrade(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/ConductTrade",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RpgServiceServer).ConductTrade(ctx, req.(*TradeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _RpgService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "rocketcycle.examples.rpg.edge.RpgService",
 	HandlerType: (*RpgServiceServer)(nil),
@@ -379,6 +412,10 @@ var _RpgService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FundCharacter",
 			Handler:    _RpgService_FundCharacter_Handler,
+		},
+		{
+			MethodName: "ConductTrade",
+			Handler:    _RpgService_ConductTrade_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

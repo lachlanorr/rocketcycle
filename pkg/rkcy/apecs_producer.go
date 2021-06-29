@@ -26,7 +26,7 @@ type Step struct {
 	Concern string
 	Command string
 	Key     string
-	Payload []byte
+	Payload proto.Message
 }
 
 type ApecsProducer struct {
@@ -389,11 +389,17 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 ) error {
 	stepsPb := make([]*ApecsTxn_Step, len(steps))
 	for i, step := range steps {
+		payloadBytes, err := proto.Marshal(step.Payload)
+		if err != nil {
+			return err
+		}
+
 		stepsPb[i] = &ApecsTxn_Step{
 			System:  System_PROCESS,
 			Concern: step.Concern,
 			Command: step.Command,
 			Key:     step.Key,
+			Payload: payloadBytes,
 		}
 	}
 
