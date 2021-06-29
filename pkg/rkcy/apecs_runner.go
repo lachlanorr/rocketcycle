@@ -5,7 +5,6 @@
 package rkcy
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -90,24 +89,28 @@ func produceNextStep(
 	} else {
 		// search for instance updates and create new storage txn to update storage
 		if rtxn.txn.Direction == Direction_FORWARD {
-			var storageSteps []*ApecsTxn_Step
+			storageStepsMap := make(map[string]*ApecsTxn_Step)
 			for _, step := range rtxn.txn.ForwardSteps {
 				if step.System == System_PROCESS && step.Result.Instance != nil {
-					storageSteps = append(
-						storageSteps,
-						&ApecsTxn_Step{
-							System:  System_STORAGE,
-							Concern: step.Concern,
-							Command: CmdUpdate,
-							Key:     step.Key,
-							Payload: step.Result.Instance,
-							Offset:  step.Offset,
-						},
-					)
-
+					stepKey := fmt.Sprintf("%s_%s", step.Concern, step.Key)
+					storageStepsMap[stepKey] = &ApecsTxn_Step{
+						System:  System_STORAGE,
+						Concern: step.Concern,
+						Command: CmdUpdate,
+						Key:     step.Key,
+						Payload: step.Result.Instance,
+						Offset:  step.Offset,
+					}
 				}
 			}
-			if storageSteps != nil {
+			if len(storageStepsMap) > 0 {
+				storageSteps := make([]*ApecsTxn_Step, len(storageStepsMap))
+				i := 0
+				for k, v := range storageStepsMap {
+					log.Info().Msgf("Storage step added for %s %s/%s/%+v", k, v.Concern, v.Key, v.Offset)
+					storageSteps[i] = v
+					i++
+				}
 				storageTraceId := NewTraceId()
 				rtxn.txn.AssocTraceId = storageTraceId
 				err := aprod.executeTxn(
@@ -281,7 +284,7 @@ func advanceApecsTxn(
 	}
 
 	// Update InstanceCache if instance contents have changed
-	if tp.System == System_PROCESS && step.Result.Instance != nil && !bytes.Equal(step.Result.Instance, args.Instance) {
+	if tp.System == System_PROCESS && step.Result.Instance != nil {
 		instanceCache.Set(step.Key, step.Result.Instance, offset)
 	}
 
