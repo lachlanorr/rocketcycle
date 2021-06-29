@@ -8,6 +8,7 @@ import (
 	"context"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -26,6 +27,7 @@ type RunnerArgs struct {
 	RandomSeed         int64
 	Ratios             []float64
 	InitCharacterCount uint
+	PreSleepSecs       uint
 }
 
 const (
@@ -99,6 +101,8 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 		}
 	}
 
+	time.Sleep(time.Duration(args.PreSleepSecs) * time.Second)
+
 	for simIdx := uint(1); simIdx <= args.SimulationCount; simIdx++ {
 		pct := r.Float64() * 100.0
 		for cmdId := CommandId(0); cmdId < Cmd_COUNT; cmdId++ {
@@ -150,6 +154,7 @@ func start(settings *Settings) {
 				RandomSeed:         r.Int63(),
 				Ratios:             ratios,
 				InitCharacterCount: settings.InitCharacterCount,
+				PreSleepSecs:       settings.PreSleepSecs,
 			},
 			&wg,
 		)

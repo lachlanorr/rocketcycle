@@ -17,6 +17,7 @@ type Settings struct {
 	RandomSeed         int64
 	Ratios             string
 	InitCharacterCount uint
+	PreSleepSecs       uint
 }
 
 var (
@@ -42,6 +43,7 @@ func CobraCommand() *cobra.Command {
 	rootCmd.PersistentFlags().Int64Var(&settings.RandomSeed, "random_seed", -1, "Seed for run, same seed will run exactly the same simulation")
 	rootCmd.PersistentFlags().StringVar(&settings.Ratios, "ratios", "", "Command ratios used for simulation")
 	rootCmd.PersistentFlags().UintVar(&settings.InitCharacterCount, "init_character_count", 10, "Number characters to create before random simulation begins")
+	rootCmd.PersistentFlags().UintVar(&settings.PreSleepSecs, "pre_sleep_secs", 0, "Number of seconds to sleep between initial character creation and simulator start")
 
 	return rootCmd
 }
