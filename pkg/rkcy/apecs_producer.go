@@ -26,7 +26,7 @@ type Step struct {
 	Concern string
 	Command string
 	Key     string
-	Payload []byte
+	Payload proto.Message
 }
 
 type ApecsProducer struct {
@@ -160,6 +160,17 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 	return nil
 }
 
+func respondThroughChannel(traceId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Str("TraceId", traceId).
+				Msgf("recover while sending to respCh '%s'", r)
+		}
+	}()
+	respCh <- txn
+}
+
 func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget *TopicTarget) {
 	reqMap := make(map[string]*RespChan)
 
@@ -255,7 +266,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 								Str("TraceId", traceId).
 								Msg("Failed to Unmarshal ApecsTxn")
 						} else {
-							respCh.RespCh <- &txn
+							respondThroughChannel(traceId, respCh.RespCh, &txn)
 						}
 					}
 				} else {
@@ -327,6 +338,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		RespCh:    make(chan *ApecsTxn),
 		StartTime: time.Now(),
 	}
+	defer close(respCh.RespCh)
 	aprod.respRegisterCh <- &respCh
 
 	err := aprod.ExecuteTxnAsync(
@@ -377,11 +389,17 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 ) error {
 	stepsPb := make([]*ApecsTxn_Step, len(steps))
 	for i, step := range steps {
+		payloadBytes, err := proto.Marshal(step.Payload)
+		if err != nil {
+			return err
+		}
+
 		stepsPb[i] = &ApecsTxn_Step{
 			System:  System_PROCESS,
 			Concern: step.Concern,
 			Command: step.Command,
 			Key:     step.Key,
+			Payload: payloadBytes,
 		}
 	}
 

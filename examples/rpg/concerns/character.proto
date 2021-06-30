@@ -35,12 +35,8 @@ message FundingRequest {
     Character.Currency currency = 2;
 }
 
-message TransferRequest {
-    string src_character_id = 1;
-    string dest_character_id = 2;
-    Character.Currency currency = 3;
-}
-
 service CharacterCommands {
     rpc Fund(FundingRequest) returns (Character);
+    rpc DebitFunds(FundingRequest) returns (Character);
+    rpc CreditFunds(FundingRequest) returns (Character);
 }

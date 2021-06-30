@@ -10,6 +10,8 @@ option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/edge";
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
+import "pkg/rkcy/apecs.proto";
+
 import "examples/rpg/concerns/player.proto";
 import "examples/rpg/concerns/character.proto";
 
@@ -19,6 +21,11 @@ message RpgRequest {
 
 message RpgResponse {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
+}
+
+message TradeRequest {
+    rocketcycle.examples.rpg.concerns.FundingRequest lhs = 1;
+    rocketcycle.examples.rpg.concerns.FundingRequest rhs = 2;
 }
 
 service RpgService {
@@ -76,5 +83,11 @@ service RpgService {
         };
     }
 
+    rpc ConductTrade(TradeRequest) returns (rkcy.Void) {
+        option (google.api.http) = {
+            post: "/v1/character/conductTrade"
+            body: "*"
+        };
+    }
 }
 

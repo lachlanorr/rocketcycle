@@ -23,10 +23,29 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 )
 
+type ResourceType int
+
+const (
+	ResourceType_PLAYER ResourceType = iota
+	ResourceType_CHARACTER
+	ResourceType_FUNDING_REQUEST
+)
+
+var messageFactory = map[ResourceType]func() proto.Message{
+	ResourceType_PLAYER:          func() proto.Message { return proto.Message(new(concerns.Player)) },
+	ResourceType_CHARACTER:       func() proto.Message { return proto.Message(new(concerns.Character)) },
+	ResourceType_FUNDING_REQUEST: func() proto.Message { return proto.Message(new(concerns.FundingRequest)) },
+}
+
+var MessageFactory = map[string]func() proto.Message{
+	"player":    messageFactory[ResourceType_PLAYER],
+	"character": messageFactory[ResourceType_CHARACTER],
+}
+
 func readResource(resourceName string, id string) (int, []byte, error) {
 	path := fmt.Sprintf("/v1/%s/read/%s?pretty", resourceName, id)
 
-	resp, err := http.Get(settings.EdgeAddr + path)
+	resp, err := http.Get(settings.EdgeHttpAddr + path)
 	if err != nil {
 		return 500, nil, err
 	}
@@ -71,7 +90,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 	}
 
 	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", contentRdr)
 	if err != nil {
 		return 500, nil, err
 	}
@@ -86,7 +105,7 @@ func createOrUpdateResource(verb string, resourceName string, msg proto.Message,
 }
 
 func cobraCreateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := concerns.MessageFactory[args[0]]
+	msgFac, ok := MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -110,7 +129,7 @@ func cobraCreateResource(cmd *cobra.Command, args []string) {
 }
 
 func cobraUpdateResource(cmd *cobra.Command, args []string) {
-	msgFac, ok := concerns.MessageFactory[args[0]]
+	msgFac, ok := MessageFactory[args[0]]
 	if !ok {
 		log.Fatal().
 			Str("Resource", args[0]).
@@ -161,7 +180,7 @@ func cobraUpdateResource(cmd *cobra.Command, args []string) {
 func deleteResource(resourceName string, id string) (int, error) {
 	path := fmt.Sprintf("/v1/%s/delete/%s", resourceName, id)
 
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", nil)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", nil)
 	if err != nil {
 		return 500, err
 	}
@@ -193,7 +212,7 @@ func cobraFundCharacter(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(content)
-	resp, err := http.Post(settings.EdgeAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(settings.EdgeHttpAddr+path, "application/json", contentRdr)
 	if err != nil {
 		log.Fatal().
 			Err(err).

@@ -38,12 +38,6 @@ services:
       - "14268:14268"
       - "14250:14250"
 
-  zipkin:
-    container_name: zipkin
-    image: openzipkin/zipkin:latest
-    ports:
-      - "9411:9411"
-
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector

@@ -27,10 +27,10 @@ BEGIN
         RAISE EXCEPTION 'mro_partition (%) != existing (%) for the same generation (%)', _mro_partition, _mro_partition_existing, _mro_generation;
       END IF;
       IF _mro_offset < _mro_offset_existing THEN
-        RAISE EXCEPTION 'mro_offset (%) < existing (%)', _mro_offset, _mro_offset_existing;
+        RETURN; -- this can happen and isn't that unusual, but we should never update with old data
       END IF;
     ELSIF _mro_generation < _mro_generation_existing THEN
-      RAISE EXCEPTION 'mro_generation (%) < existing (%)', _mro_generation, _mro_generation_existing;
+      RETURN; -- this can happen and isn't that unusual, but we should never update with old data
     END IF;
 
     UPDATE rpg.player
@@ -86,10 +86,10 @@ BEGIN
         RAISE EXCEPTION 'mro_partition (%) != existing (%) for the same generation (%)', _mro_partition, _mro_partition_existing, _mro_generation;
       END IF;
       IF _mro_offset < _mro_offset_existing THEN
-        RAISE EXCEPTION 'mro_offset (%) < existing (%)', _mro_offset, _mro_offset_existing;
+        RETURN; -- this can happen and isn't that unusual, but we should never update with old data
       END IF;
     ELSIF _mro_generation < _mro_generation_existing THEN
-      RAISE EXCEPTION 'mro_generation (%) < existing (%)', _mro_generation, _mro_generation_existing;
+      RETURN; -- this can happen and isn't that unusual, but we should never update with old data
     END IF;
 
     DELETE FROM rpg.player WHERE id = _id;
