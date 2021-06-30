@@ -47,7 +47,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 	stateDb.UpsertCharacter(character)
 
 	return fmt.Sprintf(
-		"Created %s:%s(%d/%d/%d/%d)",
+		"Create %s:%s(%d/%d/%d/%d)",
 		player.Id,
 		character.Id,
 		currency.Gold,

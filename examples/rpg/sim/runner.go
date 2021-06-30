@@ -17,6 +17,7 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/version"
 
+	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 )
 
@@ -141,17 +142,39 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 
 	}
 
-	diffs := compareInstances(ctx, stateDb, client)
+	diffsProcess := compareProcess(ctx, stateDb, client)
+	for _, diff := range diffsProcess {
+		log.Error().Msgf("%d PROCESS DIFF: %+v", args.RunnerIdx, *diff)
+	}
 
-	for _, diff := range diffs {
-		log.Error().Msgf("%d Diff: %+v", args.RunnerIdx, *diff)
+	var diffsStorage []*Difference
+	diffWait := time.Duration(settings.DiffWaitSecs) * time.Second
+	start := time.Now()
+	for {
+		diffsStorage = compareStorage(ctx, stateDb, client)
+
+		t := time.Now()
+		if t.Sub(start) > diffWait {
+			break
+		}
+
+		if len(diffsStorage) == 0 {
+			break
+		} else {
+			log.Warn().Msgf("%d STORAGE DIFFS %d, WAITING 10s", args.RunnerIdx, len(diffsStorage))
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+	for _, diff := range diffsStorage {
+		log.Error().Msgf("%d STORAGE DIFF: %+v", args.RunnerIdx, *diff)
 	}
 
 	log.Info().
-		Msgf("%d RUNNER END", args.RunnerIdx)
+		Msgf("%d RUNNER END DIFFS p/%d s/%d", args.RunnerIdx, len(diffsProcess), len(diffsStorage))
 }
 
-func compareInstances(ctx context.Context, stateDb *StateDb, client edge.RpgServiceClient) []*Difference {
+func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServiceClient) []*Difference {
 	diffs := make([]*Difference, 0, 10)
 
 	for _, stateDbPlayer := range stateDb.Players {
@@ -179,6 +202,42 @@ func compareInstances(ctx context.Context, stateDb *StateDb, client edge.RpgServ
 
 		if stateDbJson != rkcyJson {
 			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})
+		}
+	}
+
+	return diffs
+}
+
+func compareStorage(ctx context.Context, stateDb *StateDb, client edge.RpgServiceClient) []*Difference {
+	diffs := make([]*Difference, 0, 10)
+
+	for _, stateDbPlayer := range stateDb.Players {
+		rkcyPlayer := &concerns.Player{}
+		_, err := rkcyPlayer.Read(ctx, stateDbPlayer.Id)
+		if err != nil {
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
+		}
+
+		stateDbJson := protojson.Format(stateDbPlayer)
+		rkcyJson := protojson.Format(rkcyPlayer)
+
+		if stateDbJson != rkcyJson {
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbPlayer, Rkcy: rkcyPlayer})
+		}
+	}
+
+	for _, stateDbCharacter := range stateDb.Characters {
+		rkcyCharacter := &concerns.Character{}
+		_, err := rkcyCharacter.Read(ctx, stateDbCharacter.Id)
+		if err != nil {
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
+		}
+
+		stateDbJson := protojson.Format(stateDbCharacter)
+		rkcyJson := protojson.Format(rkcyCharacter)
+
+		if stateDbJson != rkcyJson {
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})
 		}
 	}
 

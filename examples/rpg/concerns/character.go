@@ -13,9 +13,9 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-func (inst *Character) ReadItems(ctx context.Context, conn *pgx.Conn) ([]*Character_Item, error) {
+func (inst *Character) ReadItems(ctx context.Context) ([]*Character_Item, error) {
 	var items []*Character_Item
-	rows, err := conn.Query(ctx, "select id, description from rpg.character_item where character_id = $1", inst.Id)
+	rows, err := pool.Query(ctx, "select id, description from rpg.character_item where character_id = $1", inst.Id)
 	if err == nil {
 		for rows.Next() {
 			item := Character_Item{}
@@ -31,17 +31,11 @@ func (inst *Character) ReadItems(ctx context.Context, conn *pgx.Conn) ([]*Charac
 }
 
 func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
-	conn, err := connect(ctx)
-	if err != nil {
-		return nil, rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
 	*inst = Character{
 		Currency: &Character_Currency{},
 	}
 	offset := rkcy.Offset{}
-	err = conn.QueryRow(
+	err := pool.QueryRow(
 		ctx,
 		`SELECT c.id,
                 c.player_id,
@@ -79,7 +73,7 @@ func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, erro
 		return nil, err
 	}
 
-	inst.Items, err = inst.ReadItems(ctx, conn)
+	inst.Items, err = inst.ReadItems(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -100,14 +94,8 @@ func hasItem(id string, items []*Character_Item) bool {
 }
 
 func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
-	conn, err := connect(ctx)
-	if err != nil {
-		return rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(
-		context.Background(),
+	_, err := pool.Exec(
+		ctx,
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
 		inst.Id,
 		inst.PlayerId,
@@ -124,8 +112,8 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 	if inst.Currency == nil {
 		inst.Currency = &Character_Currency{}
 	}
-	_, err = conn.Exec(
-		context.Background(),
+	_, err = pool.Exec(
+		ctx,
 		"CALL rpg.sp_upsert_character_currency($1, $2, $3, $4, $5, $6, $7, $8)",
 		inst.Id,
 		inst.Currency.Gold,
@@ -142,14 +130,14 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 
 	// retrieve all owned items so we can remove ones that may have
 	// been removed
-	dbItems, err := inst.ReadItems(ctx, conn)
+	dbItems, err := inst.ReadItems(ctx)
 	if err != nil {
 		return err
 	}
 	for _, dbItem := range dbItems {
 		if !hasItem(dbItem.Id, inst.Items) {
-			_, err = conn.Exec(
-				context.Background(),
+			_, err = pool.Exec(
+				ctx,
 				"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 				dbItem.Id,
 				consts.ZeroUuid,
@@ -165,8 +153,8 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 		}
 	}
 	for _, item := range inst.Items {
-		_, err = conn.Exec(
-			context.Background(),
+		_, err = pool.Exec(
+			ctx,
 			"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 			item.Id,
 			inst.Id,
@@ -193,14 +181,8 @@ func (inst *Character) Update(ctx context.Context, offset *rkcy.Offset) error {
 }
 
 func (inst *Character) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
-	conn, err := connect(ctx)
-	if err != nil {
-		return rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(
-		context.Background(),
+	_, err := pool.Exec(
+		ctx,
 		"CALL rpg.sp_delete_character($1, $2, $3, $4)",
 		key,
 		offset.Generation,

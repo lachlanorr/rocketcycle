@@ -13,15 +13,9 @@ import (
 )
 
 func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
-	conn, err := connect(ctx)
-	if err != nil {
-		return nil, rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
 	*inst = Player{}
 	offset := &rkcy.Offset{}
-	err = conn.QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", key).
+	err := pool.QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", key).
 		Scan(
 			&inst.Id,
 			&inst.Username,
@@ -42,13 +36,7 @@ func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) 
 }
 
 func (inst *Player) upsert(ctx context.Context, offset *rkcy.Offset) error {
-	conn, err := connect(ctx)
-	if err != nil {
-		return rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(
+	_, err := pool.Exec(
 		ctx,
 		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",
 		inst.Id,
@@ -70,13 +58,7 @@ func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
 }
 
 func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
-	conn, err := connect(ctx)
-	if err != nil {
-		return rkcy.NewError(rkcy.Code_CONNECTION, err.Error())
-	}
-	defer conn.Close(ctx)
-
-	_, err = conn.Exec(
+	_, err := pool.Exec(
 		context.Background(),
 		"CALL rpg.sp_delete_player($1, $2, $3, $4)",
 		key,

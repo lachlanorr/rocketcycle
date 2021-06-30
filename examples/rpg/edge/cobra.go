@@ -5,7 +5,6 @@
 package edge
 
 import (
-	//	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +31,7 @@ func CobraCommand() *cobra.Command {
 		Short: "RPG Edge Rest Api",
 		Long:  "Client interaction rest api that provides synchronous access over http",
 	}
-	rootCmd.PersistentFlags().StringVarP(&settings.EdgeHttpAddr, "edge_http_addr", "", "http://localhost:11350", "Address against which to make edge http requests")
+	rootCmd.PersistentFlags().StringVar(&settings.EdgeHttpAddr, "edge_http_addr", "http://localhost:11350", "Address against which to make edge http requests")
 
 	readCmd := &cobra.Command{
 		Use:       "read resource id",
