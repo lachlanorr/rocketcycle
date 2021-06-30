@@ -88,6 +88,13 @@ func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, st
 	), nil
 }
 
+func maxi(x, y int) int {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
 	charLhs := stateDb.RandomCharacter(r)
 	var charRhs *concerns.Character
@@ -98,8 +105,18 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 		}
 	}
 
-	fundsLhs := &concerns.Character_Currency{Gold: 10}
-	fundsRhs := &concerns.Character_Currency{Faction_0: 20}
+	fundsLhs := &concerns.Character_Currency{
+		Gold:      int32(r.Intn(maxi(1, int(charLhs.Currency.Gold)/100))),
+		Faction_0: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_0)/100))),
+		Faction_1: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_1)/100))),
+		Faction_2: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_2)/100))),
+	}
+	fundsRhs := &concerns.Character_Currency{
+		Gold:      int32(r.Intn(maxi(1, int(charRhs.Currency.Gold)/100))),
+		Faction_0: int32(r.Intn(maxi(1, int(charRhs.Currency.Faction_0)/100))),
+		Faction_1: int32(r.Intn(maxi(1, int(charRhs.Currency.Faction_1)/100))),
+		Faction_2: int32(r.Intn(maxi(1, int(charRhs.Currency.Faction_2)/100))),
+	}
 
 	_, err := client.ConductTrade(
 		ctx,
