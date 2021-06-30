@@ -37,6 +37,8 @@ const (
 	CmdCreateCharacter CommandId = iota
 	CmdFund
 	CmdTrade
+	CmdReadPlayer
+	CmdReadCharacter
 
 	Cmd_COUNT
 )
@@ -51,7 +53,9 @@ type Command struct {
 var commands = map[CommandId]Command{
 	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 3},
 	CmdFund:            {Handler: cmdFund, Ratio: 3},
-	CmdTrade:           {Handler: cmdTrade, Ratio: 94},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 4},
+	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 20},
+	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 70},
 }
 
 type DifferenceType string

@@ -154,3 +154,23 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 		fundsRhs.Faction_2,
 	), nil
 }
+
+func cmdReadPlayer(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
+	player := stateDb.RandomPlayer(r)
+	_, err := client.ReadPlayer(ctx, &edge.RpgRequest{Id: player.Id})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("ReadPlayer %s", player.Id), nil
+}
+
+func cmdReadCharacter(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
+	char := stateDb.RandomCharacter(r)
+	_, err := client.ReadCharacter(ctx, &edge.RpgRequest{Id: char.Id})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("ReadCharacter %s", char.Id), nil
+}
