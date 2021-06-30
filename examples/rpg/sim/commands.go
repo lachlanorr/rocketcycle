@@ -47,7 +47,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 	stateDb.UpsertCharacter(character)
 
 	return fmt.Sprintf(
-		"Created Player(%s) and Character(%s) Currency(%d/%d/%d/%d)",
+		"Created %s:%s(%d/%d/%d/%d)",
 		player.Id,
 		character.Id,
 		currency.Gold,
@@ -59,7 +59,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 
 func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
 	character := stateDb.RandomCharacter(r)
-	currency := concerns.Character_Currency{
+	funds := &concerns.Character_Currency{
 		Gold:      int32(r.Intn(100)),
 		Faction_0: int32(r.Intn(100)),
 		Faction_1: int32(r.Intn(100)),
@@ -69,19 +69,22 @@ func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, st
 		ctx,
 		&concerns.FundingRequest{
 			CharacterId: character.Id,
-			Currency:    &currency,
+			Currency:    funds,
 		},
 	)
 	if err != nil {
 		return "", err
 	}
+
+	stateDb.Credit(character.Id, funds)
+
 	return fmt.Sprintf(
-		"Funded %s %d/%d/%d/%d",
+		"Fund %s(%d/%d/%d/%d)",
 		character.Id,
-		currency.Gold,
-		currency.Faction_0,
-		currency.Faction_1,
-		currency.Faction_2,
+		funds.Gold,
+		funds.Faction_0,
+		funds.Faction_1,
+		funds.Faction_2,
 	), nil
 }
 
@@ -95,16 +98,19 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 		}
 	}
 
+	fundsLhs := &concerns.Character_Currency{Gold: 10}
+	fundsRhs := &concerns.Character_Currency{Faction_0: 20}
+
 	_, err := client.ConductTrade(
 		ctx,
 		&edge.TradeRequest{
 			Lhs: &concerns.FundingRequest{
 				CharacterId: charLhs.Id,
-				Currency:    &concerns.Character_Currency{Gold: 10},
+				Currency:    fundsLhs,
 			},
 			Rhs: &concerns.FundingRequest{
 				CharacterId: charRhs.Id,
-				Currency:    &concerns.Character_Currency{Faction_0: 20},
+				Currency:    fundsRhs,
 			},
 		},
 	)
@@ -112,5 +118,22 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 		return "", err
 	}
 
-	return fmt.Sprintf("Trade conducted %s %s", charLhs.Id, charRhs.Id), nil
+	stateDb.Debit(charLhs.Id, fundsLhs)
+	stateDb.Debit(charRhs.Id, fundsRhs)
+	stateDb.Credit(charLhs.Id, fundsRhs)
+	stateDb.Credit(charRhs.Id, fundsLhs)
+
+	return fmt.Sprintf(
+		"Trade %s(%d/%d/%d/%d) %s(%d/%d/%d/%d)",
+		charLhs.Id,
+		fundsLhs.Gold,
+		fundsLhs.Faction_0,
+		fundsLhs.Faction_1,
+		fundsLhs.Faction_2,
+		charRhs.Id,
+		fundsRhs.Gold,
+		fundsRhs.Faction_0,
+		fundsRhs.Faction_1,
+		fundsRhs.Faction_2,
+	), nil
 }

@@ -5,6 +5,7 @@
 package sim
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
@@ -50,4 +51,28 @@ func (stateDb *StateDb) UpsertCharacter(character *concerns.Character) {
 
 func (stateDb *StateDb) RandomCharacter(r *rand.Rand) *concerns.Character {
 	return stateDb.Characters[r.Intn(len(stateDb.Characters))]
+}
+
+func (stateDb *StateDb) Credit(charId string, funds *concerns.Character_Currency) error {
+	char, ok := stateDb.CharacterMap[charId]
+	if !ok {
+		return fmt.Errorf("Credit invalid character %s", charId)
+	}
+	char.Currency.Gold += funds.Gold
+	char.Currency.Faction_0 += funds.Faction_0
+	char.Currency.Faction_1 += funds.Faction_1
+	char.Currency.Faction_2 += funds.Faction_2
+	return nil
+}
+
+func (stateDb *StateDb) Debit(charId string, funds *concerns.Character_Currency) error {
+	char, ok := stateDb.CharacterMap[charId]
+	if !ok {
+		return fmt.Errorf("Debit invalid character %s", charId)
+	}
+	char.Currency.Gold -= funds.Gold
+	char.Currency.Faction_0 -= funds.Faction_0
+	char.Currency.Faction_1 -= funds.Faction_1
+	char.Currency.Faction_2 -= funds.Faction_2
+	return nil
 }

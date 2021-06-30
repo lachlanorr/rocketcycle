@@ -12,6 +12,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/version"
 
@@ -49,6 +51,21 @@ var commands = map[CommandId]Command{
 	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 3},
 	CmdFund:            {Handler: cmdFund, Ratio: 3},
 	CmdTrade:           {Handler: cmdTrade, Ratio: 94},
+}
+
+type DifferenceType string
+
+const (
+	Error   DifferenceType = "Error"
+	Process DifferenceType = "Process"
+	Storage DifferenceType = "Storage"
+)
+
+type Difference struct {
+	Message string
+	Type    DifferenceType
+	StateDb proto.Message
+	Rkcy    proto.Message
 }
 
 func computeRatios(commands map[CommandId]Command) []float64 {
@@ -101,7 +118,9 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 		}
 	}
 
-	time.Sleep(time.Duration(args.PreSleepSecs) * time.Second)
+	if args.PreSleepSecs > 0 {
+		time.Sleep(time.Duration(args.PreSleepSecs) * time.Second)
+	}
 
 	for simIdx := uint(1); simIdx <= args.SimulationCount; simIdx++ {
 		pct := r.Float64() * 100.0
@@ -122,8 +141,48 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 
 	}
 
+	diffs := compareInstances(ctx, stateDb, client)
+
+	for _, diff := range diffs {
+		log.Error().Msgf("%d Diff: %+v", args.RunnerIdx, *diff)
+	}
+
 	log.Info().
 		Msgf("%d RUNNER END", args.RunnerIdx)
+}
+
+func compareInstances(ctx context.Context, stateDb *StateDb, client edge.RpgServiceClient) []*Difference {
+	diffs := make([]*Difference, 0, 10)
+
+	for _, stateDbPlayer := range stateDb.Players {
+		rkcyPlayer, err := client.ReadPlayer(ctx, &edge.RpgRequest{Id: stateDbPlayer.Id})
+		if err != nil {
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
+		}
+
+		stateDbJson := protojson.Format(stateDbPlayer)
+		rkcyJson := protojson.Format(rkcyPlayer)
+
+		if stateDbJson != rkcyJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbPlayer, Rkcy: rkcyPlayer})
+		}
+	}
+
+	for _, stateDbCharacter := range stateDb.Characters {
+		rkcyCharacter, err := client.ReadCharacter(ctx, &edge.RpgRequest{Id: stateDbCharacter.Id})
+		if err != nil {
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
+		}
+
+		stateDbJson := protojson.Format(stateDbCharacter)
+		rkcyJson := protojson.Format(rkcyCharacter)
+
+		if stateDbJson != rkcyJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})
+		}
+	}
+
+	return diffs
 }
 
 func start(settings *Settings) {
