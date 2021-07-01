@@ -252,8 +252,8 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 func watchResultTopics(ctx context.Context) {
 	wtMap := make(map[string]bool)
 
-	platCh := make(chan *Platform)
-	go consumePlatformConfig(ctx, platCh, settings.BootstrapServers, platformName)
+	adminCh := make(chan *AdminMessage)
+	go consumePlatformAdminTopic(ctx, adminCh, settings.BootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
 
 	for {
 		select {
@@ -261,8 +261,8 @@ func watchResultTopics(ctx context.Context) {
 			log.Info().
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
-		case plat := <-platCh:
-			rtPlat, err := newRtPlatform(plat)
+		case adminMsg := <-adminCh:
+			rtPlat, err := newRtPlatform(adminMsg.Platform)
 			if err != nil {
 				log.Error().
 					Err(err).

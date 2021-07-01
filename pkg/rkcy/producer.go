@@ -26,9 +26,13 @@ type Producer struct {
 	kProd          *kafka.Producer
 	topics         *rtTopics
 
-	doneCh     chan struct{}
-	platformCh chan *Platform
-	produceCh  chan *message
+	adminTopic string
+	adminProd  *kafka.Producer
+
+	doneCh    chan struct{}
+	pauseCh   chan bool
+	adminCh   chan *AdminMessage
+	produceCh chan *message
 
 	fnv64 hash.Hash64
 }
@@ -61,13 +65,25 @@ func NewProducer(
 
 	prod.slog = prod.constlog.With().Logger()
 	prod.doneCh = make(chan struct{})
-	prod.platformCh = make(chan *Platform)
+	prod.pauseCh = make(chan bool)
+	prod.adminCh = make(chan *AdminMessage)
 	prod.produceCh = make(chan *message)
 
-	go consumePlatformConfig(ctx, prod.platformCh, bootstrapServers, platformName)
+	var err error
+	prod.adminTopic = AdminTopic(platformName)
+	prod.adminProd, err = kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": bootstrapServers,
+	})
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("failed to kafka.NewProducer for admin messages")
+	}
 
-	plat := <-prod.platformCh
-	prod.updatePlatform(plat)
+	go consumePlatformAdminTopic(ctx, prod.adminCh, bootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
+
+	adminMsg := <-prod.adminCh
+	prod.updatePlatform(adminMsg.Platform)
 
 	go prod.run(ctx)
 
@@ -149,46 +165,62 @@ func (prod *Producer) Close() {
 
 func (prod *Producer) run(ctx context.Context) {
 	defer prod.closeKProd()
+	var paused bool
 
 	for {
-		select {
-		case <-ctx.Done():
-			prod.slog.Info().
-				Msg("Producer.run: exiting, ctx.Done()")
-			return
-		case <-prod.doneCh:
-			prod.slog.Info().
-				Msg("Producer.run: exiting, ctx.Done()")
-			return
-		case plat := <-prod.platformCh:
-			prod.updatePlatform(plat)
-		case msg := <-prod.produceCh:
-			if prod.kProd == nil {
-				prod.slog.Error().
-					Msg("Failed to Produce, kafka Producer is nil")
-				continue
+		if !paused {
+			select {
+			case <-ctx.Done():
+				return
+			case <-prod.doneCh:
+				return
+			case paused = <-prod.pauseCh:
+				break
+			case adminMsg := <-prod.adminCh:
+				prod.updatePlatform(adminMsg.Platform)
+			case msg := <-prod.produceCh:
+				if prod.kProd == nil {
+					prod.slog.Error().
+						Msg("Failed to Produce, kafka Producer is nil")
+					continue
+				}
+
+				prod.fnv64.Reset()
+				prod.fnv64.Write(msg.key)
+				fnvCalc := prod.fnv64.Sum64()
+				partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
+
+				kMsg := kafka.Message{
+					TopicPartition: kafka.TopicPartition{
+						Topic:     &prod.topics.CurrentTopic,
+						Partition: partition,
+					},
+					Value:   msg.value,
+					Headers: standardHeaders(msg.directive, msg.traceParent),
+				}
+
+				err := prod.kProd.Produce(&kMsg, msg.deliveryCh)
+				if err != nil {
+					prod.slog.Error().
+						Err(err).
+						Msg("Failed to Produce")
+					continue
+				}
 			}
-
-			prod.fnv64.Reset()
-			prod.fnv64.Write(msg.key)
-			fnvCalc := prod.fnv64.Sum64()
-			partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
-
-			kMsg := kafka.Message{
-				TopicPartition: kafka.TopicPartition{
-					Topic:     &prod.topics.CurrentTopic,
-					Partition: partition,
-				},
-				Value:   msg.value,
-				Headers: standardHeaders(msg.directive, msg.traceParent),
-			}
-
-			err := prod.kProd.Produce(&kMsg, msg.deliveryCh)
-			if err != nil {
-				prod.slog.Error().
-					Err(err).
-					Msg("Failed to Produce")
-				continue
+		} else {
+			// Same select as above without the produceCh read
+			// This way we can hang in this bottom select until unpaused
+			// and not read from produceCh, and producers will be paused
+			// trying to publish to the channel as well.
+			select {
+			case <-ctx.Done():
+				return
+			case <-prod.doneCh:
+				return
+			case paused = <-prod.pauseCh:
+				break
+			case adminMsg := <-prod.adminCh:
+				prod.updatePlatform(adminMsg.Platform)
 			}
 		}
 	}

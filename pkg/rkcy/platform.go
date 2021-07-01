@@ -302,14 +302,16 @@ func uncommittedGroupName(topic string, partition int) string {
 	return fmt.Sprintf("__%s_%d__non_comitted_group", topic, partition)
 }
 
-type rkcyMessage struct {
-	Directive Directive
-	Value     []byte
+type AdminMessage struct {
+	Directive              Directive
+	Platform               *Platform
+	AdminConsumerDirective *AdminConsumerDirective
+	AdminProducerDirective *AdminProducerDirective
 }
 
 func consumePlatformAdminTopic(
 	ctx context.Context,
-	ch chan<- *rkcyMessage,
+	ch chan<- *AdminMessage,
 	bootstrapServers string,
 	platformName string,
 	match Directive,
@@ -380,44 +382,40 @@ func consumePlatformAdminTopic(
 			} else if !timedOut && msg != nil {
 				directive := GetDirective(msg)
 				if (directive & match) == match {
-					ch <- &rkcyMessage{
+					adminMsg := &AdminMessage{
 						Directive: directive,
-						Value:     msg.Value,
 					}
+					if (directive & Directive_PLATFORM) == Directive_PLATFORM {
+						adminMsg.Platform = &Platform{}
+						err := proto.Unmarshal(msg.Value, adminMsg.Platform)
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msg("Failed to Unmarshal Platform")
+							break
+						}
+					} else if (directive & Directive_ADMIN_PRODUCER) == Directive_ADMIN_PRODUCER {
+						adminMsg.AdminProducerDirective = &AdminProducerDirective{}
+						err := proto.Unmarshal(msg.Value, adminMsg.AdminProducerDirective)
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msg("Failed to Unmarshal AdminProducerDirective")
+							break
+						}
+					} else if (directive & Directive_ADMIN_CONSUMER) == Directive_ADMIN_CONSUMER {
+						adminMsg.AdminConsumerDirective = &AdminConsumerDirective{}
+						err := proto.Unmarshal(msg.Value, adminMsg.AdminConsumerDirective)
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msg("Failed to Unmarshal AdminConsumerDirective")
+							break
+						}
+					}
+
+					ch <- adminMsg
 				}
-			}
-		}
-	}
-}
-
-func consumePlatformConfig(ctx context.Context, ch chan<- *Platform, bootstrapServers string, platformName string) {
-	rkcyCh := make(chan *rkcyMessage, 1)
-
-	go consumePlatformAdminTopic(
-		ctx,
-		rkcyCh,
-		bootstrapServers,
-		platformName,
-		Directive_PLATFORM,
-		AtLastMatch,
-	)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().
-				Msg("ConsumePlatformConfig exiting, ctx.Done()")
-			return
-		case rkcyMsg := <-rkcyCh:
-			plat := Platform{}
-
-			err := proto.Unmarshal(rkcyMsg.Value, &plat)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to Unmarshal Platform")
-			} else {
-				ch <- &plat
 			}
 		}
 	}

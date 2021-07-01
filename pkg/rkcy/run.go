@@ -18,7 +18,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 )
 
 type rtProgram struct {
@@ -276,10 +275,11 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 }
 
 func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
-	rkcyCh := make(chan *rkcyMessage, 1)
+	adminCh := make(chan *AdminMessage)
+
 	go consumePlatformAdminTopic(
 		ctx,
-		rkcyCh,
+		adminCh,
 		settings.BootstrapServers,
 		platformName,
 		Directive_ADMIN_CONSUMER,
@@ -303,22 +303,14 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
 			return
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
-		case rkcyMsg := <-rkcyCh:
-			acd := AdminConsumerDirective{}
-			err := proto.Unmarshal(rkcyMsg.Value, &acd)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to Unmarshal AdminProducerDirective")
-			} else {
-				updateRunning(
-					ctx,
-					running,
-					rkcyMsg.Directive,
-					&acd,
-					printCh,
-				)
-			}
+		case adminMsg := <-adminCh:
+			updateRunning(
+				ctx,
+				running,
+				adminMsg.Directive,
+				adminMsg.AdminConsumerDirective,
+				printCh,
+			)
 		}
 	}
 }

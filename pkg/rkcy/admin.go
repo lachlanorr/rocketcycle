@@ -392,8 +392,8 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 		}
 	}()
 
-	platCh := make(chan *Platform)
-	go consumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	adminCh := make(chan *AdminMessage)
+	go consumePlatformAdminTopic(ctx, adminCh, bootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
 
 	for {
 		select {
@@ -401,8 +401,8 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 			log.Info().
 				Msg("managePlatform exiting, ctx.Done()")
 			return
-		case plat := <-platCh:
-			rtPlat, err := newRtPlatform(plat)
+		case adminMsg := <-adminCh:
+			rtPlat, err := newRtPlatform(adminMsg.Platform)
 			if err != nil {
 				log.Error().
 					Err(err).
