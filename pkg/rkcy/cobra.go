@@ -60,6 +60,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   platformName,
 		Short: "Rocketcycle Platform - " + platformName,
 	}
+	rootCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 
 	// admin sub command
 	adminCmd := &cobra.Command{
@@ -72,7 +73,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   "read",
 		Short: "read a specific resource from rest api",
 	}
-	adminReadCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	adminReadCmd.PersistentFlags().StringVar(&settings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
 	adminCmd.AddCommand(adminReadCmd)
 
 	adminReadPlatformCmd := &cobra.Command{
@@ -87,7 +88,7 @@ func runCobra(impl *PlatformImpl) {
 		Short: "decode base64 opaque payloads",
 	}
 	adminCmd.AddCommand(adminDecodeCmd)
-	adminDecodeCmd.PersistentFlags().StringVarP(&settings.AdminAddr, "admin_addr", "", "http://localhost:11371", "Address against which to make client requests")
+	adminDecodeCmd.PersistentFlags().StringVar(&settings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
 
 	adminDecodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
@@ -104,9 +105,8 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Manages topics and provides rest api for admin activities",
 		Run:   cobraAdminServe,
 	}
-	adminServeCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	adminServeCmd.PersistentFlags().StringVarP(&settings.HttpAddr, "http_addr", "", ":11371", "Address to host http api")
-	adminServeCmd.PersistentFlags().StringVarP(&settings.GrpcAddr, "grpc_addr", "", ":11381", "Address to host grpc api")
+	adminServeCmd.PersistentFlags().StringVar(&settings.HttpAddr, "http_addr", ":11371", "Address to host http api")
+	adminServeCmd.PersistentFlags().StringVar(&settings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
 	adminCmd.AddCommand(adminServeCmd)
 	// admin sub command (END)
 
@@ -116,8 +116,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a proc consumer against the partition specified",
 		Run:   cobraProcess,
 	}
-	procCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	procCmd.MarkPersistentFlagRequired("bootstrap_servers")
 	procCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	procCmd.MarkPersistentFlagRequired("topic")
 	procCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")
@@ -130,8 +128,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a storage consumer against the partition specified",
 		Run:   cobraStorage,
 	}
-	storageCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
-	storageCmd.MarkPersistentFlagRequired("bootstrap_servers")
 	storageCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
 	storageCmd.MarkPersistentFlagRequired("topic")
 	storageCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition to consume")
@@ -144,7 +140,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a watch consumer against all error/complete topics",
 		Run:   cobraWatch,
 	}
-	watchCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
 	watchCmd.PersistentFlags().BoolVarP(&settings.WatchError, "error", "e", true, "Whether to watch error topics")
 	watchCmd.PersistentFlags().BoolVarP(&settings.WatchComplete, "complete", "c", true, "Whether to watch complete topics")
 	watchCmd.PersistentFlags().BoolVarP(&settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
@@ -156,7 +151,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Orchestrates sub processes as specified by platform topics consumer programs",
 		Run:   cobraRun,
 	}
-	runCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config and begin all other processes")
 	runCmd.PersistentFlags().BoolVarP(&settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(runCmd)
 
@@ -164,8 +158,6 @@ func runCobra(impl *PlatformImpl) {
 		Use:   "platform",
 		Short: "Manage platform configuration",
 	}
-	platCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read metadata and begin all other processes")
-	platCmd.PersistentFlags().StringVarP(&settings.ConfigFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
 	rootCmd.AddCommand(platCmd)
 
 	platUpdateCmd := &cobra.Command{
@@ -174,7 +166,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Publishes contents of platform config file to platform topic. Creates platform topic if it doesn't already exist.",
 		Run:   cobraPlatUpdate,
 	}
-	platUpdateCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read metadata and begin all other processes")
 	platUpdateCmd.PersistentFlags().StringVarP(&settings.ConfigFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platUpdateCmd)
 
