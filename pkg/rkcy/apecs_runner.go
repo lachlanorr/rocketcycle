@@ -106,8 +106,7 @@ func produceNextStep(
 			if len(storageStepsMap) > 0 {
 				storageSteps := make([]*ApecsTxn_Step, len(storageStepsMap))
 				i := 0
-				for k, v := range storageStepsMap {
-					log.Info().Msgf("Storage step added for %s %s/%s/%+v", k, v.Concern, v.Key, v.Offset)
+				for _, v := range storageStepsMap {
 					storageSteps[i] = v
 					i++
 				}
