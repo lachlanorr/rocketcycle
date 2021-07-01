@@ -32,12 +32,12 @@ func NewSpanId() string {
 }
 
 func prepLogging(platformName string) {
+	if os.Getenv("RKCY_DEBUG") == "1" {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
-	/*
-		log.Logger = log.With().
-			Str("Platform", platformName).
-			Logger()
-	*/
 }
 
 func contains(slice []string, item string) bool {
