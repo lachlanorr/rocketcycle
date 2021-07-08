@@ -33,7 +33,9 @@ import (
 )
 
 //go:embed static/admin/docs
-var docsFiles embed.FS
+var gDocsFiles embed.FS
+
+var gAdminPingInterval = 1 * time.Second
 
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
@@ -43,8 +45,8 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go managePlatform(ctx, settings.BootstrapServers, platformName)
-	go adminServe(ctx, settings.HttpAddr, settings.GrpcAddr)
+	go managePlatform(ctx, gSettings.BootstrapServers, gPlatformName)
+	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -61,7 +63,7 @@ func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(settings.AdminAddr + path)
+	resp, err := http.Get(gSettings.AdminAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -100,7 +102,7 @@ func cobraAdminDecodeInstance(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(rpcArgsSer)
-	resp, err := http.Post(settings.AdminAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(gSettings.AdminAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -142,7 +144,7 @@ func (srv adminServer) GrpcAddr() string {
 }
 
 func (adminServer) StaticFiles() http.FileSystem {
-	return http.FS(docsFiles)
+	return http.FS(gDocsFiles)
 }
 
 func (adminServer) StaticFilesPathPrefix() string {
@@ -163,8 +165,8 @@ func (adminServer) RegisterHandlerFromEndpoint(
 }
 
 func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
-	if oldRtPlat != nil {
-		return oldRtPlat.Platform, nil
+	if gOldRtPlat != nil {
+		return gOldRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
 }
@@ -204,7 +206,7 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 	ServeGrpcGateway(ctx, srv)
 }
 
-var oldRtPlat *rtPlatform = nil
+var gOldRtPlat *rtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *Platform_Cluster
@@ -282,7 +284,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	ci.brokerCount = len(md.Brokers)
 	for _, tp := range md.Topics {
 		sortedTopics = append(sortedTopics, tp.Topic)
-		ci.existingTopics[tp.Topic] = exists
+		ci.existingTopics[tp.Topic] = gExists
 	}
 
 	sort.Strings(sortedTopics)
@@ -372,28 +374,18 @@ func updateTopics(rtPlat *rtPlatform) {
 
 func managePlatform(ctx context.Context, bootstrapServers string, platformName string) {
 	adminTopic := AdminTopic(platformName)
-	adminProd, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-	})
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msg("failed to kafka.NewProducer for admin messages")
-	}
-	defer adminProd.Close()
-	go func() {
-		for e := range adminProd.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-				if ev.TopicPartition.Error != nil {
-					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
-				}
-			}
-		}
-	}()
+	adminProdCh := getProducerCh(bootstrapServers)
 
 	adminCh := make(chan *AdminMessage)
-	go consumePlatformAdminTopic(ctx, adminCh, bootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
+	go consumePlatformAdminTopic(
+		ctx,
+		adminCh,
+		bootstrapServers,
+		platformName,
+		Directive_PLATFORM|Directive_ADMIN_PRODUCER_STATUS,
+		Directive_PLATFORM,
+		kAtLastMatch,
+	)
 
 	for {
 		select {
@@ -402,64 +394,77 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 				Msg("managePlatform exiting, ctx.Done()")
 			return
 		case adminMsg := <-adminCh:
-			rtPlat, err := newRtPlatform(adminMsg.Platform)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to newRtPlatform")
-				continue
-			}
+			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
+				rtPlat, err := newRtPlatform(adminMsg.Platform)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("Failed to newRtPlatform")
+					continue
+				}
 
-			if oldRtPlat == nil || rtPlat.Hash != oldRtPlat.Hash {
-				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
-				log.Info().
-					Str("PlatformJson", string(jsonBytes)).
-					Msg("Platform parsed")
+				if gOldRtPlat == nil || rtPlat.Hash != gOldRtPlat.Hash {
+					jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
+					log.Info().
+						Str("PlatformJson", string(jsonBytes)).
+						Msg("Platform parsed")
 
-				platDiff := rtPlat.diff(oldRtPlat)
+					platDiff := rtPlat.diff(gOldRtPlat)
 
-				updateTopics(rtPlat)
-				updateRunner(ctx, adminProd, adminTopic, platDiff)
-				oldRtPlat = rtPlat
+					updateTopics(rtPlat)
+					updateRunner(ctx, adminProdCh, adminTopic, platDiff)
+					gOldRtPlat = rtPlat
+				}
+			} else if (adminMsg.Directive & Directive_ADMIN_PRODUCER_STATUS) == Directive_ADMIN_PRODUCER_STATUS {
+				now := time.Now()
+				if now.Sub(adminMsg.Timestamp) < gAdminPingInterval*2 {
+					log.Info().Msgf("TODO: Do something with ADMIN_PRODUCER_STATUS | %s | %+v", adminMsg.Timestamp.Format(time.UnixDate), adminMsg)
+				}
 			}
 		}
 	}
 }
 
-func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string, platDiff *platformDiff) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
+
 	for _, p := range platDiff.progsToStop {
-		acd := &AdminConsumerDirective{Program: p}
-		acdSer, err := proto.Marshal(acd)
+		msg, err := kafkaMessage(
+			&adminTopic,
+			0,
+			&AdminConsumerDirective{Program: p},
+			Directive_ADMIN_CONSUMER_STOP,
+			traceParent,
+		)
 		if err != nil {
-			span.RecordError(err)
-			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
-		adminProd.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
-			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, traceParent),
-		}, nil)
+
+		adminProdCh <- msg
 	}
+
 	for _, p := range platDiff.progsToStart {
-		acd := &AdminConsumerDirective{Program: p}
-		acdSer, err := proto.Marshal(acd)
+		msg, err := kafkaMessage(
+			&adminTopic,
+			0,
+			&AdminConsumerDirective{Program: p},
+			Directive_ADMIN_CONSUMER_START,
+			traceParent,
+		)
 		if err != nil {
-			span.RecordError(err)
-			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
-		adminProd.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
-			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, traceParent),
-		}, nil)
+
+		adminProdCh <- msg
 	}
 }
 
 func substStr(s string, concernName string, clusterBootstrap string, shortTopicName string, fullTopicName string, partition int32) string {
-	s = strings.ReplaceAll(s, "@platform", platformName)
+	s = strings.ReplaceAll(s, "@platform", gPlatformName)
 	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
 	s = strings.ReplaceAll(s, "@concern", concernName)
 	s = strings.ReplaceAll(s, "@system", shortTopicName)
@@ -468,7 +473,7 @@ func substStr(s string, concernName string, clusterBootstrap string, shortTopicN
 	return s
 }
 
-var stdTags map[string]string = map[string]string{
+var gStdTags map[string]string = map[string]string{
 	"service.name":   "rkcy.@platform.@concern.@system",
 	"rkcy.concern":   "@concern",
 	"rkcy.system":    "@system",
@@ -479,7 +484,7 @@ var stdTags map[string]string = map[string]string{
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
 	progs := make([]*Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
-		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+		topicName := BuildFullTopicName(gPlatformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.Cluster]
 		progs[i] = &Program{
 			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
@@ -491,7 +496,7 @@ func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clu
 			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
 		}
 
-		for k, v := range stdTags {
+		for k, v := range gStdTags {
 			progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
 		}
 		if topics.ConsumerProgram.Tags != nil {

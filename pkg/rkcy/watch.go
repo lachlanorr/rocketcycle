@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -35,7 +34,7 @@ func (wt *watchTopic) String() string {
 }
 
 func (wt *watchTopic) consume(ctx context.Context) {
-	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", platformName, wt)
+	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", gPlatformName, wt)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
@@ -78,7 +77,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
 					txnJson := protojson.Format(proto.Message(&txn))
-					if settings.WatchDecode {
+					if gSettings.WatchDecode {
 						txnJsonDec, err := decodeOpaques(ctx, []byte(txnJson))
 						if err == nil {
 							log.WithLevel(wt.logLevel).
@@ -104,13 +103,13 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 		for _, topic := range concern.Topics {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
-				if tp.Topic == consts.Error || tp.Topic == consts.Complete {
+				if tp.Topic == ERROR || tp.Topic == COMPLETE {
 					wt := watchTopic{
 						clusterName:      topic.CurrentCluster.Name,
 						bootstrapServers: topic.CurrentCluster.BootstrapServers,
 						topicName:        topic.CurrentTopic,
 					}
-					if tp.Topic == consts.Error {
+					if tp.Topic == ERROR {
 						wt.logLevel = zerolog.ErrorLevel
 					} else {
 						wt.logLevel = zerolog.DebugLevel
@@ -253,7 +252,7 @@ func watchResultTopics(ctx context.Context) {
 	wtMap := make(map[string]bool)
 
 	adminCh := make(chan *AdminMessage)
-	go consumePlatformAdminTopic(ctx, adminCh, settings.BootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
+	go consumePlatformAdminTopic(ctx, adminCh, gSettings.BootstrapServers, gPlatformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
 
 	for {
 		select {

@@ -19,23 +19,21 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 )
 
-const undefinedPlatformName string = "__UNDEFINED__"
+const kUndefinedPlatformName string = "__UNDEFINED__"
 
-var platformName string = undefinedPlatformName
+var gPlatformName string = kUndefinedPlatformName
 
 func initPlatformName(name string) {
-	if platformName != undefinedPlatformName {
-		panic("Platform can be initialized only once, current name: " + platformName)
+	if gPlatformName != kUndefinedPlatformName {
+		panic("Platform can be initialized only once, current name: " + gPlatformName)
 	}
-	platformName = name
+	gPlatformName = name
 }
 
 func PlatformName() string {
-	return platformName
+	return gPlatformName
 }
 
 // Platform pb, with some convenience lookup maps
@@ -115,8 +113,8 @@ func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_C
 	}
 	if topic.PartitionCount <= 0 {
 		topic.PartitionCount = 1
-	} else if topic.PartitionCount > consts.MaxPartition {
-		topic.PartitionCount = consts.MaxPartition
+	} else if topic.PartitionCount > MAX_PARTITION {
+		topic.PartitionCount = MAX_PARTITION
 	}
 
 	return topic
@@ -292,7 +290,7 @@ func validateTopic(topic *Platform_Concern_Topic, clusters map[string]*Platform_
 	if _, ok := clusters[topic.Cluster]; !ok {
 		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.Cluster)
 	}
-	if topic.PartitionCount < 1 || topic.PartitionCount > consts.MaxPartition {
+	if topic.PartitionCount < 1 || topic.PartitionCount > MAX_PARTITION {
 		return fmt.Errorf("Topic with out of bounds PartitionCount %d", topic.PartitionCount)
 	}
 	return nil
@@ -307,6 +305,7 @@ type AdminMessage struct {
 	Platform               *Platform
 	AdminConsumerDirective *AdminConsumerDirective
 	AdminProducerDirective *AdminProducerDirective
+	Timestamp              time.Time
 }
 
 func consumePlatformAdminTopic(
@@ -315,7 +314,8 @@ func consumePlatformAdminTopic(
 	bootstrapServers string,
 	platformName string,
 	match Directive,
-	matchLoc MatchLoc,
+	startMatch Directive,
+	startMatchLoc MatchLoc,
 ) {
 	platformTopic := AdminTopic(platformName)
 	groupName := uncommittedGroupName(platformTopic, 0)
@@ -328,8 +328,8 @@ func consumePlatformAdminTopic(
 		bootstrapServers,
 		platformTopic,
 		0,
-		match,
-		matchLoc,
+		startMatch,
+		startMatchLoc,
 	)
 	if err != nil {
 		slog.Error().
@@ -381,9 +381,10 @@ func consumePlatformAdminTopic(
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
 				directive := GetDirective(msg)
-				if (directive & match) == match {
+				if (directive & match) != 0 {
 					adminMsg := &AdminMessage{
 						Directive: directive,
+						Timestamp: msg.Timestamp,
 					}
 					if (directive & Directive_PLATFORM) == Directive_PLATFORM {
 						adminMsg.Platform = &Platform{}
@@ -426,12 +427,12 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	defer span.End()
 
 	slog := log.With().
-		Str("BootstrapServers", settings.BootstrapServers).
-		Str("ConfigPath", settings.ConfigFilePath).
+		Str("BootstrapServers", gSettings.BootstrapServers).
+		Str("ConfigPath", gSettings.ConfigFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(settings.ConfigFilePath)
+	conf, err := ioutil.ReadFile(gSettings.ConfigFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -445,13 +446,6 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to unmarshal platform")
-	}
-	platMar, err := proto.Marshal(&plat)
-	if err != nil {
-		span.SetStatus(otel_codes.Error, err.Error())
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to Marshal platform")
 	}
 
 	// create an rtPlatform so we run the validations that involves
@@ -468,7 +462,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topic
-	adminTopic, err := createAdminTopic(context.Background(), settings.BootstrapServers, plat.Name)
+	adminTopic, err := createAdminTopic(context.Background(), gSettings.BootstrapServers, plat.Name)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -482,7 +476,7 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 		Msgf("Created platform admin topic: %s", adminTopic)
 
 	// At this point we are guaranteed to have a platform admin topic
-	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": settings.BootstrapServers})
+	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": gSettings.BootstrapServers})
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -491,10 +485,12 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 	}
 	defer prod.Close()
 
-	msg := &kafka.Message{
-		TopicPartition: kafka.TopicPartition{Topic: &adminTopic, Partition: 0},
-		Value:          platMar,
-		Headers:        standardHeaders(Directive_PLATFORM, ExtractTraceParent(ctx)),
+	msg, err := kafkaMessage(&adminTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
+	if err != nil {
+		span.SetStatus(otel_codes.Error, err.Error())
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to kafkaMessage")
 	}
 
 	produce := func() {

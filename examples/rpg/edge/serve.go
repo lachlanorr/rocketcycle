@@ -86,12 +86,12 @@ func processCrudRequest(
 	defer span.End()
 
 	var steps []rkcy.Step
-	if command == rkcy.CmdCreate || command == rkcy.CmdUpdate {
+	if command == rkcy.CREATE || command == rkcy.UPDATE {
 		var validateCmd string
-		if command == rkcy.CmdCreate {
-			validateCmd = rkcy.CmdValidateCreate
+		if command == rkcy.CREATE {
+			validateCmd = rkcy.VALIDATE_CREATE
 		} else {
-			validateCmd = rkcy.CmdValidateUpdate
+			validateCmd = rkcy.VALIDATE_UPDATE
 		}
 
 		// CREATE/UPDATE get a validate step first
@@ -135,7 +135,7 @@ func processCrudRequestPlayer(
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	if command == rkcy.CmdCreate {
+	if command == rkcy.CREATE {
 		if plyr.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 			recordError(span, err)
@@ -184,7 +184,7 @@ func processCrudRequestCharacter(
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	if command == rkcy.CmdCreate {
+	if command == rkcy.CREATE {
 		if char.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
 			recordError(span, err)
@@ -226,25 +226,25 @@ func processCrudRequestCharacter(
 func (server) ReadPlayer(ctx context.Context, req *RpgRequest) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdRead, &concerns.Player{Id: req.Id})
+	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &concerns.Player{Id: req.Id})
 }
 
 func (server) CreatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdCreate, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.CREATE, plyr)
 }
 
 func (server) UpdatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.CmdUpdate, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.UPDATE, plyr)
 }
 
 func (server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.CmdDelete, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.DELETE, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -254,25 +254,25 @@ func (server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, 
 func (server) ReadCharacter(ctx context.Context, req *RpgRequest) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdRead, &concerns.Character{Id: req.Id})
+	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &concerns.Character{Id: req.Id})
 }
 
 func (server) CreateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdCreate, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.CREATE, char)
 }
 
 func (server) UpdateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.CmdUpdate, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.UPDATE, char)
 }
 
 func (server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.CmdDelete, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.DELETE, req.Id, nil)
 	if err != nil {
 		return nil, err
 	}

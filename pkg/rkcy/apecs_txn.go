@@ -30,15 +30,15 @@ func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRe
 	}
 
 	for _, step := range steps {
-		if step.System == System_PROCESS && step.Command == CmdCreate {
+		if step.System == System_PROCESS && step.Command == CREATE {
 			// Inject a refresh step so the cache gets updated if storage Create succeeds
 			refreshStep := *step
-			refreshStep.Command = CmdRefresh
+			refreshStep.Command = REFRESH
 			refreshStep.System = System_PROCESS
 			step.System = System_STORAGE // switch to storage CREATE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 			txn.ForwardSteps = append(txn.ForwardSteps, &refreshStep)
-		} else if step.System == System_PROCESS && step.Command == CmdDelete {
+		} else if step.System == System_PROCESS && step.Command == DELETE {
 			storStep := *step
 			storStep.System = System_STORAGE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)

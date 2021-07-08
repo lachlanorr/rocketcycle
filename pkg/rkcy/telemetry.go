@@ -114,14 +114,14 @@ func SpanContext(ctx context.Context, traceId string) context.Context {
 	return trace.ContextWithRemoteSpanContext(ctx, sc)
 }
 
-var traceParentRe *regexp.Regexp = regexp.MustCompile("([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})")
+var gTraceParentRe *regexp.Regexp = regexp.MustCompile("([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})")
 
 func TraceParentIsValid(traceParent string) bool {
-	return traceParentRe.MatchString(traceParent)
+	return gTraceParentRe.MatchString(traceParent)
 }
 
 func TraceParentParts(traceParent string) []string {
-	matches := traceParentRe.FindAllStringSubmatch(traceParent, -1)
+	matches := gTraceParentRe.FindAllStringSubmatch(traceParent, -1)
 	if len(matches) != 1 || len(matches[0]) != 5 {
 		return make([]string, 0)
 	}
@@ -242,4 +242,18 @@ func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (contex
 	)
 
 	return ctx, span, step
+}
+
+func (telem *Telemetry) RecordProduceError(name string, traceId string, topic string, partition int32, err error) {
+	ctx := SpanContext(context.Background(), traceId)
+	ctx, span := Tracer().Start(
+		ctx,
+		"ProduceError: "+name,
+		trace.WithAttributes(
+			attribute.String("rkcy.topic", topic),
+			attribute.String("rkcy.error", err.Error()),
+			attribute.Int("rkcy.partition", int(partition)),
+		),
+	)
+	span.End()
 }

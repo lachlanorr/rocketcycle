@@ -10,8 +10,29 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+)
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
+const (
+	RKCY string = "rkcy"
+
+	DIRECTIVE_HEADER    string = "rkcy-directive"
+	TRACE_PARENT_HEADER string = "traceparent"
+
+	RKCY_TOPIC     string = "rkcy.topic"
+	RKCY_PARTITION string = "rkcy.partition"
+
+	MAX_PARTITION                  int32 = 1024
+	PLATFORM_ADMIN_RETENTION_BYTES int32 = 10 * 1024 * 1024
+)
+
+type StandardTopicName string
+
+const (
+	ADMIN    StandardTopicName = "admin"
+	PROCESS                    = "process"
+	ERROR                      = "error"
+	COMPLETE                   = "complete"
+	STORAGE                    = "storage"
 )
 
 type PlatformImpl struct {
@@ -31,7 +52,7 @@ func InitAncillary(platformName string) {
 }
 
 func BuildTopicNamePrefix(platformName string, concernName string, concernType Platform_Concern_Type) string {
-	return fmt.Sprintf("%s.%s.%s.%s", consts.Rkcy, platformName, concernName, Platform_Concern_Type_name[int32(concernType)])
+	return fmt.Sprintf("%s.%s.%s.%s", RKCY, platformName, concernName, Platform_Concern_Type_name[int32(concernType)])
 }
 
 func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
@@ -54,7 +75,7 @@ type TopicParts struct {
 
 func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	parts := strings.Split(fullTopic, ".")
-	if len(parts) != 6 || parts[0] != consts.Rkcy {
+	if len(parts) != 6 || parts[0] != RKCY {
 		return nil, fmt.Errorf("Invalid rkcy topic: %s", fullTopic)
 	}
 
@@ -64,9 +85,9 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 		Topic:    parts[4],
 	}
 
-	if tp.Topic == consts.Process {
+	if tp.Topic == PROCESS {
 		tp.System = System_PROCESS
-	} else if tp.Topic == consts.Storage {
+	} else if tp.Topic == STORAGE {
 		tp.System = System_STORAGE
 	} else {
 		tp.System = System_NO_SYSTEM

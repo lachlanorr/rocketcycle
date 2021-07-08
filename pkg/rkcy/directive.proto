@@ -20,6 +20,7 @@ enum Directive {
     ADMIN_PRODUCER_STOPPED = 0x00020002;
     ADMIN_PRODUCER_START   = 0x00020004;
     ADMIN_PRODUCER_STARTED = 0x00020008;
+    ADMIN_PRODUCER_STATUS  = 0x00020010;
 
     ADMIN_CONSUMER         = 0x00040000;
     ADMIN_CONSUMER_STOP    = 0x00040001;
@@ -36,7 +37,6 @@ message AdminProducerDirective {
     string concern   = 1;
     string topic     = 2;
     int32 generation = 3;
-    int32 partition  = 4;
 }
 
 message AdminConsumerDirective {

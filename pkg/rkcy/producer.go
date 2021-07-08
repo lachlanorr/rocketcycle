@@ -8,9 +8,11 @@ import (
 	"context"
 	"hash"
 	"hash/fnv"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -23,11 +25,11 @@ type Producer struct {
 	topicName    string
 
 	clusterBrokers string
-	kProd          *kafka.Producer
+	prodCh         ProducerCh
 	topics         *rtTopics
 
-	adminTopic string
-	adminProd  *kafka.Producer
+	adminTopic  string
+	adminProdCh ProducerCh
 
 	doneCh    chan struct{}
 	pauseCh   chan bool
@@ -45,6 +47,26 @@ type message struct {
 	deliveryCh  chan kafka.Event
 }
 
+func kafkaMessage(
+	topic *string,
+	partition int32,
+	value proto.Message,
+	directive Directive,
+	traceParent string,
+) (*kafka.Message, error) {
+	valueSer, err := proto.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	msg := &kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: topic, Partition: partition},
+		Value:          valueSer,
+		Headers:        standardHeaders(directive, traceParent),
+	}
+	//	log.Info().Msgf("msg: %+v", *msg)
+	return msg, nil
+}
+
 func NewProducer(
 	ctx context.Context,
 	bootstrapServers string,
@@ -52,7 +74,6 @@ func NewProducer(
 	concernName string,
 	topicName string,
 ) *Producer {
-
 	prod := Producer{
 		constlog: log.With().
 			Str("Concern", concernName).
@@ -69,18 +90,10 @@ func NewProducer(
 	prod.adminCh = make(chan *AdminMessage)
 	prod.produceCh = make(chan *message)
 
-	var err error
 	prod.adminTopic = AdminTopic(platformName)
-	prod.adminProd, err = kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-	})
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msg("failed to kafka.NewProducer for admin messages")
-	}
+	prod.adminProdCh = getProducerCh(bootstrapServers)
 
-	go consumePlatformAdminTopic(ctx, prod.adminCh, bootstrapServers, platformName, Directive_PLATFORM, AtLastMatch)
+	go consumePlatformAdminTopic(ctx, prod.adminCh, bootstrapServers, platformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
 
 	adminMsg := <-prod.adminCh
 	prod.updatePlatform(adminMsg.Platform)
@@ -118,21 +131,11 @@ func (prod *Producer) updatePlatform(plat *Platform) {
 
 	// update producer if necessary
 	if prod.clusterBrokers != prod.topics.CurrentCluster.BootstrapServers {
-		prod.closeKProd()
 		prod.clusterBrokers = prod.topics.CurrentCluster.BootstrapServers
+		prod.prodCh = getProducerCh(prod.clusterBrokers)
 		prod.slog = prod.slog.With().
 			Str("ClusterBrokers", prod.clusterBrokers).
 			Logger()
-		prod.kProd, err = kafka.NewProducer(&kafka.ConfigMap{
-			"bootstrap.servers": prod.clusterBrokers,
-		})
-		if err != nil {
-			prod.kProd = nil
-			prod.slog.Error().
-				Err(err).
-				Msg("failed to kafka.NewProducer")
-			return
-		}
 	}
 }
 
@@ -152,21 +155,26 @@ func (prod *Producer) Produce(
 	}
 }
 
-func (prod *Producer) closeKProd() {
-	if prod.kProd != nil {
-		prod.kProd.Flush(5 * 1000)
-		prod.kProd.Close()
-	}
-}
-
 func (prod *Producer) Close() {
 	prod.doneCh <- struct{}{}
 }
 
 func (prod *Producer) run(ctx context.Context) {
-	defer prod.closeKProd()
-	var paused bool
+	pingAdminTicker := time.NewTicker(gAdminPingInterval)
+	tickMsg, err := kafkaMessage(
+		&prod.adminTopic,
+		0,
+		&AdminProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+		Directive_ADMIN_PRODUCER_STATUS,
+		"",
+	)
+	if err != nil {
+		prod.slog.Fatal().
+			Err(err).
+			Msg("Failed to create tickMsg")
+	}
 
+	paused := false
 	for {
 		if !paused {
 			select {
@@ -174,12 +182,34 @@ func (prod *Producer) run(ctx context.Context) {
 				return
 			case <-prod.doneCh:
 				return
+			case <-pingAdminTicker.C:
+				prod.adminProdCh <- tickMsg
 			case paused = <-prod.pauseCh:
-				break
+				var directive Directive
+				if paused {
+					directive = Directive_ADMIN_PRODUCER_STOPPED
+				} else {
+					directive = Directive_ADMIN_PRODUCER_STARTED
+				}
+				msg, err := kafkaMessage(
+					&prod.adminTopic,
+					0,
+					&AdminProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+					directive,
+					"",
+				)
+				if err != nil {
+					prod.slog.Error().
+						Err(err).
+						Msg("Failed to kafkaMessage")
+					continue
+				}
+				log.Info().Msgf("pause produce %+v", msg)
+				prod.adminProdCh <- msg
 			case adminMsg := <-prod.adminCh:
 				prod.updatePlatform(adminMsg.Platform)
 			case msg := <-prod.produceCh:
-				if prod.kProd == nil {
+				if prod.prodCh == nil {
 					prod.slog.Error().
 						Msg("Failed to Produce, kafka Producer is nil")
 					continue
@@ -190,7 +220,7 @@ func (prod *Producer) run(ctx context.Context) {
 				fnvCalc := prod.fnv64.Sum64()
 				partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
 
-				kMsg := kafka.Message{
+				kMsg := &kafka.Message{
 					TopicPartition: kafka.TopicPartition{
 						Topic:     &prod.topics.CurrentTopic,
 						Partition: partition,
@@ -199,13 +229,7 @@ func (prod *Producer) run(ctx context.Context) {
 					Headers: standardHeaders(msg.directive, msg.traceParent),
 				}
 
-				err := prod.kProd.Produce(&kMsg, msg.deliveryCh)
-				if err != nil {
-					prod.slog.Error().
-						Err(err).
-						Msg("Failed to Produce")
-					continue
-				}
+				prod.prodCh <- kMsg
 			}
 		} else {
 			// Same select as above without the produceCh read
@@ -218,7 +242,7 @@ func (prod *Producer) run(ctx context.Context) {
 			case <-prod.doneCh:
 				return
 			case paused = <-prod.pauseCh:
-				break
+				continue
 			case adminMsg := <-prod.adminCh:
 				prod.updatePlatform(adminMsg.Platform)
 			}

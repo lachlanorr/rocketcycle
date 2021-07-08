@@ -18,8 +18,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 )
 
 type Step struct {
@@ -34,8 +32,7 @@ type ApecsProducer struct {
 	bootstrapServers  string
 	platformName      string
 	respTarget        *TopicTarget
-	producers         map[string]map[consts.StandardTopicName]*Producer
-	respProducers     map[string]*kafka.Producer
+	producers         map[string]map[StandardTopicName]*Producer
 	respRegisterCh    chan *RespChan
 	respConsumerClose context.CancelFunc
 }
@@ -59,8 +56,7 @@ func NewApecsProducer(
 		platformName:     platformName,
 		respTarget:       respTarget,
 
-		producers:      make(map[string]map[consts.StandardTopicName]*Producer),
-		respProducers:  make(map[string]*kafka.Producer),
+		producers:      make(map[string]map[StandardTopicName]*Producer),
 		respRegisterCh: make(chan *RespChan, 10),
 	}
 
@@ -84,20 +80,16 @@ func (aprod *ApecsProducer) Close() {
 		}
 	}
 
-	for _, responseProd := range aprod.respProducers {
-		responseProd.Close()
-	}
-
-	aprod.producers = make(map[string]map[consts.StandardTopicName]*Producer)
+	aprod.producers = make(map[string]map[StandardTopicName]*Producer)
 }
 
 func (aprod *ApecsProducer) getProducer(
 	concernName string,
-	topicName consts.StandardTopicName,
+	topicName StandardTopicName,
 ) (*Producer, error) {
 	concernProds, ok := aprod.producers[concernName]
 	if !ok {
-		concernProds = make(map[consts.StandardTopicName]*Producer)
+		concernProds = make(map[StandardTopicName]*Producer)
 		aprod.producers[concernName] = concernProds
 	}
 	pdc, ok := concernProds[topicName]
@@ -125,37 +117,13 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 
 	respTgt := rtxn.txn.ResponseTarget
 
-	txnSer, err := proto.Marshal(rtxn.txn)
+	kMsg, err := kafkaMessage(&respTgt.Topic, respTgt.Partition, rtxn.txn, Directive_APECS_TXN, rtxn.traceParent)
 	if err != nil {
 		return err
 	}
 
-	kProd, ok := aprod.respProducers[respTgt.BootstrapServers]
-	if !ok {
-		var err error
-		kProd, err = kafka.NewProducer(&kafka.ConfigMap{
-			"bootstrap.servers": respTgt.BootstrapServers,
-		})
-		if err != nil {
-			return err
-		}
-
-		aprod.respProducers[respTgt.BootstrapServers] = kProd
-	}
-
-	kMsg := kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &respTgt.Topic,
-			Partition: respTgt.Partition,
-		},
-		Value:   txnSer,
-		Headers: standardHeaders(Directive_APECS_TXN, rtxn.traceParent),
-	}
-
-	err = kProd.Produce(&kMsg, nil)
-	if err != nil {
-		return err
-	}
+	prodCh := getProducerCh(respTgt.BootstrapServers)
+	prodCh <- kMsg
 
 	return nil
 }
@@ -441,9 +409,9 @@ func (aprod *ApecsProducer) executeTxn(
 	return aprod.produceCurrentStep(txn, traceParent)
 }
 
-var systemToTopic = map[System]consts.StandardTopicName{
-	System_PROCESS: consts.Process,
-	System_STORAGE: consts.Storage,
+var gSystemToTopic = map[System]StandardTopicName{
+	System_PROCESS: PROCESS,
+	System_STORAGE: STORAGE,
 }
 
 func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, code Code, logToResult bool, msg string) error {
@@ -474,7 +442,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, consts.Error)
+	prd, err := aprod.getProducer(step.Concern, ERROR)
 	if err != nil {
 		return err
 	}
@@ -502,7 +470,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return fmt.Errorf("ApecsProducer.complete TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, consts.Complete)
+	prd, err := aprod.getProducer(step.Concern, COMPLETE)
 	if err != nil {
 		return err
 	}
@@ -531,7 +499,7 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn, traceParent string
 	step := rtxn.currentStep()
 
 	var prd *Producer = nil
-	topicName, ok := systemToTopic[step.System]
+	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
 		return fmt.Errorf("ApecsProducer.Process TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
 	}

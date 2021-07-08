@@ -135,7 +135,7 @@ func init() {
 
 				switch command {
 				// storage handlers
-				case rkcy.CmdCreate:
+				case rkcy.CREATE:
 					{
 						if direction == rkcy.Direction_FORWARD {
 							payloadIn := &Player{}
@@ -164,7 +164,7 @@ func init() {
 							}
 						}
 					}
-				case rkcy.CmdRead:
+				case rkcy.READ:
 					{
 						if direction == rkcy.Direction_FORWARD {
 							inst := &Player{}
@@ -180,7 +180,7 @@ func init() {
 							}
 						}
 					}
-				case rkcy.CmdUpdate:
+				case rkcy.UPDATE:
 					{
 						if direction == rkcy.Direction_FORWARD {
 							// capture orig so we can roll this back
@@ -227,7 +227,7 @@ func init() {
 							}
 						}
 					}
-				case rkcy.CmdDelete:
+				case rkcy.DELETE:
 					{
 						if direction == rkcy.Direction_FORWARD {
 							// capture orig so we can roll this back
@@ -278,14 +278,14 @@ func init() {
 					}
 				}
 
-				if inst.Key() == "" && command != rkcy.CmdValidateCreate {
+				if inst.Key() == "" && command != rkcy.VALIDATE_CREATE {
 					rslt.SetResult(fmt.Errorf("No key present during HandleCommand"))
 					return rslt
 				}
 
 				switch command {
 				// process handlers
-				case rkcy.CmdValidateCreate:
+				case rkcy.VALIDATE_CREATE:
 					{
 						payloadIn := &Player{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
@@ -304,7 +304,7 @@ func init() {
 							return rslt
 						}
 					}
-				case rkcy.CmdValidateUpdate:
+				case rkcy.VALIDATE_UPDATE:
 					{
 						payloadIn := &Player{}
 						err = proto.Unmarshal(args.Payload, payloadIn)
@@ -353,24 +353,24 @@ func init() {
 			switch system {
 			case rkcy.System_STORAGE:
 				switch command {
-				case rkcy.CmdCreate:
+				case rkcy.CREATE:
 					fallthrough
-				case rkcy.CmdRead:
+				case rkcy.READ:
 					fallthrough
-				case rkcy.CmdUpdate:
+				case rkcy.UPDATE:
 					return decodeInst(ctx, buffer)
 				default:
 					return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 				}
 			case rkcy.System_PROCESS:
 				switch command {
-				case rkcy.CmdRefresh:
+				case rkcy.REFRESH:
 					fallthrough
-				case rkcy.CmdRead:
+				case rkcy.READ:
 					fallthrough
-				case rkcy.CmdValidateCreate:
+				case rkcy.VALIDATE_CREATE:
 					fallthrough
-				case rkcy.CmdValidateUpdate:
+				case rkcy.VALIDATE_UPDATE:
 					return decodeInst(ctx, buffer)
 				default:
 					return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
@@ -384,24 +384,24 @@ func init() {
 			switch system {
 			case rkcy.System_STORAGE:
 				switch command {
-				case rkcy.CmdCreate:
+				case rkcy.CREATE:
 					fallthrough
-				case rkcy.CmdRead:
+				case rkcy.READ:
 					fallthrough
-				case rkcy.CmdUpdate:
+				case rkcy.UPDATE:
 					return decodeInst(ctx, buffer)
 				default:
 					return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 				}
 			case rkcy.System_PROCESS:
 				switch command {
-				case rkcy.CmdRead:
+				case rkcy.READ:
 					fallthrough
-				case rkcy.CmdRefresh:
+				case rkcy.REFRESH:
 					fallthrough
-				case rkcy.CmdValidateCreate:
+				case rkcy.VALIDATE_CREATE:
 					fallthrough
-				case rkcy.CmdValidateUpdate:
+				case rkcy.VALIDATE_UPDATE:
 					return decodeInst(ctx, buffer)
 				default:
 					return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)

@@ -33,15 +33,15 @@ type rtProgram struct {
 	runCount int
 }
 
-var currColorIdx int = 0
+var gCurrColorIdx int = 0
 
 func newRtProgram(program *Program, key string) *rtProgram {
 	rtProg := &rtProgram{
 		program: program,
 		key:     key,
 	}
-	rtProg.color = colors[currColorIdx%len(colors)]
-	currColorIdx++
+	rtProg.color = gColors[gCurrColorIdx%len(gColors)]
+	gCurrColorIdx++
 	rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
 
 	return rtProg
@@ -132,8 +132,8 @@ func (rtProg *rtProgram) start(
 
 	// only reset color and abbrev if this is the first time through
 	if rtProg.abbrev == "" {
-		rtProg.color = colors[currColorIdx%len(colors)]
-		currColorIdx++
+		rtProg.color = gColors[gCurrColorIdx%len(gColors)]
+		gCurrColorIdx++
 		rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
 	}
 
@@ -242,10 +242,10 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 		Directive_ADMIN_CONSUMER_START,
 		&AdminConsumerDirective{
 			Program: &Program{
-				Name:   "./" + platformName,
+				Name:   "./" + gPlatformName,
 				Args:   []string{"admin", "serve"},
 				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", platformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", gPlatformImpl.Name)},
 			},
 		},
 		printCh,
@@ -254,7 +254,7 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 
 func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
 	args := []string{"watch"}
-	if settings.WatchDecode {
+	if gSettings.WatchDecode {
 		args = append(args, "-d")
 	}
 
@@ -264,10 +264,10 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 		Directive_ADMIN_CONSUMER_START,
 		&AdminConsumerDirective{
 			Program: &Program{
-				Name:   "./" + platformName,
+				Name:   "./" + gPlatformName,
 				Args:   args,
 				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.watch", platformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.watch", gPlatformImpl.Name)},
 			},
 		},
 		printCh,
@@ -280,10 +280,11 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
 	go consumePlatformAdminTopic(
 		ctx,
 		adminCh,
-		settings.BootstrapServers,
-		platformName,
+		gSettings.BootstrapServers,
+		gPlatformName,
 		Directive_ADMIN_CONSUMER,
-		PastLastMatch,
+		Directive_ADMIN_CONSUMER,
+		kPastLastMatch,
 	)
 
 	running := map[string]*rtProgram{}

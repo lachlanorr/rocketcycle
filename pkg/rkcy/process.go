@@ -26,9 +26,9 @@ func cobraProcess(cmd *cobra.Command, args []string) {
 
 	go startApecsRunner(
 		ctx,
-		settings.BootstrapServers,
-		settings.Topic,
-		settings.Partition,
+		gSettings.BootstrapServers,
+		gSettings.Topic,
+		gSettings.Partition,
 	)
 
 	interruptCh := make(chan os.Signal, 1)
