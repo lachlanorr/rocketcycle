@@ -18,6 +18,7 @@ import (
 	otel_codes "go.opentelemetry.io/otel/codes"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -167,6 +168,10 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	sha256Bytes := sha256.Sum256([]byte(platJson))
 	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
 
+	if !rtPlat.Platform.UpdateTime.IsValid() {
+		return nil, fmt.Errorf("Invalid UpdateTime: %s", rtPlat.Platform.UpdateTime.AsTime())
+	}
+
 	if len(rtPlat.Platform.Clusters) <= 0 {
 		return nil, fmt.Errorf("No clusters defined")
 	}
@@ -302,7 +307,8 @@ func uncommittedGroupName(topic string, partition int) string {
 
 type AdminMessage struct {
 	Directive              Directive
-	Platform               *Platform
+	NewRtPlat              *rtPlatform
+	OldRtPlat              *rtPlatform
 	AdminConsumerDirective *AdminConsumerDirective
 	AdminProducerDirective *AdminProducerDirective
 	Timestamp              time.Time
@@ -366,6 +372,8 @@ func consumePlatformAdminTopic(
 		return
 	}
 
+	var currRtPlat *rtPlatform = nil
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -387,14 +395,39 @@ func consumePlatformAdminTopic(
 						Timestamp: msg.Timestamp,
 					}
 					if (directive & Directive_PLATFORM) == Directive_PLATFORM {
-						adminMsg.Platform = &Platform{}
-						err := proto.Unmarshal(msg.Value, adminMsg.Platform)
+						plat := &Platform{}
+						err := proto.Unmarshal(msg.Value, plat)
 						if err != nil {
 							log.Error().
 								Err(err).
 								Msg("Failed to Unmarshal Platform")
-							break
+							continue
 						}
+
+						rtPlat, err := newRtPlatform(plat)
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msg("Failed to newRtPlatform")
+							continue
+						}
+
+						if currRtPlat != nil {
+							if rtPlat.Hash == currRtPlat.Hash {
+								log.Info().Msg("Platform hash not changed")
+								continue
+							}
+							if !rtPlat.Platform.UpdateTime.AsTime().After(currRtPlat.Platform.UpdateTime.AsTime()) {
+								log.Info().
+									Msgf("Platform not newer: old(%s) vs new(%s)", currRtPlat.Platform.UpdateTime.AsTime(), rtPlat.Platform.UpdateTime.AsTime())
+								continue
+							}
+						}
+
+						adminMsg.NewRtPlat = rtPlat
+						adminMsg.OldRtPlat = currRtPlat
+						currRtPlat = rtPlat
+
 					} else if (directive & Directive_ADMIN_PRODUCER) == Directive_ADMIN_PRODUCER {
 						adminMsg.AdminProducerDirective = &AdminProducerDirective{}
 						err := proto.Unmarshal(msg.Value, adminMsg.AdminProducerDirective)
@@ -402,7 +435,7 @@ func consumePlatformAdminTopic(
 							log.Error().
 								Err(err).
 								Msg("Failed to Unmarshal AdminProducerDirective")
-							break
+							continue
 						}
 					} else if (directive & Directive_ADMIN_CONSUMER) == Directive_ADMIN_CONSUMER {
 						adminMsg.AdminConsumerDirective = &AdminConsumerDirective{}
@@ -411,7 +444,7 @@ func consumePlatformAdminTopic(
 							log.Error().
 								Err(err).
 								Msg("Failed to Unmarshal AdminConsumerDirective")
-							break
+							continue
 						}
 					}
 
@@ -448,13 +481,15 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 			Msg("Failed to unmarshal platform")
 	}
 
+	plat.UpdateTime = timestamppb.Now()
+
 	// create an rtPlatform so we run the validations that involves
 	rtPlat, err := newRtPlatform(&plat)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
-			Msg("Failed to create newRtPlatform")
+			Msg("Failed to newRtPlatform")
 	}
 	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
 	log.Info().

@@ -261,15 +261,7 @@ func watchResultTopics(ctx context.Context) {
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
 		case adminMsg := <-adminCh:
-			rtPlat, err := newRtPlatform(adminMsg.Platform)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to newRtPlatform")
-				continue
-			}
-
-			wts := getAllWatchTopics(rtPlat)
+			wts := getAllWatchTopics(adminMsg.NewRtPlat)
 
 			for _, wt := range wts {
 				_, ok := wtMap[wt.String()]

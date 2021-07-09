@@ -96,22 +96,14 @@ func NewProducer(
 	go consumePlatformAdminTopic(ctx, prod.adminCh, bootstrapServers, platformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
 
 	adminMsg := <-prod.adminCh
-	prod.updatePlatform(adminMsg.Platform)
+	prod.updatePlatform(adminMsg.NewRtPlat)
 
 	go prod.run(ctx)
 
 	return &prod
 }
 
-func (prod *Producer) updatePlatform(plat *Platform) {
-	rtPlat, err := newRtPlatform(plat)
-	if err != nil {
-		prod.slog.Error().
-			Err(err).
-			Msg("updatePlatform: Failed to newRtPlatform")
-		return
-	}
-
+func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
 	concern, ok := rtPlat.Concerns[prod.concernName]
 	if !ok {
 		prod.slog.Error().
@@ -207,7 +199,7 @@ func (prod *Producer) run(ctx context.Context) {
 				log.Info().Msgf("pause produce %+v", msg)
 				prod.adminProdCh <- msg
 			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(adminMsg.Platform)
+				prod.updatePlatform(adminMsg.NewRtPlat)
 			case msg := <-prod.produceCh:
 				if prod.prodCh == nil {
 					prod.slog.Error().
@@ -244,7 +236,7 @@ func (prod *Producer) run(ctx context.Context) {
 			case paused = <-prod.pauseCh:
 				continue
 			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(adminMsg.Platform)
+				prod.updatePlatform(adminMsg.NewRtPlat)
 			}
 		}
 	}

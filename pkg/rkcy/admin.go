@@ -165,8 +165,8 @@ func (adminServer) RegisterHandlerFromEndpoint(
 }
 
 func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
-	if gOldRtPlat != nil {
-		return gOldRtPlat.Platform, nil
+	if gCurrentRtPlat != nil {
+		return gCurrentRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
 }
@@ -206,7 +206,7 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 	ServeGrpcGateway(ctx, srv)
 }
 
-var gOldRtPlat *rtPlatform = nil
+var gCurrentRtPlat *rtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *Platform_Cluster
@@ -395,26 +395,16 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 			return
 		case adminMsg := <-adminCh:
 			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
-				rtPlat, err := newRtPlatform(adminMsg.Platform)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Msg("Failed to newRtPlatform")
-					continue
-				}
+				gCurrentRtPlat = adminMsg.NewRtPlat
 
-				if gOldRtPlat == nil || rtPlat.Hash != gOldRtPlat.Hash {
-					jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
-					log.Info().
-						Str("PlatformJson", string(jsonBytes)).
-						Msg("Platform parsed")
+				jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
+				log.Info().
+					Str("PlatformJson", string(jsonBytes)).
+					Msg("Platform Updated")
 
-					platDiff := rtPlat.diff(gOldRtPlat)
-
-					updateTopics(rtPlat)
-					updateRunner(ctx, adminProdCh, adminTopic, platDiff)
-					gOldRtPlat = rtPlat
-				}
+				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
+				updateTopics(gCurrentRtPlat)
+				updateRunner(ctx, adminProdCh, adminTopic, platDiff)
 			} else if (adminMsg.Directive & Directive_ADMIN_PRODUCER_STATUS) == Directive_ADMIN_PRODUCER_STATUS {
 				now := time.Now()
 				if now.Sub(adminMsg.Timestamp) < gAdminPingInterval*2 {

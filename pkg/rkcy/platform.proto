@@ -4,6 +4,8 @@
 
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
@@ -13,6 +15,8 @@ message Platform {
     string name               = 1;
     repeated Concern concerns = 2;
     repeated Cluster clusters = 3;
+
+    google.protobuf.Timestamp update_time = 4;
 
     message Concern {
         Type type              = 1;
