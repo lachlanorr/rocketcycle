@@ -36,6 +36,7 @@ import (
 var gDocsFiles embed.FS
 
 var gAdminPingInterval = 1 * time.Second
+var gPlatformRepublishInterval = 60 * time.Second
 
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
@@ -387,12 +388,26 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 		kAtLastMatch,
 	)
 
+	republishTicker := time.NewTicker(gPlatformRepublishInterval)
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().
 				Msg("managePlatform exiting, ctx.Done()")
 			return
+		case <-republishTicker.C:
+			if gCurrentRtPlat != nil {
+				log.Info().Msg("Republishing platform")
+				msg, err := kafkaMessage(&adminTopic, 0, gCurrentRtPlat.Platform, Directive_PLATFORM, "")
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("Failed to kafkaMessage")
+					continue
+				}
+				adminProdCh <- msg
+			}
 		case adminMsg := <-adminCh:
 			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
 				gCurrentRtPlat = adminMsg.NewRtPlat

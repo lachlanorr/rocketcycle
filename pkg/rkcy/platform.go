@@ -414,7 +414,7 @@ func consumePlatformAdminTopic(
 
 						if currRtPlat != nil {
 							if rtPlat.Hash == currRtPlat.Hash {
-								log.Info().Msg("Platform hash not changed")
+								// this happens frequently when admin replublishes
 								continue
 							}
 							if !rtPlat.Platform.UpdateTime.AsTime().After(currRtPlat.Platform.UpdateTime.AsTime()) {
