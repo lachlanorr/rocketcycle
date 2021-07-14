@@ -25,6 +25,7 @@ type Producer struct {
 
 	platformName string
 	concernName  string
+	concern      *rtConcern
 	topicName    string
 
 	brokers string
@@ -108,14 +109,15 @@ func NewProducer(
 }
 
 func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
-	concern, ok := rtPlat.Concerns[prod.concernName]
+	var ok bool
+	prod.concern, ok = rtPlat.Concerns[prod.concernName]
 	if !ok {
 		prod.slog.Error().
 			Msg("updatePlatform: Failed to find Concern")
 		return
 	}
 
-	prod.topics, ok = concern.Topics[prod.topicName]
+	prod.topics, ok = prod.concern.Topics[prod.topicName]
 	if !ok {
 		prod.slog.Error().
 			Msg("updatePlatform: Failed to find Topics")
@@ -132,6 +134,16 @@ func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
 		prod.slog = prod.slog.With().
 			Str("Brokers", prod.brokers).
 			Logger()
+	}
+}
+
+func (prod *Producer) producerDirective() *ProducerDirective {
+	return &ProducerDirective{
+		Id:          prod.id,
+		ConcernName: prod.concernName,
+		ConcernType: prod.concern.Concern.Type,
+		Topic:       prod.topicName,
+		Generation:  prod.topics.Topics.Current.Generation,
 	}
 }
 
@@ -160,7 +172,7 @@ func (prod *Producer) run(ctx context.Context) {
 	pingMsg, err := kafkaMessage(
 		&prod.adminTopic,
 		0,
-		&ProducerDirective{Id: prod.id, Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+		prod.producerDirective(),
 		Directive_PRODUCER_STATUS,
 		"",
 	)
@@ -190,7 +202,7 @@ func (prod *Producer) run(ctx context.Context) {
 				msg, err := kafkaMessage(
 					&prod.adminTopic,
 					0,
-					&ProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+					prod.producerDirective(),
 					directive,
 					"",
 				)

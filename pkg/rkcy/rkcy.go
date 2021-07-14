@@ -61,7 +61,7 @@ func BuildTopicName(topicNamePrefix string, name string, generation int32) strin
 
 func BuildFullTopicName(platformName string, concernName string, concernType Platform_Concern_Type, name string, generation int32) string {
 	prefix := BuildTopicNamePrefix(platformName, concernName, concernType)
-	return fmt.Sprintf("%s.%s.%04d", prefix, name, generation)
+	return BuildTopicName(prefix, name, generation)
 }
 
 type TopicParts struct {

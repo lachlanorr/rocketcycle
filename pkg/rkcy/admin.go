@@ -392,6 +392,9 @@ func managePlatform(ctx context.Context, platformName string) {
 
 	republishTicker := time.NewTicker(gPlatformRepublishInterval)
 
+	cullInterval := gAdminPingInterval * 10
+	cullTicker := time.NewTicker(cullInterval)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -410,6 +413,20 @@ func managePlatform(ctx context.Context, platformName string) {
 				}
 				adminProdCh <- msg
 			}
+		case <-cullTicker.C:
+			// cull stale producers
+			now := time.Now()
+			for topic, prodMap := range gActiveProducers {
+				for id, timestamp := range prodMap {
+					if now.Sub(timestamp) >= cullInterval {
+						log.Info().Msgf("Culling producer %s:%s", topic, id)
+						delete(prodMap, id)
+					}
+				}
+				if len(gActiveProducers[topic]) == 0 {
+					delete(gActiveProducers, topic)
+				}
+			}
 		case adminMsg := <-adminCh:
 			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
 				gCurrentRtPlat = adminMsg.NewRtPlat
@@ -425,7 +442,24 @@ func managePlatform(ctx context.Context, platformName string) {
 			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
 				now := time.Now()
 				if now.Sub(adminMsg.Timestamp) < gAdminPingInterval*2 {
-					log.Info().Msgf("TODO: Do something with PRODUCER_STATUS | %s | %+v", adminMsg.Timestamp.Format(time.UnixDate), adminMsg)
+					fullTopicName := BuildFullTopicName(
+						gPlatformName,
+						adminMsg.ProducerDirective.ConcernName,
+						adminMsg.ProducerDirective.ConcernType,
+						adminMsg.ProducerDirective.Topic,
+						adminMsg.ProducerDirective.Generation,
+					)
+					prodMap, prodMapFound := gActiveProducers[fullTopicName]
+					if !prodMapFound {
+						prodMap = make(map[string]time.Time)
+						gActiveProducers[fullTopicName] = prodMap
+					}
+
+					_, prodFound := prodMap[adminMsg.ProducerDirective.Id]
+					if !prodFound {
+						log.Info().Msgf("New producer %s:%s", fullTopicName, adminMsg.ProducerDirective.Id)
+					}
+					gActiveProducers[fullTopicName][adminMsg.ProducerDirective.Id] = adminMsg.Timestamp
 				}
 			}
 		}
