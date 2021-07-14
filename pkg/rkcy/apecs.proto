@@ -69,7 +69,7 @@ enum System {
 }
 
 message TopicTarget {
-    string bootstrap_servers = 1;
+    string brokers = 1;
     string topic = 2;
     int32 partition = 3;
 }

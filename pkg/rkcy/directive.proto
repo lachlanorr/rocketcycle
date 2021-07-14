@@ -13,32 +13,34 @@ import "platform.proto";
 enum Directive {
     UNSPECIFIED = 0;
 
-    PLATFORM               = 0x00010000;
+    PLATFORM         = 0x00010000;
 
-    ADMIN_PRODUCER         = 0x00020000;
-    ADMIN_PRODUCER_STOP    = 0x00020001;
-    ADMIN_PRODUCER_STOPPED = 0x00020002;
-    ADMIN_PRODUCER_START   = 0x00020004;
-    ADMIN_PRODUCER_STARTED = 0x00020008;
-    ADMIN_PRODUCER_STATUS  = 0x00020010;
+    PRODUCER         = 0x00020000;
+    PRODUCER_STOP    = 0x00020001;
+    PRODUCER_STOPPED = 0x00020002;
+    PRODUCER_START   = 0x00020004;
+    PRODUCER_STARTED = 0x00020008;
+    PRODUCER_STATUS  = 0x00020010;
 
-    ADMIN_CONSUMER         = 0x00040000;
-    ADMIN_CONSUMER_STOP    = 0x00040001;
-    ADMIN_CONSUMER_STOPPED = 0x00040002;
-    ADMIN_CONSUMER_START   = 0x00040004;
-    ADMIN_CONSUMER_STARTED = 0x00040008;
+    CONSUMER         = 0x00040000;
+    CONSUMER_STOP    = 0x00040001;
+    CONSUMER_STOPPED = 0x00040002;
+    CONSUMER_START   = 0x00040004;
+    CONSUMER_STARTED = 0x00040008;
 
-    APECS_TXN              = 0x00080000;
+    APECS_TXN        = 0x00080000;
 
     ALL = -1;
 }
 
-message AdminProducerDirective {
-    string concern   = 1;
-    string topic     = 2;
-    int32 generation = 3;
+message ProducerDirective {
+    string id        = 1;
+    string brokers   = 2;
+    string concern   = 3;
+    string topic     = 4;
+    int32 generation = 5;
 }
 
-message AdminConsumerDirective {
+message ConsumerDirective {
     rkcy.Program program = 1;
 }

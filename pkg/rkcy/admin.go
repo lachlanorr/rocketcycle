@@ -38,6 +38,10 @@ var gDocsFiles embed.FS
 var gAdminPingInterval = 1 * time.Second
 var gPlatformRepublishInterval = 60 * time.Second
 
+var gActiveProducers = make(map[string]map[string]time.Time)
+
+var gCurrentRtPlat *rtPlatform = nil
+
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
@@ -46,7 +50,7 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go managePlatform(ctx, gSettings.BootstrapServers, gPlatformName)
+	go managePlatform(ctx, gPlatformName)
 	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
@@ -207,8 +211,6 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 	ServeGrpcGateway(ctx, srv)
 }
 
-var gCurrentRtPlat *rtPlatform = nil
-
 type clusterInfo struct {
 	cluster        *Platform_Cluster
 	admin          *kafka.AdminClient
@@ -263,7 +265,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
-	config.SetKey("bootstrap.servers", cluster.BootstrapServers)
+	config.SetKey("bootstrap.servers", cluster.Brokers)
 
 	var err error
 	ci.admin, err = kafka.NewAdminClient(&config)
@@ -347,7 +349,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		ci, err := newClusterInfo(cluster)
 
 		if err != nil {
-			log.Printf("Unable to connect to cluster '%s', boostrap_servers '%s': %s", cluster.Name, cluster.BootstrapServers, err.Error())
+			log.Printf("Unable to connect to cluster '%s', brokers '%s': %s", cluster.Name, cluster.Brokers, err.Error())
 			return
 		}
 
@@ -355,7 +357,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		defer ci.Close()
 		log.Info().
 			Str("Cluster", cluster.Name).
-			Str("BootstrapServers", cluster.BootstrapServers).
+			Str("Brokers", cluster.Brokers).
 			Msg("Connected to cluster")
 	}
 
@@ -373,17 +375,17 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(ctx context.Context, bootstrapServers string, platformName string) {
+func managePlatform(ctx context.Context, platformName string) {
 	adminTopic := AdminTopic(platformName)
-	adminProdCh := getProducerCh(bootstrapServers)
+	adminProdCh := getProducerCh(gSettings.AdminBrokers)
 
 	adminCh := make(chan *AdminMessage)
-	go consumePlatformAdminTopic(
+	go consumeAdminTopic(
 		ctx,
 		adminCh,
-		bootstrapServers,
+		gSettings.AdminBrokers,
 		platformName,
-		Directive_PLATFORM|Directive_ADMIN_PRODUCER_STATUS,
+		Directive_PLATFORM|Directive_PRODUCER_STATUS,
 		Directive_PLATFORM,
 		kAtLastMatch,
 	)
@@ -420,10 +422,10 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
 				updateTopics(gCurrentRtPlat)
 				updateRunner(ctx, adminProdCh, adminTopic, platDiff)
-			} else if (adminMsg.Directive & Directive_ADMIN_PRODUCER_STATUS) == Directive_ADMIN_PRODUCER_STATUS {
+			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
 				now := time.Now()
 				if now.Sub(adminMsg.Timestamp) < gAdminPingInterval*2 {
-					log.Info().Msgf("TODO: Do something with ADMIN_PRODUCER_STATUS | %s | %+v", adminMsg.Timestamp.Format(time.UnixDate), adminMsg)
+					log.Info().Msgf("TODO: Do something with PRODUCER_STATUS | %s | %+v", adminMsg.Timestamp.Format(time.UnixDate), adminMsg)
 				}
 			}
 		}
@@ -439,8 +441,8 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string
 		msg, err := kafkaMessage(
 			&adminTopic,
 			0,
-			&AdminConsumerDirective{Program: p},
-			Directive_ADMIN_CONSUMER_STOP,
+			&ConsumerDirective{Program: p},
+			Directive_CONSUMER_STOP,
 			traceParent,
 		)
 		if err != nil {
@@ -455,8 +457,8 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string
 		msg, err := kafkaMessage(
 			&adminTopic,
 			0,
-			&AdminConsumerDirective{Program: p},
-			Directive_ADMIN_CONSUMER_START,
+			&ConsumerDirective{Program: p},
+			Directive_CONSUMER_START,
 			traceParent,
 		)
 		if err != nil {
@@ -468,9 +470,10 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string
 	}
 }
 
-func substStr(s string, concernName string, clusterBootstrap string, shortTopicName string, fullTopicName string, partition int32) string {
+func substStr(s string, concernName string, consumerBrokers string, shortTopicName string, fullTopicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", gPlatformName)
-	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
+	s = strings.ReplaceAll(s, "@admin_brokers", gSettings.AdminBrokers)
+	s = strings.ReplaceAll(s, "@consumer_brokers", consumerBrokers)
 	s = strings.ReplaceAll(s, "@concern", concernName)
 	s = strings.ReplaceAll(s, "@system", shortTopicName)
 	s = strings.ReplaceAll(s, "@topic", fullTopicName)
@@ -492,21 +495,21 @@ func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clu
 		topicName := BuildFullTopicName(gPlatformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.Cluster]
 		progs[i] = &Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.Brokers, topics.Name, topicName, i),
 			Tags:   make(map[string]string),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.Brokers, topics.Name, topicName, i)
 		}
 
 		for k, v := range gStdTags {
-			progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+			progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
 		}
 		if topics.ConsumerProgram.Tags != nil {
 			for k, v := range topics.ConsumerProgram.Tags {
-				progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+				progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
 			}
 		}
 	}

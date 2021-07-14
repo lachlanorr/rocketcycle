@@ -29,7 +29,7 @@ type Step struct {
 
 type ApecsProducer struct {
 	ctx               context.Context
-	bootstrapServers  string
+	adminBrokers      string
 	platformName      string
 	respTarget        *TopicTarget
 	producers         map[string]map[StandardTopicName]*Producer
@@ -45,16 +45,16 @@ type RespChan struct {
 
 func NewApecsProducer(
 	ctx context.Context,
-	bootstrapServers string,
+	adminBrokers string,
 	platformName string,
 	respTarget *TopicTarget,
 ) *ApecsProducer {
 
 	aprod := &ApecsProducer{
-		ctx:              ctx,
-		bootstrapServers: bootstrapServers,
-		platformName:     platformName,
-		respTarget:       respTarget,
+		ctx:          ctx,
+		adminBrokers: adminBrokers,
+		platformName: platformName,
+		respTarget:   respTarget,
 
 		producers:      make(map[string]map[StandardTopicName]*Producer),
 		respRegisterCh: make(chan *RespChan, 10),
@@ -94,12 +94,12 @@ func (aprod *ApecsProducer) getProducer(
 	}
 	pdc, ok := concernProds[topicName]
 	if !ok {
-		pdc = NewProducer(aprod.ctx, aprod.bootstrapServers, aprod.platformName, concernName, string(topicName))
+		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, concernName, string(topicName))
 
 		if pdc == nil {
 			return nil, fmt.Errorf(
-				"ApecsProducer.getProducer BootstrapServers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
-				aprod.bootstrapServers,
+				"ApecsProducer.getProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
+				aprod.adminBrokers,
 				aprod.platformName,
 				concernName,
 				topicName,
@@ -122,7 +122,7 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 		return err
 	}
 
-	prodCh := getProducerCh(respTgt.BootstrapServers)
+	prodCh := getProducerCh(respTgt.Brokers)
 	prodCh <- kMsg
 
 	return nil
@@ -145,7 +145,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", aprod.platformName, respTarget.Topic, respTarget.Partition)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        respTarget.BootstrapServers,
+		"bootstrap.servers":        respTarget.Brokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       true, // librdkafka will commit to brokers for us on an interval and when we close consumer
 		"enable.auto.offset.store": true, // librdkafka will commit to local store to get "at most once" behavior
@@ -153,7 +153,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Str("BoostrapServers", respTarget.BootstrapServers).
+			Str("BoostrapServers", respTarget.Brokers).
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 	}

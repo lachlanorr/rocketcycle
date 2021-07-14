@@ -9,11 +9,11 @@
                 {
                     "name": "response",
                     "current": {
-                        "partitionCount": 4
+                        "partitionCount": 1
                     },
                     "consumerProgram": {
                         "name": "./@platform",
-                        "args": ["edge", "serve", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
+                        "args": ["edge", "serve", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
                         "abbrev": "edge/@partition",
                         "tags": {"service.name": "rkcy.@platform.@concern"}
                     }
@@ -28,13 +28,13 @@
                 {
                     "name": "process",
                     "current": {
-                        "partitionCount": 4
+                        "partitionCount": 1
                     }
                 },
                 {
                     "name": "storage",
                     "current": {
-                        "partitionCount": 2
+                        "partitionCount": 1
                     }
                 }
             ]
@@ -47,13 +47,13 @@
                 {
                     "name": "process",
                     "current": {
-                        "partitionCount": 4
+                        "partitionCount": 1
                     }
                 },
                 {
                     "name": "storage",
                     "current": {
-                        "partitionCount": 2
+                        "partitionCount": 1
                     }
                 }
             ]
@@ -63,7 +63,7 @@
     "clusters": [
         {
             "name": "local-dev",
-            "bootstrap_servers": "localhost:9092"
+            "brokers": "localhost:9092"
         }
     ]
 }

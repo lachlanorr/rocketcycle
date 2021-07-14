@@ -10,6 +10,7 @@ import (
 	"hash/fnv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
@@ -17,6 +18,8 @@ import (
 )
 
 type Producer struct {
+	id string
+
 	constlog zerolog.Logger
 	slog     zerolog.Logger
 
@@ -24,9 +27,9 @@ type Producer struct {
 	concernName  string
 	topicName    string
 
-	clusterBrokers string
-	prodCh         ProducerCh
-	topics         *rtTopics
+	brokers string
+	prodCh  ProducerCh
+	topics  *rtTopics
 
 	adminTopic  string
 	adminProdCh ProducerCh
@@ -69,12 +72,13 @@ func kafkaMessage(
 
 func NewProducer(
 	ctx context.Context,
-	bootstrapServers string,
+	adminBrokers string,
 	platformName string,
 	concernName string,
 	topicName string,
 ) *Producer {
 	prod := Producer{
+		id: uuid.NewString(),
 		constlog: log.With().
 			Str("Concern", concernName).
 			Logger(),
@@ -91,9 +95,9 @@ func NewProducer(
 	prod.produceCh = make(chan *message)
 
 	prod.adminTopic = AdminTopic(platformName)
-	prod.adminProdCh = getProducerCh(bootstrapServers)
+	prod.adminProdCh = getProducerCh(adminBrokers)
 
-	go consumePlatformAdminTopic(ctx, prod.adminCh, bootstrapServers, platformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
+	go consumeAdminTopic(ctx, prod.adminCh, adminBrokers, platformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
 
 	adminMsg := <-prod.adminCh
 	prod.updatePlatform(adminMsg.NewRtPlat)
@@ -122,11 +126,11 @@ func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
 	prod.slog = prod.constlog.With().Str("Topic", prod.topics.CurrentTopic).Logger()
 
 	// update producer if necessary
-	if prod.clusterBrokers != prod.topics.CurrentCluster.BootstrapServers {
-		prod.clusterBrokers = prod.topics.CurrentCluster.BootstrapServers
-		prod.prodCh = getProducerCh(prod.clusterBrokers)
+	if prod.brokers != prod.topics.CurrentCluster.Brokers {
+		prod.brokers = prod.topics.CurrentCluster.Brokers
+		prod.prodCh = getProducerCh(prod.brokers)
 		prod.slog = prod.slog.With().
-			Str("ClusterBrokers", prod.clusterBrokers).
+			Str("Brokers", prod.brokers).
 			Logger()
 	}
 }
@@ -153,17 +157,17 @@ func (prod *Producer) Close() {
 
 func (prod *Producer) run(ctx context.Context) {
 	pingAdminTicker := time.NewTicker(gAdminPingInterval)
-	tickMsg, err := kafkaMessage(
+	pingMsg, err := kafkaMessage(
 		&prod.adminTopic,
 		0,
-		&AdminProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
-		Directive_ADMIN_PRODUCER_STATUS,
+		&ProducerDirective{Id: prod.id, Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+		Directive_PRODUCER_STATUS,
 		"",
 	)
 	if err != nil {
 		prod.slog.Fatal().
 			Err(err).
-			Msg("Failed to create tickMsg")
+			Msg("Failed to create pingMsg")
 	}
 
 	paused := false
@@ -175,18 +179,18 @@ func (prod *Producer) run(ctx context.Context) {
 			case <-prod.doneCh:
 				return
 			case <-pingAdminTicker.C:
-				prod.adminProdCh <- tickMsg
+				prod.adminProdCh <- pingMsg
 			case paused = <-prod.pauseCh:
 				var directive Directive
 				if paused {
-					directive = Directive_ADMIN_PRODUCER_STOPPED
+					directive = Directive_PRODUCER_STOPPED
 				} else {
-					directive = Directive_ADMIN_PRODUCER_STARTED
+					directive = Directive_PRODUCER_STARTED
 				}
 				msg, err := kafkaMessage(
 					&prod.adminTopic,
 					0,
-					&AdminProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
+					&ProducerDirective{Concern: prod.concernName, Topic: prod.topicName, Generation: prod.topics.Topics.Current.Generation},
 					directive,
 					"",
 				)

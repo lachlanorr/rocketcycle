@@ -14,33 +14,33 @@ import (
 type ProducerCh chan *kafka.Message
 
 type ChanneledProducer struct {
-	BootstrapServers string
-	Prod             *kafka.Producer
-	Ch               ProducerCh
+	Brokers string
+	Prod    *kafka.Producer
+	Ch      ProducerCh
 }
 
 var gProducers = make(map[string]*ChanneledProducer)
 var gProducersMtx = &sync.Mutex{}
 
-func getProducerCh(bootstrapServers string) ProducerCh {
+func getProducerCh(brokers string) ProducerCh {
 	gProducersMtx.Lock()
 	defer gProducersMtx.Unlock()
 
-	cp, ok := gProducers[bootstrapServers]
+	cp, ok := gProducers[brokers]
 	if ok {
 		return cp.Ch
 	}
 
 	var err error
-	cp = &ChanneledProducer{BootstrapServers: bootstrapServers}
+	cp = &ChanneledProducer{Brokers: brokers}
 	cp.Prod, err = kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
+		"bootstrap.servers": brokers,
 	})
 
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Msgf("Failed to create producer to %s", bootstrapServers)
+			Msgf("Failed to create producer to %s", brokers)
 		return nil
 	}
 	go func() {
@@ -60,7 +60,7 @@ func getProducerCh(bootstrapServers string) ProducerCh {
 					}
 					log.Error().
 						Err(ev.TopicPartition.Error).
-						Str("BootstrapServers", bootstrapServers).
+						Str("Brokers", brokers).
 						Msgf("Delivery failed: %+v", ev)
 				}
 			}
@@ -68,14 +68,14 @@ func getProducerCh(bootstrapServers string) ProducerCh {
 	}()
 
 	cp.Ch = make(ProducerCh)
-	gProducers[bootstrapServers] = cp
+	gProducers[brokers] = cp
 
 	go runProducer(cp)
 	return cp.Ch
 }
 
 func closeProducer(cp *ChanneledProducer) {
-	log.Info().Msgf("Closing producer for %s", cp.BootstrapServers)
+	log.Info().Msgf("Closing producer for %s", cp.Brokers)
 	if cp.Ch != nil {
 		close(cp.Ch)
 	}
@@ -105,7 +105,7 @@ func runProducer(cp *ChanneledProducer) {
 				}
 				log.Error().
 					Err(err).
-					Str("BootstrapServers", cp.BootstrapServers).
+					Str("Brokers", cp.Brokers).
 					Msgf("Produce failed: %+v", msg)
 			}
 		}

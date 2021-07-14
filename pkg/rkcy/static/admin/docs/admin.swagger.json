@@ -233,9 +233,9 @@
           "type": "string",
           "description": "unique name of cluster"
         },
-        "bootstrapServers": {
+        "brokers": {
           "type": "string",
-          "description": "kafka bootstrap servers for the cluster"
+          "description": "kafka brokers for the cluster"
         }
       }
     },

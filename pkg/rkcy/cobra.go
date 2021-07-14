@@ -13,8 +13,10 @@ import (
 
 // Cobra sets these values based on command parsing
 type Settings struct {
-	ConfigFilePath   string
-	BootstrapServers string
+	ConfigFilePath string
+
+	AdminBrokers    string
+	ConsumerBrokers string
 
 	HttpAddr  string
 	GrpcAddr  string
@@ -60,7 +62,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   gPlatformName,
 		Short: "Rocketcycle Platform - " + gPlatformName,
 	}
-	rootCmd.PersistentFlags().StringVarP(&gSettings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+	rootCmd.PersistentFlags().StringVar(&gSettings.AdminBrokers, "admin_brokers", "localhost", "Kafka brokers for admin messages like platform updates")
 
 	// admin sub command
 	adminCmd := &cobra.Command{
@@ -116,6 +118,8 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a proc consumer against the partition specified",
 		Run:   cobraProcess,
 	}
+	procCmd.PersistentFlags().StringVar(&gSettings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	procCmd.MarkPersistentFlagRequired("consumer_brokers")
 	procCmd.PersistentFlags().StringVarP(&gSettings.Topic, "topic", "t", "", "Topic to consume")
 	procCmd.MarkPersistentFlagRequired("topic")
 	procCmd.PersistentFlags().Int32VarP(&gSettings.Partition, "partition", "p", -1, "Partition to consume")
@@ -128,6 +132,8 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a storage consumer against the partition specified",
 		Run:   cobraStorage,
 	}
+	storageCmd.PersistentFlags().StringVar(&gSettings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	storageCmd.MarkPersistentFlagRequired("consumer_brokers")
 	storageCmd.PersistentFlags().StringVarP(&gSettings.Topic, "topic", "t", "", "Topic to consume")
 	storageCmd.MarkPersistentFlagRequired("topic")
 	storageCmd.PersistentFlags().Int32VarP(&gSettings.Partition, "partition", "p", -1, "Partition to consume")

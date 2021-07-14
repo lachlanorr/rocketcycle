@@ -166,7 +166,7 @@ func updateRunning(
 	ctx context.Context,
 	running map[string]*rtProgram,
 	directive Directive,
-	acd *AdminConsumerDirective,
+	acd *ConsumerDirective,
 	printCh chan<- string,
 ) {
 	key := progKey(acd.Program)
@@ -177,7 +177,7 @@ func updateRunning(
 	)
 
 	switch directive {
-	case Directive_ADMIN_CONSUMER_START:
+	case Directive_CONSUMER_START:
 		rtProg, ok = running[key]
 		if ok {
 			log.Warn().
@@ -194,7 +194,7 @@ func updateRunning(
 			return
 		}
 		running[key] = rtProg
-	case Directive_ADMIN_CONSUMER_STOP:
+	case Directive_CONSUMER_STOP:
 		rtProg, ok = running[key]
 		if !ok {
 			log.Warn().Msg("Program not running running, cannot stop: " + key)
@@ -239,8 +239,8 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 	updateRunning(
 		ctx,
 		running,
-		Directive_ADMIN_CONSUMER_START,
-		&AdminConsumerDirective{
+		Directive_CONSUMER_START,
+		&ConsumerDirective{
 			Program: &Program{
 				Name:   "./" + gPlatformName,
 				Args:   []string{"admin", "serve"},
@@ -261,8 +261,8 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 	updateRunning(
 		ctx,
 		running,
-		Directive_ADMIN_CONSUMER_START,
-		&AdminConsumerDirective{
+		Directive_CONSUMER_START,
+		&ConsumerDirective{
 			Program: &Program{
 				Name:   "./" + gPlatformName,
 				Args:   args,
@@ -274,16 +274,16 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 	)
 }
 
-func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
+func runConsumerPrograms(ctx context.Context) {
 	adminCh := make(chan *AdminMessage)
 
-	go consumePlatformAdminTopic(
+	go consumeAdminTopic(
 		ctx,
 		adminCh,
-		gSettings.BootstrapServers,
+		gSettings.AdminBrokers,
 		gPlatformName,
-		Directive_ADMIN_CONSUMER,
-		Directive_ADMIN_CONSUMER,
+		Directive_CONSUMER,
+		Directive_CONSUMER,
 		kPastLastMatch,
 	)
 
@@ -309,7 +309,7 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
 				ctx,
 				running,
 				adminMsg.Directive,
-				adminMsg.AdminConsumerDirective,
+				adminMsg.ConsumerDirective,
 				printCh,
 			)
 		}
@@ -323,9 +323,7 @@ func cobraRun(cmd *cobra.Command, args []string) {
 	interruptCh := make(chan os.Signal)
 	signal.Notify(interruptCh, os.Interrupt)
 
-	platCh := make(chan *Platform, 10)
-
-	go runConsumerPrograms(ctx, platCh)
+	go runConsumerPrograms(ctx)
 	for {
 		select {
 		case <-interruptCh:

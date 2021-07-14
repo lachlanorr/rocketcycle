@@ -100,8 +100,8 @@ message Platform {
     message Cluster {
         // unique name of cluster
         string name              = 1;
-        // kafka bootstrap servers for the cluster
-        string bootstrap_servers = 2;
+        // kafka brokers for the cluster
+        string brokers = 2;
     }
 
 

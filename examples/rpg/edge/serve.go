@@ -387,12 +387,12 @@ func cobraServe(cmd *cobra.Command, args []string) {
 
 	aprod = rkcy.NewApecsProducer(
 		ctx,
-		settings.BootstrapServers,
+		settings.AdminBrokers,
 		rkcy.PlatformName(),
 		&rkcy.TopicTarget{
-			BootstrapServers: settings.BootstrapServers,
-			Topic:            settings.Topic,
-			Partition:        settings.Partition,
+			Brokers:   settings.ConsumerBrokers,
+			Topic:     settings.Topic,
+			Partition: settings.Partition,
 		},
 	)
 

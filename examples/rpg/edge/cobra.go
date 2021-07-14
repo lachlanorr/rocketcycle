@@ -10,10 +10,12 @@ import (
 
 // Cobra sets these values based on command parsing
 type Settings struct {
-	BootstrapServers string
-	HttpAddr         string
-	GrpcAddr         string
-	EdgeHttpAddr     string
+	AdminBrokers    string
+	ConsumerBrokers string
+
+	HttpAddr     string
+	GrpcAddr     string
+	EdgeHttpAddr string
 
 	Topic     string
 	Partition int32
@@ -84,7 +86,10 @@ func CobraCommand() *cobra.Command {
 		Long:  "Provides rest entrypoints into application",
 		Run:   cobraServe,
 	}
-	serveCmd.PersistentFlags().StringVarP(&settings.BootstrapServers, "bootstrap_servers", "b", "localhost", "Kafka bootstrap servers from which to read platform config")
+
+	serveCmd.PersistentFlags().StringVar(&settings.AdminBrokers, "admin_brokers", "localhost", "Kafka brokers for admin messages like platform updates")
+	serveCmd.PersistentFlags().StringVar(&settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume response topic")
+	serveCmd.MarkPersistentFlagRequired("consumer_brokers")
 	serveCmd.PersistentFlags().StringVarP(&settings.HttpAddr, "http_addr", "", ":11350", "Address to host http api")
 	serveCmd.PersistentFlags().StringVarP(&settings.GrpcAddr, "grpc_addr", "", ":11360", "Address to host grpc api")
 	serveCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")

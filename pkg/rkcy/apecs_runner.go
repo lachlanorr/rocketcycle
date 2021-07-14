@@ -292,16 +292,18 @@ func advanceApecsTxn(
 
 func consumeApecsTopic(
 	ctx context.Context,
-	clusterBootstrap string,
+	adminBrokers string,
+	consumerBrokers string,
+	platformName string,
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
 ) {
-	aprod := NewApecsProducer(ctx, gSettings.BootstrapServers, gPlatformName, nil)
+	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil)
 
 	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        clusterBootstrap,
+		"bootstrap.servers":        consumerBrokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       true,  // librdkafka will commit to brokers for us on an interval and when we close consumer
 		"enable.auto.offset.store": false, // we explicitely commit to local store to get "at least once" behavior
@@ -392,7 +394,9 @@ func consumeApecsTopic(
 
 func startApecsRunner(
 	ctx context.Context,
-	clusterBootstrap string,
+	adminBrokers string,
+	consumerBrokers string,
+	platformName string,
 	fullTopic string,
 	partition int32,
 ) {
@@ -413,7 +417,9 @@ func startApecsRunner(
 
 	go consumeApecsTopic(
 		ctx,
-		clusterBootstrap,
+		adminBrokers,
+		consumerBrokers,
+		platformName,
 		fullTopic,
 		partition,
 		tp,
