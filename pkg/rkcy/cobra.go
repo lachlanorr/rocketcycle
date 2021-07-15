@@ -92,6 +92,13 @@ func runCobra(impl *PlatformImpl) {
 	adminCmd.AddCommand(adminDecodeCmd)
 	adminDecodeCmd.PersistentFlags().StringVar(&gSettings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
 
+	adminReadProducersCmd := &cobra.Command{
+		Use:   "producers",
+		Short: "read the active tracked producers",
+		Run:   cobraAdminReadProducers,
+	}
+	adminReadCmd.AddCommand(adminReadProducersCmd)
+
 	adminDecodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
 		Short:     "decode and print base64 payload",

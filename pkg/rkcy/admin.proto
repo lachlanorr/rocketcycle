@@ -27,10 +27,26 @@ message DecodeResponse {
     string json = 2;
 }
 
+message TrackedProducers {
+    repeated ProducerInfo topic_producers = 1;
+
+    message ProducerInfo {
+        string topic = 1;
+        string id = 2;
+        string time_since_update = 3;
+    }
+}
+
 service AdminService {
     rpc Platform(Void) returns (rkcy.Platform) {
         option (google.api.http) = {
             get: "/v1/platform/read"
+        };
+    }
+
+    rpc Producers(Void) returns (rkcy.TrackedProducers) {
+        option (google.api.http) = {
+            get: "/v1/producers/read"
         };
     }
 

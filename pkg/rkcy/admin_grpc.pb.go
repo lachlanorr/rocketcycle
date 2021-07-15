@@ -18,6 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdminServiceClient interface {
 	Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error)
+	Producers(ctx context.Context, in *Void, opts ...grpc.CallOption) (*TrackedProducers, error)
 	DecodeInstance(ctx context.Context, in *DecodeInstanceArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeArgPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeResultPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
@@ -34,6 +35,15 @@ func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
 func (c *adminServiceClient) Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error) {
 	out := new(Platform)
 	err := c.cc.Invoke(ctx, "/rkcy.AdminService/Platform", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) Producers(ctx context.Context, in *Void, opts ...grpc.CallOption) (*TrackedProducers, error) {
+	out := new(TrackedProducers)
+	err := c.cc.Invoke(ctx, "/rkcy.AdminService/Producers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +82,7 @@ func (c *adminServiceClient) DecodeResultPayload(ctx context.Context, in *Decode
 // for forward compatibility
 type AdminServiceServer interface {
 	Platform(context.Context, *Void) (*Platform, error)
+	Producers(context.Context, *Void) (*TrackedProducers, error)
 	DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error)
 	DecodeArgPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
 	DecodeResultPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
@@ -84,6 +95,9 @@ type UnimplementedAdminServiceServer struct {
 
 func (UnimplementedAdminServiceServer) Platform(context.Context, *Void) (*Platform, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Platform not implemented")
+}
+func (UnimplementedAdminServiceServer) Producers(context.Context, *Void) (*TrackedProducers, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Producers not implemented")
 }
 func (UnimplementedAdminServiceServer) DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DecodeInstance not implemented")
@@ -121,6 +135,24 @@ func _AdminService_Platform_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AdminServiceServer).Platform(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_Producers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Producers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.AdminService/Producers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Producers(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -186,6 +218,10 @@ var _AdminService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Platform",
 			Handler:    _AdminService_Platform_Handler,
+		},
+		{
+			MethodName: "Producers",
+			Handler:    _AdminService_Producers_Handler,
 		},
 		{
 			MethodName: "DecodeInstance",

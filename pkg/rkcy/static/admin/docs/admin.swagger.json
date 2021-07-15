@@ -133,6 +133,28 @@
           "AdminService"
         ]
       }
+    },
+    "/v1/producers/read": {
+      "get": {
+        "operationId": "AdminService_Producers",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.TrackedProducers"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -378,6 +400,31 @@
         "STORAGE"
       ],
       "default": "NO_SYSTEM"
+    },
+    "rkcy.TrackedProducers": {
+      "type": "object",
+      "properties": {
+        "topicProducers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.TrackedProducers.ProducerInfo"
+          }
+        }
+      }
+    },
+    "rkcy.TrackedProducers.ProducerInfo": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "timeSinceUpdate": {
+          "type": "string"
+        }
+      }
     }
   }
 }

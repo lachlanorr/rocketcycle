@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -38,9 +39,91 @@ var gDocsFiles embed.FS
 var gAdminPingInterval = 1 * time.Second
 var gPlatformRepublishInterval = 60 * time.Second
 
-var gActiveProducers = make(map[string]map[string]time.Time)
-
 var gCurrentRtPlat *rtPlatform = nil
+
+type ProducerTracker struct {
+	platformName  string
+	topicProds    map[string]map[string]time.Time
+	topicProdsMtx *sync.Mutex
+}
+
+var gProducerTracker *ProducerTracker
+
+func NewProducerTracker(platformName string) *ProducerTracker {
+	pt := &ProducerTracker{
+		platformName:  platformName,
+		topicProds:    make(map[string]map[string]time.Time),
+		topicProdsMtx: &sync.Mutex{},
+	}
+	return pt
+}
+
+func (pt *ProducerTracker) update(pd *ProducerDirective, timestamp time.Time, pingInterval time.Duration) {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	now := time.Now()
+	if now.Sub(timestamp) < pingInterval {
+		fullTopicName := BuildFullTopicName(
+			pt.platformName,
+			pd.ConcernName,
+			pd.ConcernType,
+			pd.Topic,
+			pd.Generation,
+		)
+		prodMap, prodMapFound := pt.topicProds[fullTopicName]
+		if !prodMapFound {
+			prodMap = make(map[string]time.Time)
+			pt.topicProds[fullTopicName] = prodMap
+		}
+
+		_, prodFound := prodMap[pd.Id]
+		if !prodFound {
+			log.Info().Msgf("New producer %s:%s", fullTopicName, pd.Id)
+		}
+		pt.topicProds[fullTopicName][pd.Id] = timestamp
+	}
+}
+
+func (pt *ProducerTracker) cull(ageLimit time.Duration) {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	now := time.Now()
+	for topic, prodMap := range pt.topicProds {
+		for id, timestamp := range prodMap {
+			age := now.Sub(timestamp)
+			if age >= ageLimit {
+				log.Info().Msgf("Culling producer %s:%s, age %s", topic, id, age)
+				delete(prodMap, id)
+			}
+		}
+		if len(pt.topicProds[topic]) == 0 {
+			delete(pt.topicProds, topic)
+		}
+	}
+}
+
+func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	tp := &TrackedProducers{}
+	now := time.Now()
+
+	for topic, prodMap := range pt.topicProds {
+		for id, timestamp := range prodMap {
+			age := now.Sub(timestamp)
+			tp.TopicProducers = append(tp.TopicProducers, &TrackedProducers_ProducerInfo{
+				Topic:           topic,
+				Id:              id,
+				TimeSinceUpdate: age.String(),
+			})
+		}
+	}
+
+	return tp
+}
 
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
@@ -49,6 +132,8 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	gProducerTracker = NewProducerTracker(gPlatformName)
 
 	go managePlatform(ctx, gPlatformName)
 	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
@@ -63,6 +148,31 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 
 func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
 	path := "/v1/platform/read?pretty"
+
+	slog := log.With().
+		Str("Path", path).
+		Logger()
+
+	resp, err := http.Get(gSettings.AdminAddr + path)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to READ")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+	}
+
+	fmt.Println(string(body))
+}
+
+func cobraAdminReadProducers(cmd *cobra.Command, args []string) {
+	path := "/v1/producers/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
@@ -174,6 +284,10 @@ func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
 		return gCurrentRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
+}
+
+func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, error) {
+	return gProducerTracker.toTrackedProducers(), nil
 }
 
 func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
@@ -415,18 +529,7 @@ func managePlatform(ctx context.Context, platformName string) {
 			}
 		case <-cullTicker.C:
 			// cull stale producers
-			now := time.Now()
-			for topic, prodMap := range gActiveProducers {
-				for id, timestamp := range prodMap {
-					if now.Sub(timestamp) >= cullInterval {
-						log.Info().Msgf("Culling producer %s:%s", topic, id)
-						delete(prodMap, id)
-					}
-				}
-				if len(gActiveProducers[topic]) == 0 {
-					delete(gActiveProducers, topic)
-				}
-			}
+			gProducerTracker.cull(cullInterval)
 		case adminMsg := <-adminCh:
 			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
 				gCurrentRtPlat = adminMsg.NewRtPlat
@@ -440,27 +543,7 @@ func managePlatform(ctx context.Context, platformName string) {
 				updateTopics(gCurrentRtPlat)
 				updateRunner(ctx, adminProdCh, adminTopic, platDiff)
 			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
-				now := time.Now()
-				if now.Sub(adminMsg.Timestamp) < gAdminPingInterval*2 {
-					fullTopicName := BuildFullTopicName(
-						gPlatformName,
-						adminMsg.ProducerDirective.ConcernName,
-						adminMsg.ProducerDirective.ConcernType,
-						adminMsg.ProducerDirective.Topic,
-						adminMsg.ProducerDirective.Generation,
-					)
-					prodMap, prodMapFound := gActiveProducers[fullTopicName]
-					if !prodMapFound {
-						prodMap = make(map[string]time.Time)
-						gActiveProducers[fullTopicName] = prodMap
-					}
-
-					_, prodFound := prodMap[adminMsg.ProducerDirective.Id]
-					if !prodFound {
-						log.Info().Msgf("New producer %s:%s", fullTopicName, adminMsg.ProducerDirective.Id)
-					}
-					gActiveProducers[fullTopicName][adminMsg.ProducerDirective.Id] = adminMsg.Timestamp
-				}
+				gProducerTracker.update(adminMsg.ProducerDirective, adminMsg.Timestamp, gAdminPingInterval*2)
 			}
 		}
 	}
