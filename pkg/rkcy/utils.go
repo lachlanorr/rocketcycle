@@ -17,11 +17,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 )
 
-var exists struct{}
+var gExists struct{}
 
 func NewTraceId() string {
 	return strings.ReplaceAll(uuid.NewString(), "-", "")
@@ -32,12 +30,12 @@ func NewSpanId() string {
 }
 
 func prepLogging(platformName string) {
+	if os.Getenv("RKCY_DEBUG") == "1" {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
-	/*
-		log.Logger = log.With().
-			Str("Platform", platformName).
-			Logger()
-	*/
 }
 
 func contains(slice []string, item string) bool {
@@ -87,7 +85,7 @@ func findHeader(msg *kafka.Message, key string) []byte {
 }
 
 func GetDirective(msg *kafka.Message) Directive {
-	val := findHeader(msg, consts.DirectiveHeader)
+	val := findHeader(msg, DIRECTIVE_HEADER)
 	if val != nil {
 		return Directive(BytesToInt(val))
 	} else {
@@ -96,7 +94,7 @@ func GetDirective(msg *kafka.Message) Directive {
 }
 
 func GetTraceParent(msg *kafka.Message) string {
-	val := findHeader(msg, consts.TraceParentHeader)
+	val := findHeader(msg, TRACE_PARENT_HEADER)
 	if val != nil {
 		return string(val)
 	}
@@ -108,7 +106,7 @@ func GetTraceId(msg *kafka.Message) string {
 }
 
 func AdminTopic(platformName string) string {
-	return fmt.Sprintf("%s.%s.admin", consts.Rkcy, platformName)
+	return fmt.Sprintf("%s.%s.admin", RKCY, platformName)
 }
 
 func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
@@ -138,7 +136,7 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 					ReplicationFactor: len(md.Brokers),
 					Config: map[string]string{
 						"retention.ms":    "-1",
-						"retention.bytes": strconv.Itoa(int(consts.PlatformAdminRetentionBytes)),
+						"retention.bytes": strconv.Itoa(int(PLATFORM_ADMIN_RETENTION_BYTES)),
 					},
 				},
 			},
@@ -157,38 +155,43 @@ func createAdminTopic(ctx context.Context, bootstrapServers string, internalName
 }
 
 func standardHeaders(directive Directive, traceParent string) []kafka.Header {
-	if !TraceParentIsValid(traceParent) {
-		panic("standardHeaders invalid traceParent: " + traceParent)
+	if TraceParentIsValid(traceParent) {
+		return []kafka.Header{
+			{
+				Key:   DIRECTIVE_HEADER,
+				Value: IntToBytes(int(directive)),
+			},
+			{
+				Key:   TRACE_PARENT_HEADER,
+				Value: []byte(traceParent),
+			},
+		}
+	} else {
+		return []kafka.Header{
+			{
+				Key:   DIRECTIVE_HEADER,
+				Value: IntToBytes(int(directive)),
+			},
+		}
 	}
-	hdrs := []kafka.Header{
-		{
-			Key:   consts.DirectiveHeader,
-			Value: IntToBytes(int(directive)),
-		},
-		{
-			Key:   consts.TraceParentHeader,
-			Value: []byte(traceParent),
-		},
-	}
-	return hdrs
 }
 
 const (
-	colorBlack = iota + 30
-	colorRed
-	colorGreen
-	colorYellow
-	colorBlue
-	colorMagenta
-	colorCyan
-	colorWhite
+	kColorBlack = iota + 30
+	kColorRed
+	kColorGreen
+	kColorYellow
+	kColorBlue
+	kColorMagenta
+	kColorCyan
+	kColorWhite
 
-	colorBold     = 1
-	colorDarkGray = 90
+	kColorBold     = 1
+	kColorDarkGray = 90
 )
 
 // reasonable list of colors that change greatly each time
-var colors []int = []int{
+var gColors []int = []int{
 	11, 12, /*13, 14, 10,*/ /*9,*/
 	31 /*47,*/ /*63,*/, 79, 95 /*111,*/, 127, 143, 159, 175, 191, 207, 223,
 	25, 41, 57, 73, 89, 105, 121, 137, 153, 169, 185, 201, 217,

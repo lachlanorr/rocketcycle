@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -33,7 +34,96 @@ import (
 )
 
 //go:embed static/admin/docs
-var docsFiles embed.FS
+var gDocsFiles embed.FS
+
+var gAdminPingInterval = 1 * time.Second
+var gPlatformRepublishInterval = 60 * time.Second
+
+var gCurrentRtPlat *rtPlatform = nil
+
+type ProducerTracker struct {
+	platformName  string
+	topicProds    map[string]map[string]time.Time
+	topicProdsMtx *sync.Mutex
+}
+
+var gProducerTracker *ProducerTracker
+
+func NewProducerTracker(platformName string) *ProducerTracker {
+	pt := &ProducerTracker{
+		platformName:  platformName,
+		topicProds:    make(map[string]map[string]time.Time),
+		topicProdsMtx: &sync.Mutex{},
+	}
+	return pt
+}
+
+func (pt *ProducerTracker) update(pd *ProducerDirective, timestamp time.Time, pingInterval time.Duration) {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	now := time.Now()
+	if now.Sub(timestamp) < pingInterval {
+		fullTopicName := BuildFullTopicName(
+			pt.platformName,
+			pd.ConcernName,
+			pd.ConcernType,
+			pd.Topic,
+			pd.Generation,
+		)
+		prodMap, prodMapFound := pt.topicProds[fullTopicName]
+		if !prodMapFound {
+			prodMap = make(map[string]time.Time)
+			pt.topicProds[fullTopicName] = prodMap
+		}
+
+		_, prodFound := prodMap[pd.Id]
+		if !prodFound {
+			log.Info().Msgf("New producer %s:%s", fullTopicName, pd.Id)
+		}
+		pt.topicProds[fullTopicName][pd.Id] = timestamp
+	}
+}
+
+func (pt *ProducerTracker) cull(ageLimit time.Duration) {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	now := time.Now()
+	for topic, prodMap := range pt.topicProds {
+		for id, timestamp := range prodMap {
+			age := now.Sub(timestamp)
+			if age >= ageLimit {
+				log.Info().Msgf("Culling producer %s:%s, age %s", topic, id, age)
+				delete(prodMap, id)
+			}
+		}
+		if len(pt.topicProds[topic]) == 0 {
+			delete(pt.topicProds, topic)
+		}
+	}
+}
+
+func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
+	pt.topicProdsMtx.Lock()
+	defer pt.topicProdsMtx.Unlock()
+
+	tp := &TrackedProducers{}
+	now := time.Now()
+
+	for topic, prodMap := range pt.topicProds {
+		for id, timestamp := range prodMap {
+			age := now.Sub(timestamp)
+			tp.TopicProducers = append(tp.TopicProducers, &TrackedProducers_ProducerInfo{
+				Topic:           topic,
+				Id:              id,
+				TimeSinceUpdate: age.String(),
+			})
+		}
+	}
+
+	return tp
+}
 
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
@@ -43,8 +133,10 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go managePlatform(ctx, settings.BootstrapServers, platformName)
-	go adminServe(ctx, settings.HttpAddr, settings.GrpcAddr)
+	gProducerTracker = NewProducerTracker(gPlatformName)
+
+	go managePlatform(ctx, gPlatformName)
+	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -61,7 +153,32 @@ func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(settings.AdminAddr + path)
+	resp, err := http.Get(gSettings.AdminAddr + path)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to READ")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+	}
+
+	fmt.Println(string(body))
+}
+
+func cobraAdminReadProducers(cmd *cobra.Command, args []string) {
+	path := "/v1/producers/read?pretty"
+
+	slog := log.With().
+		Str("Path", path).
+		Logger()
+
+	resp, err := http.Get(gSettings.AdminAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -100,7 +217,7 @@ func cobraAdminDecodeInstance(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(rpcArgsSer)
-	resp, err := http.Post(settings.AdminAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(gSettings.AdminAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -142,7 +259,7 @@ func (srv adminServer) GrpcAddr() string {
 }
 
 func (adminServer) StaticFiles() http.FileSystem {
-	return http.FS(docsFiles)
+	return http.FS(gDocsFiles)
 }
 
 func (adminServer) StaticFilesPathPrefix() string {
@@ -163,10 +280,14 @@ func (adminServer) RegisterHandlerFromEndpoint(
 }
 
 func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
-	if oldRtPlat != nil {
-		return oldRtPlat.Platform, nil
+	if gCurrentRtPlat != nil {
+		return gCurrentRtPlat.Platform, nil
 	}
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
+}
+
+func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, error) {
+	return gProducerTracker.toTrackedProducers(), nil
 }
 
 func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
@@ -203,8 +324,6 @@ func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
 	srv := adminServer{httpAddr: httpAddr, grpcAddr: grpcAddr}
 	ServeGrpcGateway(ctx, srv)
 }
-
-var oldRtPlat *rtPlatform = nil
 
 type clusterInfo struct {
 	cluster        *Platform_Cluster
@@ -260,7 +379,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
-	config.SetKey("bootstrap.servers", cluster.BootstrapServers)
+	config.SetKey("bootstrap.servers", cluster.Brokers)
 
 	var err error
 	ci.admin, err = kafka.NewAdminClient(&config)
@@ -282,7 +401,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	ci.brokerCount = len(md.Brokers)
 	for _, tp := range md.Topics {
 		sortedTopics = append(sortedTopics, tp.Topic)
-		ci.existingTopics[tp.Topic] = exists
+		ci.existingTopics[tp.Topic] = gExists
 	}
 
 	sort.Strings(sortedTopics)
@@ -344,7 +463,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		ci, err := newClusterInfo(cluster)
 
 		if err != nil {
-			log.Printf("Unable to connect to cluster '%s', boostrap_servers '%s': %s", cluster.Name, cluster.BootstrapServers, err.Error())
+			log.Printf("Unable to connect to cluster '%s', brokers '%s': %s", cluster.Name, cluster.Brokers, err.Error())
 			return
 		}
 
@@ -352,7 +471,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		defer ci.Close()
 		log.Info().
 			Str("Cluster", cluster.Name).
-			Str("BootstrapServers", cluster.BootstrapServers).
+			Str("Brokers", cluster.Brokers).
 			Msg("Connected to cluster")
 	}
 
@@ -370,30 +489,25 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(ctx context.Context, bootstrapServers string, platformName string) {
+func managePlatform(ctx context.Context, platformName string) {
 	adminTopic := AdminTopic(platformName)
-	adminProd, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-	})
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msg("failed to kafka.NewProducer for admin messages")
-	}
-	defer adminProd.Close()
-	go func() {
-		for e := range adminProd.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-				if ev.TopicPartition.Error != nil {
-					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
-				}
-			}
-		}
-	}()
+	adminProdCh := getProducerCh(gSettings.AdminBrokers)
 
-	platCh := make(chan *Platform)
-	go consumePlatformConfig(ctx, platCh, bootstrapServers, platformName)
+	adminCh := make(chan *AdminMessage)
+	go consumeAdminTopic(
+		ctx,
+		adminCh,
+		gSettings.AdminBrokers,
+		platformName,
+		Directive_PLATFORM|Directive_PRODUCER_STATUS,
+		Directive_PLATFORM,
+		kAtLastMatch,
+	)
+
+	republishTicker := time.NewTicker(gPlatformRepublishInterval)
+
+	cullInterval := gAdminPingInterval * 10
+	cullTicker := time.NewTicker(cullInterval)
 
 	for {
 		select {
@@ -401,66 +515,82 @@ func managePlatform(ctx context.Context, bootstrapServers string, platformName s
 			log.Info().
 				Msg("managePlatform exiting, ctx.Done()")
 			return
-		case plat := <-platCh:
-			rtPlat, err := newRtPlatform(plat)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to newRtPlatform")
-				continue
+		case <-republishTicker.C:
+			if gCurrentRtPlat != nil {
+				log.Info().Msg("Republishing platform")
+				msg, err := kafkaMessage(&adminTopic, 0, gCurrentRtPlat.Platform, Directive_PLATFORM, "")
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("Failed to kafkaMessage")
+					continue
+				}
+				adminProdCh <- msg
 			}
+		case <-cullTicker.C:
+			// cull stale producers
+			gProducerTracker.cull(cullInterval)
+		case adminMsg := <-adminCh:
+			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
+				gCurrentRtPlat = adminMsg.NewRtPlat
 
-			if oldRtPlat == nil || rtPlat.Hash != oldRtPlat.Hash {
-				jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
+				jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
 				log.Info().
 					Str("PlatformJson", string(jsonBytes)).
-					Msg("Platform parsed")
+					Msg("Platform Updated")
 
-				platDiff := rtPlat.diff(oldRtPlat)
-
-				updateTopics(rtPlat)
-				updateRunner(ctx, adminProd, adminTopic, platDiff)
-				oldRtPlat = rtPlat
+				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
+				updateTopics(gCurrentRtPlat)
+				updateRunner(ctx, adminProdCh, adminTopic, platDiff)
+			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
+				gProducerTracker.update(adminMsg.ProducerDirective, adminMsg.Timestamp, gAdminPingInterval*2)
 			}
 		}
 	}
 }
 
-func updateRunner(ctx context.Context, adminProd *kafka.Producer, adminTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string, platDiff *platformDiff) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
+
 	for _, p := range platDiff.progsToStop {
-		acd := &AdminConsumerDirective{Program: p}
-		acdSer, err := proto.Marshal(acd)
+		msg, err := kafkaMessage(
+			&adminTopic,
+			0,
+			&ConsumerDirective{Program: p},
+			Directive_CONSUMER_STOP,
+			traceParent,
+		)
 		if err != nil {
-			span.RecordError(err)
-			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
-		adminProd.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
-			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_STOP, traceParent),
-		}, nil)
+
+		adminProdCh <- msg
 	}
+
 	for _, p := range platDiff.progsToStart {
-		acd := &AdminConsumerDirective{Program: p}
-		acdSer, err := proto.Marshal(acd)
+		msg, err := kafkaMessage(
+			&adminTopic,
+			0,
+			&ConsumerDirective{Program: p},
+			Directive_CONSUMER_START,
+			traceParent,
+		)
 		if err != nil {
-			span.RecordError(err)
-			log.Error().Err(err).Msg("failed to marshal AdminConsumerDirective")
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
-		adminProd.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &adminTopic},
-			Value:          acdSer,
-			Headers:        standardHeaders(Directive_ADMIN_CONSUMER_START, traceParent),
-		}, nil)
+
+		adminProdCh <- msg
 	}
 }
 
-func substStr(s string, concernName string, clusterBootstrap string, shortTopicName string, fullTopicName string, partition int32) string {
-	s = strings.ReplaceAll(s, "@platform", platformName)
-	s = strings.ReplaceAll(s, "@bootstrap_servers", clusterBootstrap)
+func substStr(s string, concernName string, consumerBrokers string, shortTopicName string, fullTopicName string, partition int32) string {
+	s = strings.ReplaceAll(s, "@platform", gPlatformName)
+	s = strings.ReplaceAll(s, "@admin_brokers", gSettings.AdminBrokers)
+	s = strings.ReplaceAll(s, "@consumer_brokers", consumerBrokers)
 	s = strings.ReplaceAll(s, "@concern", concernName)
 	s = strings.ReplaceAll(s, "@system", shortTopicName)
 	s = strings.ReplaceAll(s, "@topic", fullTopicName)
@@ -468,7 +598,7 @@ func substStr(s string, concernName string, clusterBootstrap string, shortTopicN
 	return s
 }
 
-var stdTags map[string]string = map[string]string{
+var gStdTags map[string]string = map[string]string{
 	"service.name":   "rkcy.@platform.@concern.@system",
 	"rkcy.concern":   "@concern",
 	"rkcy.system":    "@system",
@@ -479,24 +609,24 @@ var stdTags map[string]string = map[string]string{
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
 	progs := make([]*Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
-		topicName := BuildFullTopicName(platformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+		topicName := BuildFullTopicName(gPlatformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.Cluster]
 		progs[i] = &Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
 			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i),
+			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.Brokers, topics.Name, topicName, i),
 			Tags:   make(map[string]string),
 		}
 		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.Brokers, topics.Name, topicName, i)
 		}
 
-		for k, v := range stdTags {
-			progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+		for k, v := range gStdTags {
+			progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
 		}
 		if topics.ConsumerProgram.Tags != nil {
 			for k, v := range topics.ConsumerProgram.Tags {
-				progs[i].Tags[k] = substStr(v, concern.Name, cluster.BootstrapServers, topics.Name, topicName, i)
+				progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
 			}
 		}
 	}

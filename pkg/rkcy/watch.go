@@ -19,15 +19,14 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/consts"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
 type watchTopic struct {
-	clusterName      string
-	bootstrapServers string
-	topicName        string
-	logLevel         zerolog.Level
+	clusterName string
+	brokers     string
+	topicName   string
+	logLevel    zerolog.Level
 }
 
 func (wt *watchTopic) String() string {
@@ -35,11 +34,11 @@ func (wt *watchTopic) String() string {
 }
 
 func (wt *watchTopic) consume(ctx context.Context) {
-	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", platformName, wt)
+	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", gPlatformName, wt)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        wt.bootstrapServers,
+		"bootstrap.servers":        wt.brokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       true, // librdkafka will commit to brokers for us on an interval and when we close consumer
 		"enable.auto.offset.store": true, // librdkafka will commit to local store to get "at most once" behavior
@@ -47,7 +46,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	if err != nil {
 		log.Error().
 			Err(err).
-			Str("BoostrapServers", wt.bootstrapServers).
+			Str("BoostrapServers", wt.brokers).
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 		return
@@ -78,7 +77,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
 					txnJson := protojson.Format(proto.Message(&txn))
-					if settings.WatchDecode {
+					if gSettings.WatchDecode {
 						txnJsonDec, err := decodeOpaques(ctx, []byte(txnJson))
 						if err == nil {
 							log.WithLevel(wt.logLevel).
@@ -104,13 +103,13 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 		for _, topic := range concern.Topics {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
-				if tp.Topic == consts.Error || tp.Topic == consts.Complete {
+				if tp.Topic == ERROR || tp.Topic == COMPLETE {
 					wt := watchTopic{
-						clusterName:      topic.CurrentCluster.Name,
-						bootstrapServers: topic.CurrentCluster.BootstrapServers,
-						topicName:        topic.CurrentTopic,
+						clusterName: topic.CurrentCluster.Name,
+						brokers:     topic.CurrentCluster.Brokers,
+						topicName:   topic.CurrentTopic,
 					}
-					if tp.Topic == consts.Error {
+					if tp.Topic == ERROR {
 						wt.logLevel = zerolog.ErrorLevel
 					} else {
 						wt.logLevel = zerolog.DebugLevel
@@ -249,11 +248,11 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 	return jsonSer, nil
 }
 
-func watchResultTopics(ctx context.Context) {
+func watchResultTopics(ctx context.Context, adminBrokers string) {
 	wtMap := make(map[string]bool)
 
-	platCh := make(chan *Platform)
-	go consumePlatformConfig(ctx, platCh, settings.BootstrapServers, platformName)
+	adminCh := make(chan *AdminMessage)
+	go consumeAdminTopic(ctx, adminCh, adminBrokers, gPlatformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
 
 	for {
 		select {
@@ -261,16 +260,8 @@ func watchResultTopics(ctx context.Context) {
 			log.Info().
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
-		case plat := <-platCh:
-			rtPlat, err := newRtPlatform(plat)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to newRtPlatform")
-				continue
-			}
-
-			wts := getAllWatchTopics(rtPlat)
+		case adminMsg := <-adminCh:
+			wts := getAllWatchTopics(adminMsg.NewRtPlat)
 
 			for _, wt := range wts {
 				_, ok := wtMap[wt.String()]
@@ -292,7 +283,7 @@ func cobraWatch(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go watchResultTopics(ctx)
+	go watchResultTopics(ctx, gSettings.AdminBrokers)
 
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)

@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	instanceCache *InstanceCache = NewInstanceCache()
+	gInstanceCache *InstanceCache = NewInstanceCache()
 )
 
 func produceApecsTxnError(
@@ -96,7 +96,7 @@ func produceNextStep(
 					storageStepsMap[stepKey] = &ApecsTxn_Step{
 						System:  System_STORAGE,
 						Concern: step.Concern,
-						Command: CmdUpdate,
+						Command: UPDATE,
 						Key:     step.Key,
 						Payload: step.Result.Instance,
 						Offset:  step.Offset,
@@ -106,8 +106,7 @@ func produceNextStep(
 			if len(storageStepsMap) > 0 {
 				storageSteps := make([]*ApecsTxn_Step, len(storageStepsMap))
 				i := 0
-				for k, v := range storageStepsMap {
-					log.Info().Msgf("Storage step added for %s %s/%s/%+v", k, v.Concern, v.Key, v.Offset)
+				for _, v := range storageStepsMap {
 					storageSteps[i] = v
 					i++
 				}
@@ -143,7 +142,7 @@ func advanceApecsTxn(
 	aprod *ApecsProducer,
 ) {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
-	ctx, span, step := platformImpl.Telem.StartStep(ctx, rtxn)
+	ctx, span, step := gPlatformImpl.Telem.StartStep(ctx, rtxn)
 	defer span.End()
 
 	log.Debug().
@@ -181,8 +180,8 @@ func advanceApecsTxn(
 		// Special case "REFRESH" command
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
-		if step.Command == CmdRefresh {
-			instanceCache.Set(step.Key, step.Payload, offset)
+		if step.Command == REFRESH {
+			gInstanceCache.Set(step.Key, step.Payload, offset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
@@ -192,9 +191,9 @@ func advanceApecsTxn(
 			produceNextStep(span, rtxn, step, offset, aprod)
 			return
 		} else {
-			inst = instanceCache.Get(step.Key)
+			inst = gInstanceCache.Get(step.Key)
 
-			nilOk := step.Command == CmdCreate || step.Command == CmdValidateCreate
+			nilOk := step.Command == CREATE || step.Command == VALIDATE_CREATE
 			if inst == nil && !nilOk {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
@@ -204,14 +203,14 @@ func advanceApecsTxn(
 					&ApecsTxn_Step{
 						System:  System_STORAGE,
 						Concern: step.Concern,
-						Command: CmdRead,
+						Command: READ,
 						Key:     step.Key,
 						Offset:  offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 					&ApecsTxn_Step{
 						System:  System_PROCESS,
 						Concern: step.Concern,
-						Command: CmdRefresh,
+						Command: REFRESH,
 						Key:     step.Key,
 					},
 				)
@@ -226,7 +225,7 @@ func advanceApecsTxn(
 					return
 				}
 				return
-			} else if inst != nil && step.Command == CmdCreate {
+			} else if inst != nil && step.Command == CREATE {
 				produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return
 			}
@@ -285,7 +284,7 @@ func advanceApecsTxn(
 
 	// Update InstanceCache if instance contents have changed
 	if tp.System == System_PROCESS && step.Result.Instance != nil {
-		instanceCache.Set(step.Key, step.Result.Instance, offset)
+		gInstanceCache.Set(step.Key, step.Result.Instance, offset)
 	}
 
 	produceNextStep(span, rtxn, step, offset, aprod)
@@ -293,16 +292,18 @@ func advanceApecsTxn(
 
 func consumeApecsTopic(
 	ctx context.Context,
-	clusterBootstrap string,
+	adminBrokers string,
+	consumerBrokers string,
+	platformName string,
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
 ) {
-	aprod := NewApecsProducer(ctx, settings.BootstrapServers, platformName, nil)
+	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil)
 
 	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        clusterBootstrap,
+		"bootstrap.servers":        consumerBrokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       true,  // librdkafka will commit to brokers for us on an interval and when we close consumer
 		"enable.auto.offset.store": false, // we explicitely commit to local store to get "at least once" behavior
@@ -393,7 +394,9 @@ func consumeApecsTopic(
 
 func startApecsRunner(
 	ctx context.Context,
-	clusterBootstrap string,
+	adminBrokers string,
+	consumerBrokers string,
+	platformName string,
 	fullTopic string,
 	partition int32,
 ) {
@@ -414,7 +417,9 @@ func startApecsRunner(
 
 	go consumeApecsTopic(
 		ctx,
-		clusterBootstrap,
+		adminBrokers,
+		consumerBrokers,
+		platformName,
 		fullTopic,
 		partition,
 		tp,

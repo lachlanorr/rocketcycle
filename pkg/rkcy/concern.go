@@ -16,18 +16,18 @@ import (
 )
 
 const (
-	CmdCreate = "Create"
-	CmdRead   = "Read"
-	CmdUpdate = "Update"
-	CmdDelete = "Delete"
+	CREATE = "Create"
+	READ   = "Read"
+	UPDATE = "Update"
+	DELETE = "Delete"
 
-	CmdValidateCreate = "ValidateCreate"
-	CmdValidateUpdate = "ValidateUpdate"
+	VALIDATE_CREATE = "ValidateCreate"
+	VALIDATE_UPDATE = "ValidateUpdate"
 
-	CmdRefresh = "Refresh"
+	REFRESH = "Refresh"
 )
 
-var concernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
+var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
 type CommandHandler func(context.Context, System, string, Direction, *StepArgs) *ApecsTxn_Step_Result
 type InstanceDecoder func(context.Context, []byte) (string, error)
@@ -47,11 +47,11 @@ func RegisterConcernHandler(
 	argDecoder PayloadDecoder,
 	resultDecoder PayloadDecoder,
 ) {
-	_, ok := concernHandlers[concern]
+	_, ok := gConcernHandlers[concern]
 	if ok {
 		panic(fmt.Sprintf("%s concern handler already registered", concern))
 	}
-	concernHandlers[concern] = ConcernHandler{
+	gConcernHandlers[concern] = ConcernHandler{
 		Handler:         handler,
 		InstanceDecoder: instanceDecoder,
 		ArgDecoder:      argDecoder,
@@ -60,7 +60,7 @@ func RegisterConcernHandler(
 }
 
 func decodeInstance(ctx context.Context, concern string, instance []byte) (string, error) {
-	concernHandler, ok := concernHandlers[concern]
+	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return "", fmt.Errorf("decodeInstance invalid concern: %s", concern)
 	}
@@ -76,7 +76,7 @@ func decodeInstance64(ctx context.Context, concern string, instance64 string) (s
 }
 
 func decodeArgPayload(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
-	concernHandler, ok := concernHandlers[concern]
+	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return "", fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
@@ -92,7 +92,7 @@ func decodeArgPayload64(ctx context.Context, concern string, system System, comm
 }
 
 func decodeResultPayload(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
-	concernHandler, ok := concernHandlers[concern]
+	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return "", fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
 	}
@@ -129,9 +129,9 @@ func handleCommand(
 
 	if system == System_PROCESS {
 		switch command {
-		case CmdCreate:
+		case CREATE:
 			fallthrough
-		case CmdUpdate:
+		case UPDATE:
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
 			}
@@ -140,7 +140,7 @@ func handleCommand(
 				Payload:  args.Payload,
 				Instance: args.Payload,
 			}
-		case CmdRead:
+		case READ:
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
 			}
@@ -148,18 +148,18 @@ func handleCommand(
 				Code:    Code_OK,
 				Payload: args.Instance,
 			}
-		case CmdDelete:
+		case DELETE:
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
 			}
-			instanceCache.Remove(args.Key)
+			gInstanceCache.Remove(args.Key)
 			return &ApecsTxn_Step_Result{
 				Code: Code_OK,
 			}
 		}
 	}
 
-	concernHandler, ok := concernHandlers[concern]
+	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))

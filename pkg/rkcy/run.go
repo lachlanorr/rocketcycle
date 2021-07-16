@@ -18,7 +18,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 )
 
 type rtProgram struct {
@@ -34,15 +33,15 @@ type rtProgram struct {
 	runCount int
 }
 
-var currColorIdx int = 0
+var gCurrColorIdx int = 0
 
 func newRtProgram(program *Program, key string) *rtProgram {
 	rtProg := &rtProgram{
 		program: program,
 		key:     key,
 	}
-	rtProg.color = colors[currColorIdx%len(colors)]
-	currColorIdx++
+	rtProg.color = gColors[gCurrColorIdx%len(gColors)]
+	gCurrColorIdx++
 	rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
 
 	return rtProg
@@ -133,8 +132,8 @@ func (rtProg *rtProgram) start(
 
 	// only reset color and abbrev if this is the first time through
 	if rtProg.abbrev == "" {
-		rtProg.color = colors[currColorIdx%len(colors)]
-		currColorIdx++
+		rtProg.color = gColors[gCurrColorIdx%len(gColors)]
+		gCurrColorIdx++
 		rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
 	}
 
@@ -167,7 +166,7 @@ func updateRunning(
 	ctx context.Context,
 	running map[string]*rtProgram,
 	directive Directive,
-	acd *AdminConsumerDirective,
+	acd *ConsumerDirective,
 	printCh chan<- string,
 ) {
 	key := progKey(acd.Program)
@@ -178,7 +177,7 @@ func updateRunning(
 	)
 
 	switch directive {
-	case Directive_ADMIN_CONSUMER_START:
+	case Directive_CONSUMER_START:
 		rtProg, ok = running[key]
 		if ok {
 			log.Warn().
@@ -195,7 +194,7 @@ func updateRunning(
 			return
 		}
 		running[key] = rtProg
-	case Directive_ADMIN_CONSUMER_STOP:
+	case Directive_CONSUMER_STOP:
 		rtProg, ok = running[key]
 		if !ok {
 			log.Warn().Msg("Program not running running, cannot stop: " + key)
@@ -240,13 +239,13 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 	updateRunning(
 		ctx,
 		running,
-		Directive_ADMIN_CONSUMER_START,
-		&AdminConsumerDirective{
+		Directive_CONSUMER_START,
+		&ConsumerDirective{
 			Program: &Program{
-				Name:   "./" + platformName,
+				Name:   "./" + gPlatformName,
 				Args:   []string{"admin", "serve"},
 				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", platformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", gPlatformImpl.Name)},
 			},
 		},
 		printCh,
@@ -255,35 +254,37 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 
 func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
 	args := []string{"watch"}
-	if settings.WatchDecode {
+	if gSettings.WatchDecode {
 		args = append(args, "-d")
 	}
 
 	updateRunning(
 		ctx,
 		running,
-		Directive_ADMIN_CONSUMER_START,
-		&AdminConsumerDirective{
+		Directive_CONSUMER_START,
+		&ConsumerDirective{
 			Program: &Program{
-				Name:   "./" + platformName,
+				Name:   "./" + gPlatformName,
 				Args:   args,
 				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.watch", platformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.watch", gPlatformImpl.Name)},
 			},
 		},
 		printCh,
 	)
 }
 
-func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
-	rkcyCh := make(chan *rkcyMessage, 1)
-	go consumePlatformAdminTopic(
+func runConsumerPrograms(ctx context.Context) {
+	adminCh := make(chan *AdminMessage)
+
+	go consumeAdminTopic(
 		ctx,
-		rkcyCh,
-		settings.BootstrapServers,
-		platformName,
-		Directive_ADMIN_CONSUMER,
-		PastLastMatch,
+		adminCh,
+		gSettings.AdminBrokers,
+		gPlatformName,
+		Directive_CONSUMER,
+		Directive_CONSUMER,
+		kPastLastMatch,
 	)
 
 	running := map[string]*rtProgram{}
@@ -303,22 +304,14 @@ func runConsumerPrograms(ctx context.Context, platCh <-chan *Platform) {
 			return
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
-		case rkcyMsg := <-rkcyCh:
-			acd := AdminConsumerDirective{}
-			err := proto.Unmarshal(rkcyMsg.Value, &acd)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("Failed to Unmarshal AdminProducerDirective")
-			} else {
-				updateRunning(
-					ctx,
-					running,
-					rkcyMsg.Directive,
-					&acd,
-					printCh,
-				)
-			}
+		case adminMsg := <-adminCh:
+			updateRunning(
+				ctx,
+				running,
+				adminMsg.Directive,
+				adminMsg.ConsumerDirective,
+				printCh,
+			)
 		}
 	}
 }
@@ -330,9 +323,7 @@ func cobraRun(cmd *cobra.Command, args []string) {
 	interruptCh := make(chan os.Signal)
 	signal.Notify(interruptCh, os.Interrupt)
 
-	platCh := make(chan *Platform, 10)
-
-	go runConsumerPrograms(ctx, platCh)
+	go runConsumerPrograms(ctx)
 	for {
 		select {
 		case <-interruptCh:

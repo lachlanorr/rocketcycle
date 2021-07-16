@@ -15,8 +15,8 @@ import (
 type MatchLoc int
 
 const (
-	PastLastMatch MatchLoc = 0
-	AtLastMatch   MatchLoc = 1
+	kPastLastMatch MatchLoc = 0
+	kAtLastMatch   MatchLoc = 1
 )
 
 func findMostRecentMatching(
@@ -30,14 +30,18 @@ func findMostRecentMatching(
 	groupName := uncommittedGroupName(topic, int(partition))
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":  bootstrapServers,
-		"group.id":           groupName,
-		"enable.auto.commit": false,
+		"bootstrap.servers":        bootstrapServers,
+		"group.id":                 groupName,
+		"enable.auto.commit":       false,
+		"enable.auto.offset.store": false,
+		"auto.commit.interval.ms":  0,
 	})
 	if err != nil {
 		return false, 0, err
 	}
-	defer cons.Close()
+	defer func() {
+		go cons.Close()
+	}()
 
 	low, high, err := cons.QueryWatermarkOffsets(topic, 0, 10000)
 	if err != nil {
@@ -45,18 +49,20 @@ func findMostRecentMatching(
 			Err(err).
 			Str("Topic", topic).
 			Msg("findMostRecentMatching: QueryWatermarkOffsets failed, topic likely doesn't exist yet, return 0 offset")
+		log.Info().Msgf("findMostRecentMatching 002a")
 		return true, 0, nil
 	}
 
-	if matchLoc == PastLastMatch {
+	if matchLoc == kPastLastMatch {
 		return true, high, nil
 	}
 
 	if match == Directive_ALL {
 		matchingOffset := high
-		if matchLoc == AtLastMatch {
+		if matchLoc == kAtLastMatch {
 			matchingOffset = maxi64(0, matchingOffset-1)
 		}
+		log.Info().Msgf("findMostRecentMatching 003b")
 		return true, matchingOffset, nil
 	}
 
@@ -89,7 +95,7 @@ func findMostRecentMatching(
 	}
 
 	if matchingOffset != -1 {
-		if matchLoc == PastLastMatch {
+		if matchLoc == kPastLastMatch {
 			matchingOffset++
 		}
 		return true, matchingOffset, nil
@@ -130,6 +136,7 @@ func FindMostRecentMatching(
 			return found, mro, nil
 		}
 		delta *= 10
+		log.Warn().Msgf("Not found, new delta: %d", delta)
 	}
 
 	return found, mro, nil

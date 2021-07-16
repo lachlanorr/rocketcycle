@@ -4,6 +4,8 @@
 
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 package rkcy;
 option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 
@@ -13,6 +15,8 @@ message Platform {
     string name               = 1;
     repeated Concern concerns = 2;
     repeated Cluster clusters = 3;
+
+    google.protobuf.Timestamp update_time = 4;
 
     message Concern {
         Type type              = 1;
@@ -68,20 +72,16 @@ message Platform {
                 CURRENT                = 0;
                 // future topic added to concern and gets created
                 FUTURE_INIT            = 1;
-                // current to future mirroring starts and gets as caught up as possible
-                FUTURE_MIRROR          = 2;
                 // producers all pause
-                PRODUCER_PAUSE         = 3;
-                // wait until mirror is confirmed on all partitions
-                FUTURE_MIRROR_VALIDATE = 4;
+                PRODUCER_PAUSE         = 2;
                 // consumers read until end and shutdown
-                CONSUMER_SHUTDOWN      = 5;
+                CONSUMER_SHUTDOWN      = 3;
                 // new consumers start on future, advanced passed newest
-                CONSUMER_FUTURE_START  = 6;
+                CONSUMER_FUTURE_START  = 4;
                 // producers unpause and produce to future
-                PRODUCER_FUTURE_START  = 7;
+                PRODUCER_FUTURE_START  = 5;
                 // future becomes current, future is nulled, state set to CURRENT
-                FUTURE_TO_CURRENT      = 8;
+                FUTURE_TO_CURRENT      = 6;
             }
         }
 
@@ -100,8 +100,8 @@ message Platform {
     message Cluster {
         // unique name of cluster
         string name              = 1;
-        // kafka bootstrap servers for the cluster
-        string bootstrap_servers = 2;
+        // kafka brokers for the cluster
+        string brokers = 2;
     }
 
 
