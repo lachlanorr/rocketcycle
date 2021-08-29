@@ -14,9 +14,13 @@ provider "aws" {
   region = "us-east-2"
 }
 
+variable "vpc_cidr_block" {
+  type = string
+  default = "10.0.0.0/16"
+}
 
 resource "aws_vpc" "rkcy" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block = var.vpc_cidr_block
 
   tags = {
     Name = "rkcy"
@@ -30,7 +34,6 @@ resource "aws_security_group" "rkcy_allow_ssh" {
 
   ingress = [
     {
-#[aws_vpc.rkcy.cidr_block]
       cidr_blocks      = [ "0.0.0.0/0", ]
       description      = ""
       from_port        = 22
@@ -91,9 +94,13 @@ resource "aws_route_table_association" "rkcy" {
   route_table_id = aws_route_table.rkcy.id
 }
 
-resource "aws_network_interface" "rkcy_bastion" {
+locals {
+  bastion_private_ip = cidrhost(aws_subnet.rkcy.cidr_block, 10)
+}
+
+resource "aws_network_interface" "bastion" {
   subnet_id   = aws_subnet.rkcy.id
-  private_ips = ["10.0.1.100"]
+  private_ips = [local.bastion_private_ip]
 
   security_groups = [aws_security_group.rkcy_allow_ssh.id]
 }
@@ -116,7 +123,7 @@ resource "aws_instance" "bastion" {
   key_name = aws_key_pair.bastion.key_name
 
   network_interface {
-    network_interface_id = aws_network_interface.rkcy_bastion.id
+    network_interface_id = aws_network_interface.bastion.id
     device_index = 0
   }
 
@@ -133,18 +140,38 @@ resource "aws_eip" "bastion" {
   vpc = true
 
   instance = aws_instance.bastion.id
-  associate_with_private_ip = tolist(aws_network_interface.rkcy_bastion.private_ips)[0]
+  associate_with_private_ip = local.bastion_private_ip
   depends_on = [aws_internet_gateway.rkcy]
+
+  provisioner "file" {
+    source = "~/.ssh/id_rsa"
+    destination = "~/.ssh/id_rsa"
+
+    connection {
+      type     = "ssh"
+      user     = "ubuntu"
+      host     = self.public_ip
+      private_key = file("~/.ssh/id_rsa")
+    }
+  }
 }
 
 data "aws_route53_zone" "rkcy_net" {
-  name         = "rkcy.net"
+  name = "rkcy.net"
 }
 
-resource "aws_route53_record" "bastion" {
+resource "aws_route53_record" "bastion_public" {
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
   name    = "bastion.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [aws_eip.bastion.public_ip]
+}
+
+resource "aws_route53_record" "bastion_private" {
+  zone_id = data.aws_route53_zone.rkcy_net.zone_id
+  name    = "bastion.local.${data.aws_route53_zone.rkcy_net.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.bastion_private_ip]
 }
