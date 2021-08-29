@@ -19,6 +19,16 @@ variable "vpc_cidr_block" {
   default = "10.0.0.0/16"
 }
 
+# Put something like this in ~/.ssh/config:
+#
+# Host bastion.rkcy.net
+#    User ubuntu
+#    IdentityFile ~/.ssh/rkcy_id_rsa
+variable "ssh_key_path" {
+  type = string
+  default = "~/.ssh/rkcy_id_rsa"
+}
+
 resource "aws_vpc" "rkcy" {
   cidr_block = var.vpc_cidr_block
 
@@ -113,7 +123,7 @@ data "aws_ami" "bastion" {
 
 resource "aws_key_pair" "bastion" {
   key_name = "rkcy-bastion"
-  public_key = file("~/.ssh/id_rsa.pub")
+  public_key = file("${var.ssh_key_path}.pub")
 }
 
 resource "aws_instance" "bastion" {
@@ -144,14 +154,14 @@ resource "aws_eip" "bastion" {
   depends_on = [aws_internet_gateway.rkcy]
 
   provisioner "file" {
-    source = "~/.ssh/id_rsa"
+    source = var.ssh_key_path
     destination = "~/.ssh/id_rsa"
 
     connection {
       type     = "ssh"
       user     = "ubuntu"
       host     = self.public_ip
-      private_key = file("~/.ssh/id_rsa")
+      private_key = file(var.ssh_key_path)
     }
   }
 }
