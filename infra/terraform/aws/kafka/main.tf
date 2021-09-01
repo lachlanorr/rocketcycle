@@ -217,7 +217,7 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_inst_zookeeper_${count.index}"
+    Name = "rkcy_inst_zookeeper_${count.index+1}"
   }
 }
 
@@ -228,7 +228,7 @@ data "aws_route53_zone" "rkcy_net" {
 resource "aws_route53_record" "zookeeper_private" {
   count = var.zookeeper_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "zk${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "zk${count.index+1}.local.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
