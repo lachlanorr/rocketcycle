@@ -41,12 +41,13 @@ data "aws_vpc" "rkcy" {
   }
 }
 
-data "aws_subnet" "rkcy" {
+data "aws_subnet" "rkcy_app" {
+  count = var.zookeeper_count
   vpc_id = data.aws_vpc.rkcy.id
 
   filter {
     name = "tag:Name"
-    values = ["rkcy_sn"]
+    values = ["rkcy_app${count.index+1}_sn"]
   }
 }
 
@@ -118,12 +119,20 @@ resource "aws_security_group" "rkcy_zookeeper" {
 }
 
 locals {
-  zookeeper_ips = [for i in range(var.zookeeper_count) : "${cidrhost(data.aws_subnet.rkcy.cidr_block, 21 + i)}"]
+  zookeeper_ips = [for i in range(var.zookeeper_count) : "${cidrhost(data.aws_subnet.rkcy_app[i].cidr_block, 100)}"]
+}
+
+data "aws_availability_zones" "zones" {
+  state = "available"
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
 }
 
 resource "aws_network_interface" "zookeeper" {
   count = var.zookeeper_count
-  subnet_id   = data.aws_subnet.rkcy.id
+  subnet_id   = data.aws_subnet.rkcy_app[count.index].id
   private_ips = [local.zookeeper_ips[count.index]]
 
   security_groups = [aws_security_group.rkcy_zookeeper.id]
@@ -140,10 +149,16 @@ resource "aws_key_pair" "kafka" {
   public_key = file("${var.ssh_key_path}.pub")
 }
 
+resource "aws_placement_group" "zookeeper" {
+  name     = "rkcy_zookeeper_pc"
+  strategy = "spread"
+}
+
 resource "aws_instance" "zookeeper" {
   count = var.zookeeper_count
   ami = data.aws_ami.kafka.id
   instance_type = "m4.large"
+  placement_group = aws_placement_group.zookeeper.name
 
   key_name = aws_key_pair.kafka.key_name
 

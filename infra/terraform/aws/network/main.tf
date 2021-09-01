@@ -29,6 +29,11 @@ variable "ssh_key_path" {
   default = "~/.ssh/rkcy_id_rsa"
 }
 
+variable "subnet_count" {
+  type = number
+  default = 5
+}
+
 resource "aws_vpc" "rkcy" {
   cidr_block = var.vpc_cidr_block
 
@@ -37,14 +42,22 @@ resource "aws_vpc" "rkcy" {
   }
 }
 
-resource "aws_security_group" "rkcy_bastion" {
-  name        = "rkcy_bastion"
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
+
+locals {
+  allowed_inbound_cidr = "${chomp(data.http.myip.body)}/32"
+}
+
+resource "aws_security_group" "rkcy_edge" {
+  name        = "rkcy_edge"
   description = "Allow SSH inbound traffic"
   vpc_id      = aws_vpc.rkcy.id
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ local.allowed_inbound_cidr ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -79,16 +92,38 @@ resource "aws_internet_gateway" "rkcy" {
   }
 }
 
-resource "aws_subnet" "rkcy" {
+data "aws_availability_zones" "zones" {
+  state = "available"
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
+
+resource "aws_subnet" "rkcy_edge" {
   vpc_id            = aws_vpc.rkcy.id
-  cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 1)
-  availability_zone = "us-east-2a"
+  cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 0)
+  availability_zone = data.aws_availability_zones.zones.names[0]
   map_public_ip_on_launch = true
 
   depends_on = [aws_internet_gateway.rkcy]
 
   tags = {
-    Name = "rkcy_sn"
+    Name = "rkcy_edge_sn"
+  }
+}
+
+resource "aws_subnet" "rkcy_app" {
+  count             = var.subnet_count
+  vpc_id            = aws_vpc.rkcy.id
+  cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, count.index + 1)
+  availability_zone = data.aws_availability_zones.zones.names[count.index % length(data.aws_availability_zones.zones.names)]
+  map_public_ip_on_launch = true
+
+  depends_on = [aws_internet_gateway.rkcy]
+
+  tags = {
+    Name = "rkcy_app${count.index+1}_sn"
   }
 }
 
@@ -104,19 +139,19 @@ resource "aws_route_table" "rkcy" {
 }
 
 resource "aws_route_table_association" "rkcy" {
-  subnet_id      = aws_subnet.rkcy.id
+  subnet_id      = aws_subnet.rkcy_edge.id
   route_table_id = aws_route_table.rkcy.id
 }
 
 locals {
-  bastion_private_ip = cidrhost(aws_subnet.rkcy.cidr_block, 10)
+  bastion_private_ip = cidrhost(aws_subnet.rkcy_edge.cidr_block, 10)
 }
 
 resource "aws_network_interface" "bastion" {
-  subnet_id   = aws_subnet.rkcy.id
+  subnet_id   = aws_subnet.rkcy_edge.id
   private_ips = [local.bastion_private_ip]
 
-  security_groups = [aws_security_group.rkcy_bastion.id]
+  security_groups = [aws_security_group.rkcy_edge.id]
 }
 
 data "aws_ami" "bastion" {
