@@ -33,12 +33,12 @@ resource "aws_vpc" "rkcy" {
   cidr_block = var.vpc_cidr_block
 
   tags = {
-    Name = "rkcy"
+    Name = "rkcy_vpc"
   }
 }
 
-resource "aws_security_group" "rkcy_allow_ssh" {
-  name        = "rkcy_allow_ssh"
+resource "aws_security_group" "rkcy_bastion" {
+  name        = "rkcy_bastion"
   description = "Allow SSH inbound traffic"
   vpc_id      = aws_vpc.rkcy.id
 
@@ -47,12 +47,12 @@ resource "aws_security_group" "rkcy_allow_ssh" {
       cidr_blocks      = [ "0.0.0.0/0", ]
       description      = ""
       from_port        = 22
+      to_port          = 22
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
       security_groups  = []
       self             = false
-      to_port          = 22
     }
   ]
 
@@ -61,12 +61,12 @@ resource "aws_security_group" "rkcy_allow_ssh" {
       cidr_blocks      = [ "0.0.0.0/0", ]
       description      = ""
       from_port        = 0
+      to_port          = 0
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "-1"
       security_groups  = []
       self             = false
-      to_port          = 0
     }
   ]
 }
@@ -86,6 +86,10 @@ resource "aws_subnet" "rkcy" {
   map_public_ip_on_launch = true
 
   depends_on = [aws_internet_gateway.rkcy]
+
+  tags = {
+    Name = "rkcy_sn"
+  }
 }
 
 resource "aws_route_table" "rkcy" {
@@ -112,7 +116,7 @@ resource "aws_network_interface" "bastion" {
   subnet_id   = aws_subnet.rkcy.id
   private_ips = [local.bastion_private_ip]
 
-  security_groups = [aws_security_group.rkcy_allow_ssh.id]
+  security_groups = [aws_security_group.rkcy_bastion.id]
 }
 
 data "aws_ami" "bastion" {
@@ -142,7 +146,7 @@ resource "aws_instance" "bastion" {
   }
 
   tags = {
-    Name = "rkcy_bastion"
+    Name = "rkcy_inst_bastion"
   }
 }
 
@@ -156,13 +160,19 @@ resource "aws_eip" "bastion" {
   provisioner "file" {
     source = var.ssh_key_path
     destination = "~/.ssh/id_rsa"
+  }
 
-    connection {
-      type     = "ssh"
-      user     = "ubuntu"
-      host     = self.public_ip
-      private_key = file(var.ssh_key_path)
-    }
+  provisioner "remote-exec" {
+    inline = [
+      "chmod 600 ~/.ssh/id_rsa"
+    ]
+  }
+
+  connection {
+    type     = "ssh"
+    user     = "ubuntu"
+    host     = self.public_ip
+    private_key = file(var.ssh_key_path)
   }
 }
 
