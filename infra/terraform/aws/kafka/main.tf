@@ -269,7 +269,7 @@ resource "aws_route53_record" "zookeeper_private" {
 
 
 #-------------------------------------------------------------------------------
-# Kafkas
+# Brokers
 #-------------------------------------------------------------------------------
 locals {
   kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
