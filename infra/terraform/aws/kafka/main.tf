@@ -66,12 +66,9 @@ data "aws_subnet" "rkcy_app" {
   }
 }
 
-data "aws_availability_zones" "zones" {
-  state = "available"
-  filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
-  }
+locals {
+  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_app.*.availability_zone, data.aws_subnet.rkcy_app.*.id))}"
+  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_app.*.availability_zone, data.aws_subnet.rkcy_app.*.cidr_block))}"
 }
 
 data "aws_ami" "kafka" {
@@ -93,7 +90,7 @@ resource "aws_key_pair" "kafka" {
 # Zookeepers
 #-------------------------------------------------------------------------------
 locals {
-  zookeeper_ips = [for i in range(var.zookeeper_count) : "${cidrhost(data.aws_subnet.rkcy_app[i].cidr_block, 100)}"]
+  zookeeper_ips = [for i in range(var.zookeeper_count) : "${cidrhost(local.sn_cidrs[i], 100)}"]
 }
 
 resource "aws_security_group" "rkcy_zookeeper" {
@@ -165,7 +162,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
 
 resource "aws_network_interface" "zookeeper" {
   count = var.zookeeper_count
-  subnet_id   = data.aws_subnet.rkcy_app[count.index].id
+  subnet_id   = local.sn_ids[count.index]
   private_ips = [local.zookeeper_ips[count.index]]
 
   security_groups = [aws_security_group.rkcy_zookeeper.id]
@@ -275,7 +272,7 @@ resource "aws_route53_record" "zookeeper_private" {
 # Kafkas
 #-------------------------------------------------------------------------------
 locals {
-  kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(data.aws_subnet.rkcy_app[i].cidr_block, 101)}"]
+  kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
 }
 
 resource "aws_security_group" "rkcy_kafka" {
@@ -325,7 +322,7 @@ resource "aws_security_group" "rkcy_kafka" {
 
 resource "aws_network_interface" "kafka" {
   count = var.kafka_count
-  subnet_id   = data.aws_subnet.rkcy_app[count.index].id
+  subnet_id   = local.sn_ids[count.index]
   private_ips = [local.kafka_ips[count.index]]
 
   security_groups = [aws_security_group.rkcy_kafka.id]

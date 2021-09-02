@@ -110,11 +110,15 @@ data "aws_availability_zones" "zones" {
   }
 }
 
+locals {
+  zones = sort(data.aws_availability_zones.zones.names)
+}
+
 resource "aws_subnet" "rkcy_edge" {
   count             = var.edge_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 0 + count.index)
-  availability_zone = data.aws_availability_zones.zones.names[count.index % length(data.aws_availability_zones.zones.names)]
+  availability_zone = local.zones[count.index % length(local.zones)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
@@ -128,7 +132,7 @@ resource "aws_subnet" "rkcy_app" {
   count             = var.app_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 100 + count.index)
-  availability_zone = data.aws_availability_zones.zones.names[count.index % length(data.aws_availability_zones.zones.names)]
+  availability_zone = local.zones[count.index % length(local.zones)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
@@ -142,7 +146,7 @@ resource "aws_subnet" "rkcy_storage" {
   count             = var.storage_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 200 + count.index)
-  availability_zone = data.aws_availability_zones.zones.names[count.index % length(data.aws_availability_zones.zones.names)]
+  availability_zone = local.zones[count.index % length(local.zones)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
