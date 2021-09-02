@@ -189,7 +189,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -205,7 +205,7 @@ EOF
 resource "aws_route53_record" "postgresql_private" {
   count = var.postgresql_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "pg${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "postgresql-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [local.postgresql_ips[count.index]]

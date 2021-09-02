@@ -242,7 +242,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -258,7 +258,7 @@ EOF
 resource "aws_route53_record" "zookeeper_private" {
   count = var.zookeeper_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "zk${count.index+1}.local.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "zookeeper-${count.index+1}.local.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
@@ -526,7 +526,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -542,7 +542,7 @@ EOF
 resource "aws_route53_record" "kafka_private" {
   count = var.kafka_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "kf${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "kafka-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [local.kafka_ips[count.index]]

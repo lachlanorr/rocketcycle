@@ -21,12 +21,17 @@ variable "vpc_cidr_block" {
 
 # Put something like this in ~/.ssh/config:
 #
-# Host bastion0.rkcy.net
+# Host bastion-0.rkcy.net
 #    User ubuntu
 #    IdentityFile ~/.ssh/rkcy_id_rsa
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
+}
+
+variable "bastion_count" {
+  type = number
+  default = 1
 }
 
 variable "edge_subnet_count" {
@@ -174,11 +179,11 @@ resource "aws_route_table_association" "rkcy_edge" {
 }
 
 locals {
-  bastion_private_ips = [for i in range(var.edge_subnet_count) : "${cidrhost(aws_subnet.rkcy_edge[i].cidr_block, 10)}" ]
+  bastion_private_ips = [for i in range(var.bastion_count) : "${cidrhost(aws_subnet.rkcy_edge[i].cidr_block, 10)}" ]
 }
 
 resource "aws_network_interface" "bastion" {
-  count       = var.edge_subnet_count
+  count       = var.bastion_count
   subnet_id   = aws_subnet.rkcy_edge[count.index].id
   private_ips = [local.bastion_private_ips[count.index]]
 
@@ -197,7 +202,7 @@ resource "aws_key_pair" "bastion" {
 }
 
 resource "aws_instance" "bastion" {
-  count = var.edge_subnet_count
+  count = var.bastion_count
   ami = data.aws_ami.bastion.id
   instance_type = "t2.micro"
 
@@ -213,12 +218,12 @@ resource "aws_instance" "bastion" {
   }
 
   tags = {
-    Name = "rkcy_inst_bastion${count.index}"
+    Name = "rkcy_inst_bastion_${count.index}"
   }
 }
 
 resource "aws_eip" "bastion" {
-  count = var.edge_subnet_count
+  count = var.bastion_count
   vpc = true
 
   instance = aws_instance.bastion[count.index].id
@@ -249,18 +254,18 @@ data "aws_route53_zone" "rkcy_net" {
 }
 
 resource "aws_route53_record" "bastion_public" {
-  count   = var.edge_subnet_count
+  count   = var.bastion_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "bastion${count.index}.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "bastion-${count.index}.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [aws_eip.bastion[count.index].public_ip]
 }
 
 resource "aws_route53_record" "bastion_private" {
-  count   = var.edge_subnet_count
+  count   = var.bastion_count
   zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "bastion${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  name    = "bastion-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
   type    = "A"
   ttl     = "300"
   records = [local.bastion_private_ips[count.index]]
