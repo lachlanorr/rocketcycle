@@ -122,12 +122,6 @@ resource "aws_placement_group" "postgresql" {
   strategy = "spread"
 }
 
-locals {
-  postgresql_conf = templatefile("${path.module}/postgresql.conf.tpl", {})
-  pg_hba_conf = templatefile("${path.module}/pg_hba.conf.tpl", {})
-  pg_ident_conf = templatefile("${path.module}/pg_ident.conf.tpl", {})
-}
-
 resource "aws_instance" "postgresql" {
   count = var.postgresql_count
   ami = data.aws_ami.postgresql.id
@@ -142,17 +136,17 @@ resource "aws_instance" "postgresql" {
   }
 
   provisioner "file" {
-    content = local.postgresql_conf
+    content = templatefile("${path.module}/postgresql.conf.tpl", {})
     destination = "/home/ubuntu/postgresql.conf"
   }
 
   provisioner "file" {
-    content = local.pg_hba_conf
+    content = templatefile("${path.module}/pg_hba.conf.tpl", {})
     destination = "/home/ubuntu/pg_hba.conf"
   }
 
   provisioner "file" {
-    content = local.pg_ident_conf
+    content = templatefile("${path.module}/pg_ident.conf.tpl", {})
     destination = "/home/ubuntu/pg_ident.conf"
   }
 
