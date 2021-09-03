@@ -235,6 +235,12 @@ func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh c
 	}
 }
 
+func defaultArgs() []string {
+	return []string{
+		"--admin_brokers=" + gSettings.AdminBrokers,
+	}
+}
+
 func startAdminServer(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
 	updateRunning(
 		ctx,
@@ -243,7 +249,7 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 		&ConsumerDirective{
 			Program: &Program{
 				Name:   "./" + gPlatformName,
-				Args:   []string{"admin", "serve"},
+				Args:   append(defaultArgs(), "admin", "serve"),
 				Abbrev: "admin",
 				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", gPlatformImpl.Name)},
 			},
@@ -253,7 +259,7 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 }
 
 func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
-	args := []string{"watch"}
+	args := append(defaultArgs(), "watch")
 	if gSettings.WatchDecode {
 		args = append(args, "-d")
 	}
