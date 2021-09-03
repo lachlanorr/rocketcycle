@@ -15,7 +15,7 @@ import (
 
 func (inst *Character) ReadItems(ctx context.Context) ([]*Character_Item, error) {
 	var items []*Character_Item
-	rows, err := pool.Query(ctx, "select id, description from rpg.character_item where character_id = $1", inst.Id)
+	rows, err := pool().Query(ctx, "select id, description from rpg.character_item where character_id = $1", inst.Id)
 	if err == nil {
 		for rows.Next() {
 			item := Character_Item{}
@@ -35,7 +35,7 @@ func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, erro
 		Currency: &Character_Currency{},
 	}
 	offset := rkcy.Offset{}
-	err := pool.QueryRow(
+	err := pool().QueryRow(
 		ctx,
 		`SELECT c.id,
                 c.player_id,
@@ -94,7 +94,7 @@ func hasItem(id string, items []*Character_Item) bool {
 }
 
 func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
-	_, err := pool.Exec(
+	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
 		inst.Id,
@@ -112,7 +112,7 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 	if inst.Currency == nil {
 		inst.Currency = &Character_Currency{}
 	}
-	_, err = pool.Exec(
+	_, err = pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character_currency($1, $2, $3, $4, $5, $6, $7, $8)",
 		inst.Id,
@@ -136,7 +136,7 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 	}
 	for _, dbItem := range dbItems {
 		if !hasItem(dbItem.Id, inst.Items) {
-			_, err = pool.Exec(
+			_, err = pool().Exec(
 				ctx,
 				"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 				dbItem.Id,
@@ -153,7 +153,7 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 		}
 	}
 	for _, item := range inst.Items {
-		_, err = pool.Exec(
+		_, err = pool().Exec(
 			ctx,
 			"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 			item.Id,
@@ -181,7 +181,7 @@ func (inst *Character) Update(ctx context.Context, offset *rkcy.Offset) error {
 }
 
 func (inst *Character) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
-	_, err := pool.Exec(
+	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_delete_character($1, $2, $3, $4)",
 		key,
