@@ -14,6 +14,26 @@ provider "aws" {
   region = "us-east-2"
 }
 
+variable "stack" {
+  type = string
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_app" {
+  type = any
+}
+
+variable "dns_zone" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -49,26 +69,9 @@ variable "kafka_properties_file" {
   default = "/etc/kafka.properties"
 }
 
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_vpc"]
-  }
-}
-
-data "aws_subnet" "rkcy_app" {
-  count = max(var.zookeeper_count, var.kafka_count)
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_app${count.index+1}_sn"]
-  }
-}
-
 locals {
-  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_app.*.availability_zone, data.aws_subnet.rkcy_app.*.id))}"
-  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_app.*.availability_zone, data.aws_subnet.rkcy_app.*.cidr_block))}"
+  sn_ids   = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.id))}"
+  sn_cidrs = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.cidr_block))}"
 }
 
 data "aws_ami" "kafka" {
@@ -77,12 +80,8 @@ data "aws_ami" "kafka" {
   owners           = ["self"]
 }
 
-data "aws_route53_zone" "rkcy_net" {
-  name = "rkcy.net"
-}
-
 resource "aws_key_pair" "kafka" {
-  key_name = "rkcy-kafka"
+  key_name = "rkcy-${var.stack}-kafka"
   public_key = file("${var.ssh_key_path}.pub")
 }
 
@@ -94,9 +93,9 @@ locals {
 }
 
 resource "aws_security_group" "rkcy_zookeeper" {
-  name        = "rkcy_zookeeper"
+  name        = "rkcy_${var.stack}_zookeeper"
   description = "Allow SSH and zookeeper inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -169,7 +168,7 @@ resource "aws_network_interface" "zookeeper" {
 }
 
 resource "aws_placement_group" "zookeeper" {
-  name     = "rkcy_zookeeper_pc"
+  name     = "rkcy_${var.stack}_zookeeper_pc"
   strategy = "spread"
 }
 
@@ -242,7 +241,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = var.bastion_hosts[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -251,14 +250,14 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_inst_zookeeper_${count.index+1}"
+    Name = "rkcy_${var.stack}_inst_zookeeper_${count.index+1}"
   }
 }
 
 resource "aws_route53_record" "zookeeper_private" {
   count = var.zookeeper_count
-  zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "zookeeper-${count.index+1}.local.${data.aws_route53_zone.rkcy_net.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "zookeeper-${count.index+1}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
@@ -273,12 +272,13 @@ resource "aws_route53_record" "zookeeper_private" {
 #-------------------------------------------------------------------------------
 locals {
   kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
+  kafka_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.stack}.local.${var.dns_zone.name}"]
 }
 
 resource "aws_security_group" "rkcy_kafka" {
-  name        = "rkcy_kafka"
+  name        = "rkcy_${var.stack}_kafka"
   description = "Allow SSH and kafka inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -329,7 +329,7 @@ resource "aws_network_interface" "kafka" {
 }
 
 resource "aws_placement_group" "kafka" {
-  name     = "rkcy_kafka_pc"
+  name     = "rkcy_${var.stack}_kafka_pc"
   strategy = "spread"
 }
 
@@ -397,7 +397,7 @@ listeners=PLAINTEXT://:9092
 # Hostname and port the broker will advertise to producers and consumers. If not set,
 # it uses the value for "listeners" if configured.  Otherwise, it will use the value
 # returned from java.net.InetAddress.getCanonicalHostName().
-advertised.listeners=PLAINTEXT://kf${count.index}.local.${data.aws_route53_zone.rkcy_net.name}:9092
+advertised.listeners=PLAINTEXT://${local.kafka_hosts[count.index]}:9092
 
 # Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details
 #listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
@@ -526,7 +526,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = var.bastion_hosts[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -535,14 +535,14 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_inst_kafka_${count.index}"
+    Name = "rkcy_${var.stack}_inst_kafka_${count.index}"
   }
 }
 
 resource "aws_route53_record" "kafka_private" {
   count = var.kafka_count
-  zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "kafka-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = local.kafka_hosts[count.index]
   type    = "A"
   ttl     = "300"
   records = [local.kafka_ips[count.index]]

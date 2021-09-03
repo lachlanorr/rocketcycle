@@ -14,6 +14,26 @@ provider "aws" {
   region = "us-east-2"
 }
 
+variable "stack" {
+  type = string
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_storage" {
+  type = any
+}
+
+variable "dns_zone" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -24,26 +44,9 @@ variable "postgresql_count" {
   default = 1
 }
 
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_vpc"]
-  }
-}
-
-data "aws_subnet" "rkcy_storage" {
-  count = var.postgresql_count
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_storage${count.index+1}_sn"]
-  }
-}
-
 locals {
-  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_storage.*.availability_zone, data.aws_subnet.rkcy_storage.*.id))}"
-  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_storage.*.availability_zone, data.aws_subnet.rkcy_storage.*.cidr_block))}"
+  sn_ids   = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.id))}"
+  sn_cidrs = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.cidr_block))}"
 }
 
 data "aws_ami" "postgresql" {
@@ -52,12 +55,8 @@ data "aws_ami" "postgresql" {
   owners           = ["self"]
 }
 
-data "aws_route53_zone" "rkcy_net" {
-  name = "rkcy.net"
-}
-
 resource "aws_key_pair" "postgresql" {
-  key_name = "rkcy-postgresql"
+  key_name = "rkcy-${var.stack}-postgresql"
   public_key = file("${var.ssh_key_path}.pub")
 }
 
@@ -66,9 +65,9 @@ locals {
 }
 
 resource "aws_security_group" "rkcy_postgresql" {
-  name        = "rkcy_postgresql"
+  name        = "rkcy_${var.stack}_postgresql"
   description = "Allow SSH and postgresql inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -119,14 +118,14 @@ resource "aws_network_interface" "postgresql" {
 }
 
 resource "aws_placement_group" "postgresql" {
-  name     = "rkcy_postgresql_pc"
+  name     = "rkcy_${var.stack}_postgresql_pc"
   strategy = "spread"
 }
 
 locals {
-  postgresql_conf = templatefile("postgresql.conf.tpl", {})
-  pg_hba_conf = templatefile("pg_hba.conf.tpl", {})
-  pg_ident_conf = templatefile("pg_ident.conf.tpl", {})
+  postgresql_conf = templatefile("${path.module}/postgresql.conf.tpl", {})
+  pg_hba_conf = templatefile("${path.module}/pg_hba.conf.tpl", {})
+  pg_ident_conf = templatefile("${path.module}/pg_ident.conf.tpl", {})
 }
 
 resource "aws_instance" "postgresql" {
@@ -189,7 +188,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "bastion-0.${data.aws_route53_zone.rkcy_net.name}"
+    bastion_host        = "${var.bastion_hosts[0]}"
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -198,14 +197,14 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_inst_postgresql_${count.index}"
+    Name = "rkcy_${var.stack}_inst_postgresql_${count.index}"
   }
 }
 
 resource "aws_route53_record" "postgresql_private" {
   count = var.postgresql_count
-  zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "postgresql-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "postgresql-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.postgresql_ips[count.index]]

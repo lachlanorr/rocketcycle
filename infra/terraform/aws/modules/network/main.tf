@@ -14,6 +14,14 @@ provider "aws" {
   region = "us-east-2"
 }
 
+variable "stack" {
+  type = string
+}
+
+variable "dns_zone" {
+  type = string
+}
+
 variable "vpc_cidr_block" {
   type = string
   default = "10.0.0.0/16"
@@ -53,7 +61,7 @@ resource "aws_vpc" "rkcy" {
   cidr_block = var.vpc_cidr_block
 
   tags = {
-    Name = "rkcy_vpc"
+    Name = "rkcy_${var.stack}_vpc"
   }
 }
 
@@ -66,7 +74,7 @@ locals {
 }
 
 resource "aws_security_group" "rkcy_bastion" {
-  name        = "rkcy_bastion"
+  name        = "rkcy_${var.stack}_bastion"
   description = "Allow SSH inbound traffic"
   vpc_id      = aws_vpc.rkcy.id
 
@@ -103,11 +111,11 @@ resource "aws_internet_gateway" "rkcy" {
   vpc_id = aws_vpc.rkcy.id
 
   tags = {
-    Name = "rkcy_gw"
+    Name = "rkcy_${var.stack}_gw"
   }
 }
 
-data "aws_availability_zones" "zones" {
+data "aws_availability_zones" "azs" {
   state = "available"
   filter {
     name   = "opt-in-status"
@@ -116,20 +124,20 @@ data "aws_availability_zones" "zones" {
 }
 
 locals {
-  zones = sort(data.aws_availability_zones.zones.names)
+  azs = sort(data.aws_availability_zones.azs.names)
 }
 
 resource "aws_subnet" "rkcy_edge" {
   count             = var.edge_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 0 + count.index)
-  availability_zone = local.zones[count.index % length(local.zones)]
+  availability_zone = local.azs[count.index % length(local.azs)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
 
   tags = {
-    Name = "rkcy_edge${count.index}_sn"
+    Name = "rkcy_${var.stack}_edge_${count.index}_sn"
   }
 }
 
@@ -137,13 +145,13 @@ resource "aws_subnet" "rkcy_app" {
   count             = var.app_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 100 + count.index)
-  availability_zone = local.zones[count.index % length(local.zones)]
+  availability_zone = local.azs[count.index % length(local.azs)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
 
   tags = {
-    Name = "rkcy_app${count.index}_sn"
+    Name = "rkcy_${var.stack}_app_${count.index}_sn"
   }
 }
 
@@ -151,13 +159,13 @@ resource "aws_subnet" "rkcy_storage" {
   count             = var.storage_subnet_count
   vpc_id            = aws_vpc.rkcy.id
   cidr_block        = cidrsubnet(aws_vpc.rkcy.cidr_block, 8, 200 + count.index)
-  availability_zone = local.zones[count.index % length(local.zones)]
+  availability_zone = local.azs[count.index % length(local.azs)]
   map_public_ip_on_launch = false
 
   depends_on = [aws_internet_gateway.rkcy]
 
   tags = {
-    Name = "rkcy_storage${count.index}_sn"
+    Name = "rkcy_${var.stack}_storage_${count.index}_sn"
   }
 }
 
@@ -168,7 +176,7 @@ resource "aws_route_table" "rkcy_edge" {
     gateway_id = aws_internet_gateway.rkcy.id
   }
   tags = {
-    Name = "rkcy_rt"
+    Name = "rkcy_${var.stack}_rt"
   }
 }
 
@@ -197,7 +205,7 @@ data "aws_ami" "bastion" {
 }
 
 resource "aws_key_pair" "bastion" {
-  key_name = "rkcy-bastion"
+  key_name = "rkcy_${var.stack}_bastion"
   public_key = file("${var.ssh_key_path}.pub")
 }
 
@@ -218,7 +226,7 @@ resource "aws_instance" "bastion" {
   }
 
   tags = {
-    Name = "rkcy_inst_bastion_${count.index}"
+    Name = "rkcy_${var.stack}_inst_bastion_${count.index}"
   }
 }
 
@@ -249,14 +257,14 @@ resource "aws_eip" "bastion" {
   }
 }
 
-data "aws_route53_zone" "rkcy_net" {
-  name = "rkcy.net"
+data "aws_route53_zone" "zone" {
+  name = var.dns_zone
 }
 
 resource "aws_route53_record" "bastion_public" {
   count   = var.bastion_count
-  zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "bastion-${count.index}.${data.aws_route53_zone.rkcy_net.name}"
+  zone_id = data.aws_route53_zone.zone.zone_id
+  name    = "bastion-${count.index}.${var.stack}.${data.aws_route53_zone.zone.name}"
   type    = "A"
   ttl     = "300"
   records = [aws_eip.bastion[count.index].public_ip]
@@ -264,9 +272,38 @@ resource "aws_route53_record" "bastion_public" {
 
 resource "aws_route53_record" "bastion_private" {
   count   = var.bastion_count
-  zone_id = data.aws_route53_zone.rkcy_net.zone_id
-  name    = "bastion-${count.index}.local.${data.aws_route53_zone.rkcy_net.name}"
+  zone_id = data.aws_route53_zone.zone.zone_id
+  name    = "bastion-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.bastion_private_ips[count.index]]
+}
+
+
+output "stack" {
+  value = var.stack
+}
+
+output "vpc" {
+  value = aws_vpc.rkcy
+}
+
+output "dns_zone" {
+  value = data.aws_route53_zone.zone
+}
+
+output "subnet_edge" {
+  value = aws_subnet.rkcy_edge
+}
+
+output "subnet_app" {
+  value = aws_subnet.rkcy_app
+}
+
+output "subnet_storage" {
+  value = aws_subnet.rkcy_storage
+}
+
+output "bastion_hosts" {
+  value = sort(aws_route53_record.bastion_public.*.name)
 }
