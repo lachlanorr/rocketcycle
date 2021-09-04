@@ -4,11 +4,6 @@
     "title": "edge.proto",
     "version": "version not set"
   },
-  "tags": [
-    {
-      "name": "RpgService"
-    }
-  ],
   "consumes": [
     "application/json"
   ],
@@ -362,7 +357,7 @@
     },
     "rkcy.Void": {
       "type": "object",
-      "description": "Convenience empty message for services that return or accept no data"
+      "title": "Convenience empty message for services that return or accept no data"
     },
     "rocketcycle.examples.rpg.concerns.Character": {
       "type": "object",
