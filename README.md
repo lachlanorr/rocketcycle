@@ -4,10 +4,16 @@
 The following should be installed as appropriate for your platform:
 - [Docker](https://markdownlivepreview.com/)
 - [Go](https://golang.org/doc/install) - 1.16.x
-- [Protobuf and gRPC compilers with Go support](https://grpc.io/docs/languages/go/quickstart/)
+- [Protobuf and gRPC compilers with Go support (see versions below)](https://grpc.io/docs/languages/go/quickstart/)
 - [gRPC-Gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway#installation)
 - [Sqitch with PosgreSQL support](https://sqitch.org/download/)
 
+In order to standardize protoc output, use these versions:
+- protoc 3.17.3
+- protoc-gen-go 1.26.0
+- protoc-gen-go-grpc 1.0.1
+- protoc-gen-grpc-gateway 2.0.1
+- protoc-gen-openapiv2 2.0.1
 
 ## Build everything - Will make the GNUmakefile
 ```
