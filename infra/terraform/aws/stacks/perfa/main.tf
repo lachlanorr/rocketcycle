@@ -30,6 +30,7 @@ module "dev" {
   vpc = module.network.vpc
   subnet_edge = module.network.subnet_edge
   postgresql_hosts = module.postgresql.postgresql_hosts
+  kafka_cluster = module.kafka.kafka_cluster
   kafka_hosts = module.kafka.kafka_hosts
 }
 
@@ -37,6 +38,7 @@ module "kafka" {
   source = "../../modules/kafka"
 
   stack = module.network.stack
+  cluster = "clusa"
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app

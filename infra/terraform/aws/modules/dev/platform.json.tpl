@@ -10,7 +10,7 @@
                     "name": "response",
                     "current": {
                         "partitionCount": 1,
-                        "cluster": "${stack}"
+                        "cluster": "${kafka_cluster}"
                     },
                     "consumerProgram": {
                         "name": "./@platform",
@@ -30,14 +30,14 @@
                     "name": "process",
                     "current": {
                         "partitionCount": 1,
-                        "cluster": "${stack}"
+                        "cluster": "${kafka_cluster}"
                     }
                 },
                 {
                     "name": "storage",
                     "current": {
                         "partitionCount": 1,
-                        "cluster": "${stack}"
+                        "cluster": "${kafka_cluster}"
                     }
                 }
             ]
@@ -51,14 +51,14 @@
                     "name": "process",
                     "current": {
                         "partitionCount": 1,
-                        "cluster": "${stack}"
+                        "cluster": "${kafka_cluster}"
                     }
                 },
                 {
                     "name": "storage",
                     "current": {
                         "partitionCount": 1,
-                        "cluster": "${stack}"
+                        "cluster": "${kafka_cluster}"
                     }
                 }
             ]
@@ -67,7 +67,7 @@
 
     "clusters": [
         {
-            "name": "${stack}",
+            "name": "${kafka_cluster}",
             "brokers": "${join(":9092,", kafka_hosts)}:9092"
         }
     ]

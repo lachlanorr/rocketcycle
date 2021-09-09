@@ -18,6 +18,10 @@ variable "stack" {
   type = string
 }
 
+variable "cluster" {
+  type = string
+}
+
 variable "vpc" {
   type = any
 }
@@ -61,7 +65,7 @@ data "aws_ami" "kafka" {
 }
 
 resource "aws_key_pair" "kafka" {
-  key_name = "rkcy-${var.stack}-kafka"
+  key_name = "rkcy-${var.cluster}-${var.stack}-kafka"
   public_key = file("${var.ssh_key_path}.pub")
 }
 
@@ -73,7 +77,7 @@ locals {
 }
 
 resource "aws_security_group" "rkcy_zookeeper" {
-  name        = "rkcy_${var.stack}_zookeeper"
+  name        = "rkcy_${var.cluster}_${var.stack}_zookeeper"
   description = "Allow SSH and zookeeper inbound traffic"
   vpc_id      = var.vpc.id
 
@@ -148,7 +152,7 @@ resource "aws_network_interface" "zookeeper" {
 }
 
 resource "aws_placement_group" "zookeeper" {
-  name     = "rkcy_${var.stack}_zookeeper_pc"
+  name     = "rkcy_${var.cluster}_${var.stack}_zookeeper_pc"
   strategy = "spread"
 }
 
@@ -213,14 +217,14 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_zookeeper_${count.index+1}"
+    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index+1}"
   }
 }
 
 resource "aws_route53_record" "zookeeper_private" {
   count = var.zookeeper_count
   zone_id = var.dns_zone.zone_id
-  name    = "zookeeper-${count.index+1}.${var.stack}.local.${var.dns_zone.name}"
+  name    = "zookeeper-${count.index+1}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
@@ -235,11 +239,11 @@ resource "aws_route53_record" "zookeeper_private" {
 #-------------------------------------------------------------------------------
 locals {
   kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
-  kafka_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.stack}.local.${var.dns_zone.name}"]
+  kafka_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"]
 }
 
 resource "aws_security_group" "rkcy_kafka" {
-  name        = "rkcy_${var.stack}_kafka"
+  name        = "rkcy_${var.cluster}_${var.stack}_kafka"
   description = "Allow SSH and kafka inbound traffic"
   vpc_id      = var.vpc.id
 
@@ -292,7 +296,7 @@ resource "aws_network_interface" "kafka" {
 }
 
 resource "aws_placement_group" "kafka" {
-  name     = "rkcy_${var.stack}_kafka_pc"
+  name     = "rkcy_${var.cluster}_${var.stack}_kafka_pc"
   strategy = "spread"
 }
 
@@ -372,7 +376,7 @@ EOF
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_kafka_${count.index}"
+    Name = "rkcy_${var.cluster}_${var.stack}_inst_kafka_${count.index}"
   }
 }
 
@@ -383,6 +387,10 @@ resource "aws_route53_record" "kafka_private" {
   type    = "A"
   ttl     = "300"
   records = [local.kafka_ips[count.index]]
+}
+
+output "kafka_cluster" {
+  value = "${var.stack}_${var.cluster}"
 }
 
 output "kafka_hosts" {

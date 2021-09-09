@@ -34,6 +34,10 @@ variable "postgresql_hosts" {
   type = any
 }
 
+variable "kafka_cluster" {
+  type = string
+}
+
 variable "kafka_hosts" {
   type = any
 }
@@ -149,7 +153,7 @@ resource "aws_eip" "dev" {
     content = templatefile(
       "${path.module}/platform.json.tpl",
       {
-        stack = var.stack
+        kafka_cluster = var.kafka_cluster
         kafka_hosts = var.kafka_hosts
       })
     destination = "/code/rocketcycle/build/bin/platform_aws.json"
