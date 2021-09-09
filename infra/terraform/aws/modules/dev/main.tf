@@ -30,6 +30,14 @@ variable "dns_zone" {
   type = any
 }
 
+variable "postgresql_hosts" {
+  type = any
+}
+
+variable "kafka_hosts" {
+  type = any
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -127,6 +135,52 @@ resource "aws_eip" "dev" {
 
   instance = aws_instance.dev.id
   associate_with_private_ip = local.dev_ip
+
+  provisioner "file" {
+    content = templatefile(
+      "${path.module}/init_db.sh.tpl",
+      {
+        postgresql_hosts = var.postgresql_hosts
+      })
+    destination = "/code/rocketcycle/build/bin/init_db_aws.sh"
+  }
+
+  provisioner "file" {
+    content = templatefile(
+      "${path.module}/platform.json.tpl",
+      {
+        stack = var.stack
+        kafka_hosts = var.kafka_hosts
+      })
+    destination = "/code/rocketcycle/build/bin/platform_aws.json"
+  }
+
+  provisioner "file" {
+    content = templatefile(
+      "${path.module}/run_aws.sh.tpl",
+      {
+        kafka_hosts = var.kafka_hosts
+      })
+    destination = "/code/rocketcycle/build/bin/run_aws.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+echo 'export DATABASE_URL=postgresql://postgres@${var.postgresql_hosts[0]}:5432/rpg' >> ~/.bashrc
+
+chmod +x /code/rocketcycle/build/bin/init_db_aws.sh
+chmod +x /code/rocketcycle/build/bin/run_aws.sh
+EOF
+    ]
+  }
+
+  connection {
+    type     = "ssh"
+    user     = "ubuntu"
+    host     = self.public_ip
+    private_key = file(var.ssh_key_path)
+  }
 }
 
 resource "aws_route53_record" "dev_public" {

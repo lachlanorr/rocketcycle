@@ -90,6 +90,10 @@ local   all             postgres                                peer
 
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
 
+# NOTE: this is for simplicity in testing, not production!!!
+# Postgres for rkcy in aws is not internet accessible.
+host    all             all             0.0.0.0/0               trust
+
 # "local" is for Unix domain socket connections only
 local   all             all                                     peer
 # IPv4 local connections:

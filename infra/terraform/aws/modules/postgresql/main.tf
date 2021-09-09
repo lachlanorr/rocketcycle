@@ -203,3 +203,7 @@ resource "aws_route53_record" "postgresql_private" {
   ttl     = "300"
   records = [local.postgresql_ips[count.index]]
 }
+
+output "postgresql_hosts" {
+  value = sort(aws_route53_record.postgresql_private.*.name)
+}

@@ -384,6 +384,10 @@ resource "aws_route53_record" "kafka_private" {
   ttl     = "300"
   records = [local.kafka_ips[count.index]]
 }
+
+output "kafka_hosts" {
+  value = sort(aws_route53_record.kafka_private.*.name)
+}
 #-------------------------------------------------------------------------------
 # Brokers (END)
 #-------------------------------------------------------------------------------

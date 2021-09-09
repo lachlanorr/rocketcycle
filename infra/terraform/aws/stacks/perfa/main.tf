@@ -29,6 +29,8 @@ module "dev" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_edge = module.network.subnet_edge
+  postgresql_hosts = module.postgresql.postgresql_hosts
+  kafka_hosts = module.kafka.kafka_hosts
 }
 
 module "kafka" {

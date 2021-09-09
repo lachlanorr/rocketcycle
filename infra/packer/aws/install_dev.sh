@@ -10,8 +10,15 @@ sudo apt upgrade
 
 sudo apt install -y make \
      build-essential \
+     cpanminus \
+     perl \
+     perl-doc \
+     libdbd-pg-perl \
+     postgresql-client \
      unzip \
      emacs-nox
+
+sudo cpanm --quiet --notest App::Sqitch
 
 sudo wget https://golang.org/dl/${GO_FILE_NAME}
 sudo rm -rf /usr/local/go
