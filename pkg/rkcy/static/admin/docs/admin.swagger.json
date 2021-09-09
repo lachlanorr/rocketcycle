@@ -4,11 +4,6 @@
     "title": "admin.proto",
     "version": "version not set"
   },
-  "tags": [
-    {
-      "name": "AdminService"
-    }
-  ],
   "consumes": [
     "application/json"
   ],
@@ -253,11 +248,11 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "unique name of cluster"
+          "title": "unique name of cluster"
         },
         "brokers": {
           "type": "string",
-          "description": "kafka brokers for the cluster"
+          "title": "kafka brokers for the cluster"
         }
       }
     },
@@ -287,11 +282,11 @@
         "generation": {
           "type": "integer",
           "format": "int32",
-          "description": "incrementing generation id, +1 every time we migrate a logical topic"
+          "title": "incrementing generation id, +1 every time we migrate a logical topic"
         },
         "cluster": {
           "type": "string",
-          "description": "kafka cluster topic exists within"
+          "title": "kafka cluster topic exists within"
         },
         "partitionCount": {
           "type": "integer",
@@ -299,7 +294,7 @@
         },
         "partitionStrat": {
           "$ref": "#/definitions/rkcy.Platform.PartitionStrategy",
-          "description": "How to determine which partiton messages are produced to"
+          "title": "How to determine which partiton messages are produced to"
         }
       }
     },
@@ -308,19 +303,19 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "base name, it will get decorated with additional dot notated pieces"
+          "title": "base name, it will get decorated with additional dot notated pieces"
         },
         "state": {
           "$ref": "#/definitions/rkcy.Platform.Concern.Topics.State",
-          "description": "current vs future transition state"
+          "title": "current vs future transition state"
         },
         "current": {
           "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
-          "description": "current physical topic"
+          "title": "current physical topic"
         },
         "future": {
           "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
-          "description": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
+          "title": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
         },
         "consumerProgram": {
           "$ref": "#/definitions/rkcy.Program"
@@ -339,7 +334,8 @@
         "FUTURE_TO_CURRENT"
       ],
       "default": "CURRENT",
-      "description": "States surrounding current vs future topics and current to future transition\n\n - CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - PRODUCER_PAUSE: producers all pause\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT"
+      "description": "- CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - PRODUCER_PAUSE: producers all pause\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT",
+      "title": "States surrounding current vs future topics and current to future transition"
     },
     "rkcy.Platform.Concern.Type": {
       "type": "string",
@@ -349,7 +345,8 @@
         "APECS"
       ],
       "default": "GENERAL",
-      "description": "Type implies what topics will be present\n\n - GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer"
+      "description": "- GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer",
+      "title": "Type implies what topics will be present"
     },
     "rkcy.Platform.PartitionStrategy": {
       "type": "string",
@@ -357,7 +354,8 @@
         "FNV64_MOD"
       ],
       "default": "FNV64_MOD",
-      "description": "Different types of partitioning mechanisms\n\n - FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count"
+      "description": "- FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count",
+      "title": "Different types of partitioning mechanisms"
     },
     "rkcy.Program": {
       "type": "object",

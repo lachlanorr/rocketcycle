@@ -62,7 +62,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   gPlatformName,
 		Short: "Rocketcycle Platform - " + gPlatformName,
 	}
-	rootCmd.PersistentFlags().StringVar(&gSettings.AdminBrokers, "admin_brokers", "localhost", "Kafka brokers for admin messages like platform updates")
+	rootCmd.PersistentFlags().StringVar(&gSettings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
 
 	// admin sub command
 	adminCmd := &cobra.Command{

@@ -8,19 +8,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var pool *pgxpool.Pool
+var _pool *pgxpool.Pool = nil
 
-func init() {
-	connString := os.Getenv("DATABASE_URL")
-	if connString == "" {
-		connString = "postgresql://postgres@127.0.0.1:5432/rpg"
-	}
+func pool() *pgxpool.Pool {
+	if _pool == nil {
+		connString := os.Getenv("DATABASE_URL")
+		if connString == "" {
+			connString = "postgresql://postgres@127.0.0.1:5432/rpg"
+		}
 
-	var err error
-	pool, err = pgxpool.Connect(context.Background(), connString)
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msgf("Failed to create pgxpool: %s", connString)
+		var err error
+		_pool, err = pgxpool.Connect(context.Background(), connString)
+		if err != nil {
+			log.Fatal().
+				Err(err).
+				Msgf("Failed to create pgxpool: %s", connString)
+		}
 	}
+	return _pool
 }
