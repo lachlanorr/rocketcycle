@@ -42,6 +42,10 @@ variable "kafka_hosts" {
   type = any
 }
 
+variable "otelcol_endpoint" {
+  type = string
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -164,6 +168,7 @@ resource "aws_eip" "dev" {
       "${path.module}/run_aws.sh.tpl",
       {
         kafka_hosts = var.kafka_hosts
+        otelcol_endpoint = var.otelcol_endpoint
       })
     destination = "/code/rocketcycle/build/bin/run_aws.sh"
   }

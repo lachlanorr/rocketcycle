@@ -16,16 +16,26 @@ provider "aws" {
 
 variable "stack" {
   type = string
-  default = "perfa"
+}
+
+variable "dns_zone" {
+  type = any
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_app" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
 }
 
 variable "elasticsearch_urls" {
   type = list
-  default = [
-    "http://elasticsearch-0.perfa.local.rkcy.net:9200",
-    "http://elasticsearch-1.perfa.local.rkcy.net:9200",
-    "http://elasticsearch-2.perfa.local.rkcy.net:9200"
-  ]
 }
 
 variable "ssh_key_path" {
@@ -43,35 +53,9 @@ variable "query_count" {
   default = 1
 }
 
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_vpc"]
-  }
-}
-
-variable "bastion_hosts" {
-  type = list
-  default = ["bastion-0.perfa.rkcy.net"]
-}
-
-data "aws_route53_zone" "zone" {
-  name = "rkcy.net"
-}
-
-data "aws_subnet" "rkcy_app" {
-  count = max(var.collector_count, var.query_count)
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_app_${count.index}_sn"]
-  }
-}
-
 locals {
-  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_app.*.cidr_block, data.aws_subnet.rkcy_app.*.id))}"
-  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_app.*.cidr_block, data.aws_subnet.rkcy_app.*.cidr_block))}"
+  sn_ids   = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.id))}"
+  sn_cidrs = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.cidr_block))}"
 }
 
 data "aws_ami" "telemetry" {
@@ -95,7 +79,7 @@ locals {
 resource "aws_security_group" "rkcy_collector" {
   name        = "rkcy_${var.stack}_jaeger_collector"
   description = "Allow SSH and jaeger_collector inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -226,8 +210,8 @@ EOF
 
 resource "aws_route53_record" "collector_private" {
   count = var.collector_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "jaeger-collector-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "jaeger-collector-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.collector_ips[count.index]]
@@ -247,7 +231,7 @@ locals {
 resource "aws_security_group" "rkcy_query" {
   name        = "rkcy_${var.stack}_jaeger_query"
   description = "Allow SSH and jaeger_query inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -378,8 +362,8 @@ EOF
 
 resource "aws_route53_record" "query_private" {
   count = var.query_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "jaeger-query-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "jaeger-query-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.query_ips[count.index]]
@@ -398,7 +382,7 @@ locals {
 resource "aws_security_group" "rkcy_otelcol" {
   name        = "rkcy_${var.stack}_otelcol"
   description = "Allow SSH and otelcol inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -562,8 +546,8 @@ EOF
 
 resource "aws_route53_record" "otelcol_private" {
   count = var.collector_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "otelcol-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "otelcol-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.otelcol_ips[count.index]]
@@ -571,3 +555,7 @@ resource "aws_route53_record" "otelcol_private" {
 #-------------------------------------------------------------------------------
 # otelcol (END)
 #-------------------------------------------------------------------------------
+
+output "otelcol_endpoint" {
+  value = "${aws_route53_record.otelcol_private[0].name}:4317"
+}

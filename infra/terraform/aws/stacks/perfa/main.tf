@@ -32,6 +32,7 @@ module "dev" {
   postgresql_hosts = module.postgresql.postgresql_hosts
   kafka_cluster = module.kafka.kafka_cluster
   kafka_hosts = module.kafka.kafka_hosts
+  otelcol_endpoint = module.telemetry.otelcol_endpoint
 }
 
 module "kafka" {
@@ -42,6 +43,27 @@ module "kafka" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app
+  bastion_hosts = module.network.bastion_hosts
+}
+
+module "telemetry" {
+  source = "../../modules/telemetry"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_app = module.network.subnet_app
+  bastion_hosts = module.network.bastion_hosts
+  elasticsearch_urls = module.elasticsearch.elasticsearch_urls
+}
+
+module "elasticsearch" {
+  source = "../../modules/elasticsearch"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_storage = module.network.subnet_storage
   bastion_hosts = module.network.bastion_hosts
 }
 

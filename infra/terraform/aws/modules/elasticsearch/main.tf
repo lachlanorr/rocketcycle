@@ -16,7 +16,22 @@ provider "aws" {
 
 variable "stack" {
   type = string
-  default = "perfa"
+}
+
+variable "dns_zone" {
+  type = any
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_storage" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
 }
 
 variable "ssh_key_path" {
@@ -29,35 +44,9 @@ variable "elasticsearch_count" {
   default = 3
 }
 
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_vpc"]
-  }
-}
-
-variable "bastion_hosts" {
-  type = list
-  default = ["bastion-0.perfa.rkcy.net"]
-}
-
-data "aws_route53_zone" "zone" {
-  name = "rkcy.net"
-}
-
-data "aws_subnet" "rkcy_storage" {
-  count = var.elasticsearch_count
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_storage_${count.index}_sn"]
-  }
-}
-
 locals {
-  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_storage.*.cidr_block, data.aws_subnet.rkcy_storage.*.id))}"
-  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_storage.*.cidr_block, data.aws_subnet.rkcy_storage.*.cidr_block))}"
+  sn_ids   = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.id))}"
+  sn_cidrs = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.cidr_block))}"
 }
 
 data "aws_ami" "elasticsearch" {
@@ -79,7 +68,7 @@ locals {
 resource "aws_security_group" "rkcy_elasticsearch" {
   name        = "rkcy_${var.stack}_elasticsearch"
   description = "Allow SSH and elasticsearch inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
@@ -209,9 +198,13 @@ EOF
 
 resource "aws_route53_record" "elasticsearch_private" {
   count = var.elasticsearch_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "elasticsearch-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "elasticsearch-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.elasticsearch_ips[count.index]]
+}
+
+output "elasticsearch_urls" {
+  value = [for host in sort(aws_route53_record.elasticsearch_private.*.name): "http://${host}:9200"]
 }
