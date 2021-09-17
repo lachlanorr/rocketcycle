@@ -57,12 +57,30 @@ func prepPlatformImpl(impl *PlatformImpl) {
 	prepLogging(impl.Name)
 }
 
+func prerunCobra(cmd *cobra.Command, args []string) {
+	var err error
+	gTelem, err = NewTelemetry(context.Background())
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("Failed to NewTelemetry")
+	}
+}
+
+func postrunCobra(cmd *cobra.Command, args []string) {
+	if gTelem != nil {
+		gTelem.Close()
+	}
+}
+
 func runCobra(impl *PlatformImpl) {
 	prepPlatformImpl(impl)
 
 	rootCmd := &cobra.Command{
-		Use:   gPlatformName,
-		Short: "Rocketcycle Platform - " + gPlatformName,
+		Use:               gPlatformName,
+		Short:             "Rocketcycle Platform - " + gPlatformName,
+		PersistentPreRun:  prerunCobra,
+		PersistentPostRun: postrunCobra,
 	}
 	rootCmd.PersistentFlags().StringVar(&gSettings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
 	rootCmd.PersistentFlags().StringVar(&gSettings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
@@ -188,15 +206,6 @@ func runCobra(impl *PlatformImpl) {
 	for _, addtlCmd := range gPlatformImpl.CobraCommands {
 		rootCmd.AddCommand(addtlCmd)
 	}
-
-	var err error
-	gTelem, err = NewTelemetry(context.Background())
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msg("Failed to NewTelemetry")
-	}
-	defer gTelem.Close()
 
 	rootCmd.Execute()
 }
