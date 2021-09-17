@@ -15,6 +15,8 @@ import (
 type Settings struct {
 	ConfigFilePath string
 
+	OtelcolEndpoint string
+
 	AdminBrokers    string
 	ConsumerBrokers string
 
@@ -62,6 +64,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   gPlatformName,
 		Short: "Rocketcycle Platform - " + gPlatformName,
 	}
+	rootCmd.PersistentFlags().StringVar(&gSettings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
 	rootCmd.PersistentFlags().StringVar(&gSettings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
 
 	// admin sub command

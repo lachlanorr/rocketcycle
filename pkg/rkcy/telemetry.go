@@ -40,11 +40,11 @@ func NewTelemetry(ctx context.Context) (*Telemetry, error) {
 	// Set different endpoints for the metrics and traces collectors
 	metricsDriver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint("localhost:4317"),
+		otlpgrpc.WithEndpoint(gSettings.OtelcolEndpoint),
 	)
 	tracesDriver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint("localhost:4317"),
+		otlpgrpc.WithEndpoint(gSettings.OtelcolEndpoint),
 	)
 	splitCfg := otlp.SplitConfig{
 		ForMetrics: metricsDriver,
