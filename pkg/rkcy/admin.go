@@ -589,6 +589,7 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string
 
 func substStr(s string, concernName string, consumerBrokers string, shortTopicName string, fullTopicName string, partition int32) string {
 	s = strings.ReplaceAll(s, "@platform", gPlatformName)
+	s = strings.ReplaceAll(s, "@otelcol_endpoint", gSettings.OtelcolEndpoint)
 	s = strings.ReplaceAll(s, "@admin_brokers", gSettings.AdminBrokers)
 	s = strings.ReplaceAll(s, "@consumer_brokers", consumerBrokers)
 	s = strings.ReplaceAll(s, "@concern", concernName)

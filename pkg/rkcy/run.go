@@ -237,6 +237,7 @@ func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh c
 
 func defaultArgs() []string {
 	return []string{
+		"--otelcol_endpoint=" + gSettings.OtelcolEndpoint,
 		"--admin_brokers=" + gSettings.AdminBrokers,
 	}
 }

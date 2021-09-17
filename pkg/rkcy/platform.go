@@ -137,13 +137,13 @@ func initTopics(topics *Platform_Concern_Topics, defaultCluster string, concernT
 			case "process":
 				topics.ConsumerProgram = &Program{
 					Name:   "./@platform",
-					Args:   []string{"process", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
+					Args:   []string{"process", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "p/@concern/@partition",
 				}
 			case "storage":
 				topics.ConsumerProgram = &Program{
 					Name:   "./@platform",
-					Args:   []string{"storage", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
+					Args:   []string{"storage", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
 					Abbrev: "s/@concern/@partition",
 				}
 			}
