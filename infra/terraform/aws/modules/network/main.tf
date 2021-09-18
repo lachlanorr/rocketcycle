@@ -237,24 +237,6 @@ resource "aws_eip" "bastion" {
   instance = aws_instance.bastion[count.index].id
   associate_with_private_ip = local.bastion_private_ips[count.index]
   depends_on = [aws_internet_gateway.rkcy]
-
-  provisioner "file" {
-    source = var.ssh_key_path
-    destination = "~/.ssh/id_rsa"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "chmod 600 ~/.ssh/id_rsa"
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-    user     = "ubuntu"
-    host     = self.public_ip
-    private_key = file(var.ssh_key_path)
-  }
 }
 
 data "aws_route53_zone" "zone" {
@@ -277,8 +259,25 @@ resource "aws_route53_record" "bastion_private" {
   type    = "A"
   ttl     = "300"
   records = [local.bastion_private_ips[count.index]]
-}
 
+  provisioner "file" {
+    source = var.ssh_key_path
+    destination = "~/.ssh/id_rsa"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod 600 ~/.ssh/id_rsa"
+    ]
+  }
+
+  connection {
+    type     = "ssh"
+    user     = "ubuntu"
+    host     = aws_eip.bastion[count.index].public_ip
+    private_key = file(var.ssh_key_path)
+  }
+}
 
 output "stack" {
   value = var.stack

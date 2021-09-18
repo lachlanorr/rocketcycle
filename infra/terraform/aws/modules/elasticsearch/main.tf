@@ -150,6 +150,18 @@ resource "aws_instance" "elasticsearch" {
   credit_specification {
     cpu_credits = "unlimited"
   }
+  tags = {
+    Name = "rkcy_${var.stack}_inst_elasticsearch_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "elasticsearch_private" {
+  count = var.elasticsearch_count
+  zone_id = var.dns_zone.zone_id
+  name    = "elasticsearch-${count.index}.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.elasticsearch_ips[count.index]]
 
   provisioner "file" {
     content = templatefile(
@@ -190,19 +202,6 @@ EOF
     host        = local.elasticsearch_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.stack}_inst_elasticsearch_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "elasticsearch_private" {
-  count = var.elasticsearch_count
-  zone_id = var.dns_zone.zone_id
-  name    = "elasticsearch-${count.index}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.elasticsearch_ips[count.index]]
 }
 
 output "elasticsearch_urls" {

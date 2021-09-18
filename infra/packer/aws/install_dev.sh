@@ -47,7 +47,7 @@ go install \
 go install \
     google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.0.1
 
-echo 'PATH=$PATH:/code/protobuf/bin:/usr/local/go/bin:~/go/bin' >> ~/.bashrc
+echo 'export PATH=$PATH:/code/protobuf/bin:/usr/local/go/bin:~/go/bin' >> ~/.bashrc
 
 export PATH=$PATH:~/go/bin
 make

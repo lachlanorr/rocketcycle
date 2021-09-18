@@ -143,6 +143,22 @@ resource "aws_eip" "dev" {
 
   instance = aws_instance.dev.id
   associate_with_private_ip = local.dev_ip
+}
+
+resource "aws_route53_record" "dev_public" {
+  zone_id = var.dns_zone.zone_id
+  name    = "dev.${var.stack}.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [aws_eip.dev.public_ip]
+}
+
+resource "aws_route53_record" "dev_private" {
+  zone_id = var.dns_zone.zone_id
+  name    = "dev.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.dev_ip]
 
   provisioner "file" {
     content = templatefile(
@@ -187,23 +203,7 @@ EOF
   connection {
     type     = "ssh"
     user     = "ubuntu"
-    host     = self.public_ip
+    host     = aws_eip.dev.public_ip
     private_key = file(var.ssh_key_path)
   }
-}
-
-resource "aws_route53_record" "dev_public" {
-  zone_id = var.dns_zone.zone_id
-  name    = "dev.${var.stack}.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [aws_eip.dev.public_ip]
-}
-
-resource "aws_route53_record" "dev_private" {
-  zone_id = var.dns_zone.zone_id
-  name    = "dev.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.dev_ip]
 }

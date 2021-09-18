@@ -173,6 +173,20 @@ resource "aws_instance" "collector" {
     cpu_credits = "unlimited"
   }
 
+  tags = {
+    Name = "rkcy_${var.stack}_inst_jaeger_collector_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "collector_private" {
+  count = var.collector_count
+  zone_id = var.dns_zone.zone_id
+  name    = "jaeger-collector-${count.index}.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.collector_ips[count.index]]
+
+
   provisioner "file" {
     content = templatefile("${path.module}/jaeger-collector.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
@@ -202,19 +216,6 @@ EOF
     host        = local.collector_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.stack}_inst_jaeger_collector_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "collector_private" {
-  count = var.collector_count
-  zone_id = var.dns_zone.zone_id
-  name    = "jaeger-collector-${count.index}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.collector_ips[count.index]]
 }
 #-------------------------------------------------------------------------------
 # collector (END)
@@ -325,6 +326,19 @@ resource "aws_instance" "query" {
     cpu_credits = "unlimited"
   }
 
+  tags = {
+    Name = "rkcy_${var.stack}_inst_jaeger_query_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "query_private" {
+  count = var.query_count
+  zone_id = var.dns_zone.zone_id
+  name    = "jaeger-query-${count.index}.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.query_ips[count.index]]
+
   provisioner "file" {
     content = templatefile("${path.module}/jaeger-query.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
@@ -354,19 +368,6 @@ EOF
     host        = local.query_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.stack}_inst_jaeger_query_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "query_private" {
-  count = var.query_count
-  zone_id = var.dns_zone.zone_id
-  name    = "jaeger-query-${count.index}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.query_ips[count.index]]
 }
 #-------------------------------------------------------------------------------
 # query (END)
@@ -498,6 +499,19 @@ resource "aws_instance" "otelcol" {
     cpu_credits = "unlimited"
   }
 
+  tags = {
+    Name = "rkcy_${var.stack}_inst_otelcol_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "otelcol_private" {
+  count = var.collector_count
+  zone_id = var.dns_zone.zone_id
+  name    = "otelcol-${count.index}.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.otelcol_ips[count.index]]
+
   provisioner "file" {
     content = templatefile("${path.module}/otelcol.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
@@ -538,19 +552,6 @@ EOF
     host        = local.otelcol_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.stack}_inst_otelcol_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "otelcol_private" {
-  count = var.collector_count
-  zone_id = var.dns_zone.zone_id
-  name    = "otelcol-${count.index}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.otelcol_ips[count.index]]
 }
 #-------------------------------------------------------------------------------
 # otelcol (END)

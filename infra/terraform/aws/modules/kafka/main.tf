@@ -173,6 +173,20 @@ resource "aws_instance" "zookeeper" {
     cpu_credits = "unlimited"
   }
 
+  tags = {
+    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index+1}"
+  }
+}
+
+resource "aws_route53_record" "zookeeper_private" {
+  count = var.zookeeper_count
+  zone_id = var.dns_zone.zone_id
+  name    = "zookeeper-${count.index+1}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [local.zookeeper_ips[count.index]]
+
+
   provisioner "file" {
     content = templatefile("${path.module}/zookeeper.service.tpl", {})
     destination = "/home/ubuntu/zookeeper.service"
@@ -215,19 +229,6 @@ EOF
     host        = local.zookeeper_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index+1}"
-  }
-}
-
-resource "aws_route53_record" "zookeeper_private" {
-  count = var.zookeeper_count
-  zone_id = var.dns_zone.zone_id
-  name    = "zookeeper-${count.index+1}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.zookeeper_ips[count.index]]
 }
 #-------------------------------------------------------------------------------
 # Zookeepers (END)
@@ -317,6 +318,20 @@ resource "aws_instance" "kafka" {
     cpu_credits = "unlimited"
   }
 
+  tags = {
+    Name = "rkcy_${var.cluster}_${var.stack}_inst_kafka_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "kafka_private" {
+  count = var.kafka_count
+  zone_id = var.dns_zone.zone_id
+  name    = local.kafka_hosts[count.index]
+  type    = "A"
+  ttl     = "300"
+  records = [local.kafka_ips[count.index]]
+
+
   provisioner "file" {
     content = templatefile("${path.module}/kafka.service.tpl", {})
     destination = "/home/ubuntu/kafka.service"
@@ -374,19 +389,6 @@ EOF
     host        = local.kafka_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-
-  tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_kafka_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "kafka_private" {
-  count = var.kafka_count
-  zone_id = var.dns_zone.zone_id
-  name    = local.kafka_hosts[count.index]
-  type    = "A"
-  ttl     = "300"
-  records = [local.kafka_ips[count.index]]
 }
 
 output "kafka_cluster" {
