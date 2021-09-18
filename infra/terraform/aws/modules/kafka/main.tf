@@ -83,7 +83,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -94,7 +94,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 2181
       to_port          = 2181
@@ -105,7 +105,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 2888
       to_port          = 2888
@@ -116,7 +116,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 3888
       to_port          = 3888
@@ -130,7 +130,7 @@ resource "aws_security_group" "rkcy_zookeeper" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -250,7 +250,7 @@ resource "aws_security_group" "rkcy_kafka" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -261,7 +261,7 @@ resource "aws_security_group" "rkcy_kafka" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 9092
       to_port          = 9092
@@ -275,7 +275,7 @@ resource "aws_security_group" "rkcy_kafka" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []

@@ -62,6 +62,10 @@ resource "aws_key_pair" "dev" {
   public_key = file("${var.ssh_key_path}.pub")
 }
 
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
+
 locals {
   dev_ip = cidrhost(var.subnet_edge[0].cidr_block, 113)
 }
@@ -73,7 +77,7 @@ resource "aws_security_group" "rkcy_dev" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ "${chomp(data.http.myip.body)}/32" ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -84,7 +88,7 @@ resource "aws_security_group" "rkcy_dev" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 11300
       to_port          = 11399

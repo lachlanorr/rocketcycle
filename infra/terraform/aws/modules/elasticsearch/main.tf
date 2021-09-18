@@ -72,7 +72,7 @@ resource "aws_security_group" "rkcy_elasticsearch" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -83,7 +83,7 @@ resource "aws_security_group" "rkcy_elasticsearch" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 9200
       to_port          = 9200
@@ -94,7 +94,7 @@ resource "aws_security_group" "rkcy_elasticsearch" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 9300
       to_port          = 9300
@@ -108,7 +108,7 @@ resource "aws_security_group" "rkcy_elasticsearch" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []

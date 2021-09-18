@@ -83,7 +83,7 @@ resource "aws_security_group" "rkcy_collector" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -94,7 +94,7 @@ resource "aws_security_group" "rkcy_collector" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-collector gRPC server"
       from_port        = 14250
       to_port          = 14250
@@ -105,7 +105,7 @@ resource "aws_security_group" "rkcy_collector" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-collector HTTP server"
       from_port        = 14268
       to_port          = 14268
@@ -116,7 +116,7 @@ resource "aws_security_group" "rkcy_collector" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-collector Admin server"
       from_port        = 14269
       to_port          = 14269
@@ -130,7 +130,7 @@ resource "aws_security_group" "rkcy_collector" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -236,7 +236,7 @@ resource "aws_security_group" "rkcy_query" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -247,7 +247,7 @@ resource "aws_security_group" "rkcy_query" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-query gRPC server"
       from_port        = 16685
       to_port          = 16685
@@ -258,7 +258,7 @@ resource "aws_security_group" "rkcy_query" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-query HTTP server"
       from_port        = 16686
       to_port          = 16686
@@ -269,7 +269,7 @@ resource "aws_security_group" "rkcy_query" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "jaeger-query Admin server"
       from_port        = 16687
       to_port          = 16687
@@ -283,7 +283,7 @@ resource "aws_security_group" "rkcy_query" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -387,7 +387,7 @@ resource "aws_security_group" "rkcy_otelcol" {
 
   ingress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -398,7 +398,7 @@ resource "aws_security_group" "rkcy_otelcol" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "otelcol gRPC listener"
       from_port        = 4317
       to_port          = 4317
@@ -409,7 +409,7 @@ resource "aws_security_group" "rkcy_otelcol" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "otelcol HTTP listener"
       from_port        = 4318
       to_port          = 4318
@@ -420,7 +420,7 @@ resource "aws_security_group" "rkcy_otelcol" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "otelcol Prometheus metrics"
       from_port        = 8888
       to_port          = 8888
@@ -431,7 +431,7 @@ resource "aws_security_group" "rkcy_otelcol" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "otelcol Prometheus metrics"
       from_port        = 9999
       to_port          = 9999
@@ -442,7 +442,7 @@ resource "aws_security_group" "rkcy_otelcol" {
       self             = false
     },
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "otelcol legacy HTTP listener"
       from_port        = 55681
       to_port          = 55681
@@ -456,7 +456,7 @@ resource "aws_security_group" "rkcy_otelcol" {
 
   egress = [
     {
-      cidr_blocks      = [ "0.0.0.0/0", ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []

@@ -69,10 +69,6 @@ data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
 
-locals {
-  allowed_inbound_cidr = "${chomp(data.http.myip.body)}/32"
-}
-
 resource "aws_security_group" "rkcy_bastion" {
   name        = "rkcy_${var.stack}_bastion"
   description = "Allow SSH inbound traffic"
@@ -80,7 +76,7 @@ resource "aws_security_group" "rkcy_bastion" {
 
   ingress = [
     {
-      cidr_blocks      = [ local.allowed_inbound_cidr ]
+      cidr_blocks      = [ "${chomp(data.http.myip.body)}/32" ]
       description      = ""
       from_port        = 22
       to_port          = 22
