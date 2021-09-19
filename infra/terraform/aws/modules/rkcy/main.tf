@@ -89,3 +89,14 @@ module "postgresql" {
   bastion_hosts = module.network.bastion_hosts
 }
 
+module "balancers" {
+  source = "../../modules/balancers"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_edge = module.network.subnet_edge
+  subnet_app = module.network.subnet_app
+  bastion_hosts = module.network.bastion_hosts
+  jaeger_query_hosts = module.telemetry.jaeger_query_hosts
+}

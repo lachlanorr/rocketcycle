@@ -560,3 +560,7 @@ EOF
 output "otelcol_endpoint" {
   value = "${aws_route53_record.otelcol_private[0].name}:4317"
 }
+
+output "jaeger_query_hosts" {
+  value = [for host in aws_route53_record.query_private.*.name: "${host}:16686"]
+}

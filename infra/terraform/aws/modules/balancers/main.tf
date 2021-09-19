@@ -16,53 +16,35 @@ provider "aws" {
 
 variable "stack" {
   type = string
-  default = "perfa"
+}
+
+variable "dns_zone" {
+  type = any
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_edge" {
+  type = any
+}
+
+variable "subnet_app" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
+}
+
+variable "jaeger_query_hosts" {
+  type = list
 }
 
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
-}
-
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_vpc"]
-  }
-}
-
-variable "bastion_hosts" {
-  type = list
-  default = ["bastion-0.perfa.rkcy.net"]
-}
-
-variable "jaeger_query_hosts" {
-  type = list
-  default = ["jaeger-query-0.perfa.local.rkcy.net:16686"]
-}
-
-data "aws_route53_zone" "zone" {
-  name = "rkcy.net"
-}
-
-data "aws_subnet" "rkcy_edge" {
-  count = var.edge_count
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_edge_${count.index}_sn"]
-  }
-}
-
-data "aws_subnet" "rkcy_app" {
-  count = var.app_count
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_app_${count.index}_sn"]
-  }
 }
 
 data "http" "myip" {
@@ -84,9 +66,9 @@ module "nginx_edge" {
 
   stack = var.stack
   cluster = "edge"
-  vpc = data.aws_vpc.rkcy
-  subnet = data.aws_subnet.rkcy_edge
-  dns_zone = data.aws_route53_zone.zone
+  vpc = var.vpc
+  subnet = var.subnet_edge
+  dns_zone = var.dns_zone
   bastion_hosts = var.bastion_hosts
   inbound_cidr = "${chomp(data.http.myip.body)}/32"
   public = true
@@ -104,11 +86,11 @@ module "nginx_app" {
 
   stack = var.stack
   cluster = "app"
-  vpc = data.aws_vpc.rkcy
-  subnet = data.aws_subnet.rkcy_app
-  dns_zone = data.aws_route53_zone.zone
+  vpc = var.vpc
+  subnet = var.subnet_app
+  dns_zone = var.dns_zone
   bastion_hosts = var.bastion_hosts
-  inbound_cidr = data.aws_vpc.rkcy.cidr_block
+  inbound_cidr = var.vpc.cidr_block
   public = false
   nginx_count = var.app_count
   routes = []
