@@ -9,7 +9,7 @@ Type=simple
 User=telem
 Group=telem
 Environment=SPAN_STORAGE_TYPE=elasticsearch
-ExecStart=/usr/local/bin/jaeger-query --es.server-urls=${join(",", elasticsearch_urls)}
+ExecStart=/usr/local/bin/jaeger-query --query.base-path=/jaeger --es.server-urls=${join(",", elasticsearch_urls)}
 ExecStop=pgrep -f jaeger-query | xargs kill
 
 [Install]
