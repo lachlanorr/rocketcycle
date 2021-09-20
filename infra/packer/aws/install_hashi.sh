@@ -3,9 +3,6 @@ CONSUL_ZIP=consul_${CONSUL_VER}_linux_amd64.zip
 NOMAD_VER=1.1.4
 NOMAD_ZIP=nomad_${NOMAD_VER}_linux_amd64.zip
 
-sudo apt update
-sudo apt update # needed, not sure why, but updates come down the second time
-sudo apt upgrade
 sudo apt install unzip
 
 # prep hashi user, used for consul and nomad

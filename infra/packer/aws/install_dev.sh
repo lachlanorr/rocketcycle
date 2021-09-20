@@ -4,10 +4,6 @@ GO_FILE_NAME=go${GO_VER}.linux-amd64.tar.gz
 PROTOC_VER=3.17.3
 PROTOC_FILE_NAME=protoc-3.17.3-linux-x86_64.zip
 
-sudo apt update
-sudo apt update # needed, not sure why, but updates come down the second time
-sudo apt upgrade
-
 sudo apt install -y make \
      build-essential \
      cpanminus \

@@ -8,7 +8,7 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "rkcy-dev-{{isotime `20060102-150405`}}"
+  ami_name      = "rkcy-metrics-{{isotime `20060102-150405`}}"
   instance_type = "t2.micro"
   region        = "us-east-2"
   source_ami_filter {
@@ -30,6 +30,6 @@ build {
     script = "install_baseline.sh"
   }
   provisioner "shell" {
-    script = "install_dev.sh"
+    script = "install_metrics.sh"
   }
 }

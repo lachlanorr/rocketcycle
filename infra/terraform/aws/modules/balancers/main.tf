@@ -42,6 +42,11 @@ variable "jaeger_query_hosts" {
   type = list
 }
 
+variable "prometheus_hosts" {
+  type = list
+  default = ["prometheus-0.perfa.local.rkcy.net:9090"]
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -77,6 +82,10 @@ module "nginx_edge" {
     {
       name = "jaeger",
       servers = var.jaeger_query_hosts,
+    },
+    {
+      name = "prometheus",
+      servers = var.prometheus_hosts,
     },
   ]
 }

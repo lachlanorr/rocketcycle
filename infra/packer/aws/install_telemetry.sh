@@ -4,10 +4,6 @@ JAEGER_FILE=jaeger-${JAEGER_VER}-linux-amd64
 OTELCOL_VER=0.35.0
 OTELCOL_FILE=otelcol_${OTELCOL_VER}_linux_amd64
 
-sudo apt update
-sudo apt update # needed, not sure why, but updates come down the second time
-sudo apt upgrade
-
 sudo useradd telem -m
 sudo usermod --shell /bin/bash telem
 echo -e "telem:telem" | sudo chpasswd

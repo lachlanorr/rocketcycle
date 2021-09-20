@@ -24,7 +24,9 @@ source "amazon-ebs" "ubuntu" {
 }
 
 build {
-  sources = [
-    "source.amazon-ebs.ubuntu"
-  ]
+  sources = [ "source.amazon-ebs.ubuntu" ]
+
+  provisioner "shell" {
+    script = "install_baseline.sh"
+  }
 }

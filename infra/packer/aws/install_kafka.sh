@@ -4,10 +4,6 @@ FULL_VER=${SCALA_VER}-${KAFKA_VER}
 FILE_NAME=kafka_${FULL_VER}
 KAFKA_PATH=/opt/${FILE_NAME}
 
-sudo apt update
-sudo apt update # needed, not sure why, but updates come down the second time
-sudo apt upgrade
-
 # install java
 sudo apt -y install default-jre
 

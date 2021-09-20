@@ -27,6 +27,9 @@ build {
   sources = ["source.amazon-ebs.ubuntu" ]
 
   provisioner "shell" {
+    script = "install_baseline.sh"
+  }
+  provisioner "shell" {
     script = "install_kafka.sh"
   }
 }
