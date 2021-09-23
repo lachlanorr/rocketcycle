@@ -85,7 +85,18 @@ resource "aws_security_group" "rkcy_bastion" {
       protocol         = "tcp"
       security_groups  = []
       self             = false
-    }
+    },
+    {
+      cidr_blocks      = [ aws_vpc.rkcy.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -255,6 +266,25 @@ resource "aws_route53_record" "bastion_private" {
   type    = "A"
   ttl     = "300"
   records = [local.bastion_private_ips[count.index]]
+
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
 
   provisioner "file" {
     source = var.ssh_key_path

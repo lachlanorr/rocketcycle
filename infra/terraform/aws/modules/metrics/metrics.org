@@ -1,0 +1,2 @@
+process_resident_memory_bytes
+rate(process_cpu_seconds_total[30s]) * 100

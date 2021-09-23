@@ -69,6 +69,52 @@ module "telemetry" {
   elasticsearch_urls = module.elasticsearch.elasticsearch_urls
 }
 
+module "metrics" {
+  source = "../../modules/metrics"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_app = module.network.subnet_app
+  bastion_hosts = module.network.bastion_hosts
+  balancer_urls = module.balancers.balancer_urls
+
+  jobs = [
+    {
+      name = "telemetry_otelcol",
+      targets = [for host in module.telemetry.otelcol_hosts: "${host}:9100"]
+    },
+    {
+      name = "telemetry_query",
+      targets = [for host in module.telemetry.query_hosts: "${host}:9100"]
+    },
+    {
+      name = "telemetry_collector",
+      targets = [for host in module.telemetry.collector_hosts: "${host}:9100"]
+    },
+    {
+      name = "elasticsearch",
+      targets = [for host in module.elasticsearch.elasticsearch_hosts: "${host}:9100"]
+    },
+    {
+      name = "kafka",
+      targets = [for host in module.kafka.kafka_hosts: "${host}:9100"]
+    },
+    {
+      name = "zookeeper",
+      targets = [for host in module.kafka.zookeeper_hosts: "${host}:9100"]
+    },
+    {
+      name = "postgresql",
+      targets = [for host in module.postgresql.postgresql_hosts: "${host}:9100"]
+    },
+    {
+      name = "dev",
+      targets = [for host in module.dev.dev_hosts: "${host}:9100"]
+    },
+  ]
+}
+
 module "elasticsearch" {
   source = "../../modules/elasticsearch"
 
@@ -98,5 +144,7 @@ module "balancers" {
   subnet_edge = module.network.subnet_edge
   subnet_app = module.network.subnet_app
   bastion_hosts = module.network.bastion_hosts
-  jaeger_query_hosts = module.telemetry.jaeger_query_hosts
+  jaeger_query_hostports = module.telemetry.jaeger_query_hostports
+  prometheus_hostports = module.metrics.prometheus_hostports
+  grafana_hostports = module.metrics.grafana_hostports
 }

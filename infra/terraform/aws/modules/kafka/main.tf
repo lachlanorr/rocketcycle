@@ -126,6 +126,17 @@ resource "aws_security_group" "rkcy_zookeeper" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -186,6 +197,25 @@ resource "aws_route53_record" "zookeeper_private" {
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
 
+
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+#rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
 
   provisioner "file" {
     content = templatefile("${path.module}/zookeeper.service.tpl", {})
@@ -271,6 +301,17 @@ resource "aws_security_group" "rkcy_kafka" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -332,6 +373,25 @@ resource "aws_route53_record" "kafka_private" {
   records = [local.kafka_ips[count.index]]
 
 
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+#rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
+
   provisioner "file" {
     content = templatefile("${path.module}/kafka.service.tpl", {})
     destination = "/home/ubuntu/kafka.service"
@@ -390,6 +450,13 @@ EOF
     private_key = file(var.ssh_key_path)
   }
 }
+#-------------------------------------------------------------------------------
+# Brokers (END)
+#-------------------------------------------------------------------------------
+
+output "zookeeper_hosts" {
+  value = sort(aws_route53_record.zookeeper_private.*.name)
+}
 
 output "kafka_cluster" {
   value = "${var.stack}_${var.cluster}"
@@ -398,6 +465,3 @@ output "kafka_cluster" {
 output "kafka_hosts" {
   value = sort(aws_route53_record.kafka_private.*.name)
 }
-#-------------------------------------------------------------------------------
-# Brokers (END)
-#-------------------------------------------------------------------------------

@@ -126,6 +126,17 @@ resource "aws_security_group" "rkcy_collector" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -186,6 +197,25 @@ resource "aws_route53_record" "collector_private" {
   ttl     = "300"
   records = [local.collector_ips[count.index]]
 
+
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
 
   provisioner "file" {
     content = templatefile("${path.module}/jaeger-collector.service.tpl", {
@@ -279,6 +309,17 @@ resource "aws_security_group" "rkcy_query" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -338,6 +379,25 @@ resource "aws_route53_record" "query_private" {
   type    = "A"
   ttl     = "300"
   records = [local.query_ips[count.index]]
+
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
 
   provisioner "file" {
     content = templatefile("${path.module}/jaeger-query.service.tpl", {
@@ -452,6 +512,17 @@ resource "aws_security_group" "rkcy_otelcol" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -512,6 +583,25 @@ resource "aws_route53_record" "otelcol_private" {
   ttl     = "300"
   records = [local.otelcol_ips[count.index]]
 
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
+
   provisioner "file" {
     content = templatefile("${path.module}/otelcol.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
@@ -561,6 +651,18 @@ output "otelcol_endpoint" {
   value = "${aws_route53_record.otelcol_private[0].name}:4317"
 }
 
-output "jaeger_query_hosts" {
-  value = [for host in aws_route53_record.query_private.*.name: "${host}:16686"]
+output "jaeger_query_hostports" {
+  value = [for host in sort(aws_route53_record.query_private.*.name): "${host}:16686"]
+}
+
+output "collector_hosts" {
+  value = sort(aws_route53_record.collector_private.*.name)
+}
+
+output "query_hosts" {
+  value = sort(aws_route53_record.query_private.*.name)
+}
+
+output "otelcol_hosts" {
+  value = sort(aws_route53_record.otelcol_private.*.name)
 }

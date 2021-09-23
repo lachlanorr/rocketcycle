@@ -38,13 +38,16 @@ variable "bastion_hosts" {
   type = list
 }
 
-variable "jaeger_query_hosts" {
+variable "jaeger_query_hostports" {
   type = list
 }
 
-variable "prometheus_hosts" {
+variable "prometheus_hostports" {
   type = list
-  default = ["prometheus-0.perfa.local.rkcy.net:9090"]
+}
+
+variable "grafana_hostports" {
+  type = list
 }
 
 variable "ssh_key_path" {
@@ -81,11 +84,15 @@ module "nginx_edge" {
   routes = [
     {
       name = "jaeger",
-      servers = var.jaeger_query_hosts,
+      servers = var.jaeger_query_hostports,
     },
     {
       name = "prometheus",
-      servers = var.prometheus_hosts,
+      servers = var.prometheus_hostports,
+    },
+    {
+      name = "grafana",
+      servers = var.grafana_hostports,
     },
   ]
 }
@@ -102,5 +109,17 @@ module "nginx_app" {
   inbound_cidr = var.vpc.cidr_block
   public = false
   nginx_count = var.app_count
-  routes = []
+  routes = [
+    {
+      name = "prometheus",
+      servers = var.prometheus_hostports,
+    },
+  ]
+}
+
+output "balancer_urls" {
+  value = {
+    edge = module.nginx_edge.balancer_url
+    app = module.nginx_app.balancer_url
+  }
 }

@@ -1,4 +1,4 @@
-KAFKA_VER=2.8.0
+KAFKA_VER=3.0.0
 SCALA_VER=2.13
 FULL_VER=${SCALA_VER}-${KAFKA_VER}
 FILE_NAME=kafka_${FULL_VER}
@@ -15,7 +15,7 @@ sudo usermod -aG sudo kafka
 
 # install kafka binaries
 cd /opt
-sudo wget https://downloads.apache.org/kafka/${KAFKA_VER}/${FILE_NAME}.tgz
+sudo wget https://archive.apache.org/dist/kafka/${KAFKA_VER}/${FILE_NAME}.tgz
 sudo tar -xzf ${FILE_NAME}.tgz
 sudo mv /opt/${FILE_NAME} /opt/kafka
 sudo chown -R kafka:kafka /opt/kafka

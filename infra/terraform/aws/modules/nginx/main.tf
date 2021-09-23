@@ -96,6 +96,17 @@ resource "aws_security_group" "rkcy_nginx" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -170,6 +181,14 @@ resource "aws_route53_record" "nginx_public" {
   records = aws_eip.nginx.*.public_ip
 }
 
+resource "aws_route53_record" "nginx_private_aggregate" {
+  zone_id = var.dns_zone.zone_id
+  name    = "${var.cluster}.local.${var.stack}.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = local.nginx_ips
+}
+
 resource "aws_route53_record" "nginx_private" {
   count = var.nginx_count
   zone_id = var.dns_zone.zone_id
@@ -177,6 +196,25 @@ resource "aws_route53_record" "nginx_private" {
   type    = "A"
   ttl     = "300"
   records = [local.nginx_ips[count.index]]
+
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
 
   provisioner "file" {
     content = templatefile("${path.module}/index.html.tpl", {})
@@ -218,3 +256,6 @@ EOF
   }
 }
 
+output "balancer_url" {
+  value = "http://${var.public ? aws_route53_record.nginx_public[0].name : aws_route53_record.nginx_private_aggregate.name}"
+}

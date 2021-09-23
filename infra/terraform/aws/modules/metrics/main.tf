@@ -16,44 +16,35 @@ provider "aws" {
 
 variable "stack" {
   type = string
-  default = "perfa"
 }
 
-variable "balancer_url" {
-  type = string
-  #default = "http://edge.${var.stack}.${data.aws_route53_zone.zone}"
-  default = "http://edge.perfa.rkcy.net"
+variable "dns_zone" {
+  type = any
+}
+
+variable "vpc" {
+  type = any
+}
+
+variable "subnet_app" {
+  type = any
+}
+
+variable "bastion_hosts" {
+  type = list
+}
+
+variable "balancer_urls" {
+  type = any
+}
+
+variable "jobs" {
+  type = list
 }
 
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
-}
-
-data "aws_vpc" "rkcy" {
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_vpc"]
-  }
-}
-
-variable "bastion_hosts" {
-  type = list
-  default = ["bastion-0.perfa.rkcy.net"]
-}
-
-data "aws_route53_zone" "zone" {
-  name = "rkcy.net"
-}
-
-data "aws_subnet" "rkcy_app" {
-  count = max(var.prometheus_count, var.grafana_count)
-  vpc_id = data.aws_vpc.rkcy.id
-
-  filter {
-    name = "tag:Name"
-    values = ["rkcy_${var.stack}_app_${count.index}_sn"]
-  }
 }
 
 variable "prometheus_count" {
@@ -67,8 +58,8 @@ variable "grafana_count" {
 }
 
 locals {
-  sn_ids   = "${values(zipmap(data.aws_subnet.rkcy_app.*.cidr_block, data.aws_subnet.rkcy_app.*.id))}"
-  sn_cidrs = "${values(zipmap(data.aws_subnet.rkcy_app.*.cidr_block, data.aws_subnet.rkcy_app.*.cidr_block))}"
+  sn_ids   = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.id))}"
+  sn_cidrs = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.cidr_block))}"
 }
 
 data "aws_ami" "metrics" {
@@ -92,11 +83,11 @@ locals {
 resource "aws_security_group" "rkcy_prometheus" {
   name        = "rkcy_${var.stack}_prometheus"
   description = "Allow SSH and prometheus inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -107,10 +98,21 @@ resource "aws_security_group" "rkcy_prometheus" {
       self             = false
     },
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "prometheus server"
       from_port        = 9090
       to_port          = 9090
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter listener"
+      from_port        = 9100
+      to_port          = 9100
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -121,7 +123,7 @@ resource "aws_security_group" "rkcy_prometheus" {
 
   egress = [
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -171,24 +173,60 @@ resource "aws_instance" "prometheus" {
 
 resource "aws_route53_record" "prometheus_private" {
   count = var.prometheus_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "prometheus-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "prometheus-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.prometheus_ips[count.index]]
 
 
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
+
   provisioner "file" {
     content = templatefile("${path.module}/prometheus.service.tpl", {
-      balancer_url = var.balancer_url
+      balancer_url = var.balancer_urls.edge
     })
     destination = "/home/ubuntu/prometheus.service"
+  }
+
+  provisioner "file" {
+    content = templatefile("${path.module}/prometheus.yml.tpl", {
+      jobs = concat(var.jobs, [
+        {
+          name = "prometheus",
+          targets = [for host in sort(aws_route53_record.prometheus_private.*.name): "${host}:9100"]
+        },
+        {
+          name = "grafana",
+          targets = [for host in sort(aws_route53_record.grafana_private.*.name): "${host}:9100"]
+        },
+      ])
+    })
+    destination = "/home/ubuntu/prometheus.yml"
   }
 
   provisioner "remote-exec" {
     inline = [
       <<EOF
 sudo mv /home/ubuntu/prometheus.service /etc/systemd/system/prometheus.service
+sudo mv /home/ubuntu/prometheus.yml /opt/prometheus/prometheus.yml
 sudo systemctl daemon-reload
 sudo systemctl start prometheus
 sudo systemctl enable prometheus
@@ -222,11 +260,11 @@ locals {
 resource "aws_security_group" "rkcy_grafana" {
   name        = "rkcy_${var.stack}_grafana"
   description = "Allow SSH and grafana inbound traffic"
-  vpc_id      = data.aws_vpc.rkcy.id
+  vpc_id      = var.vpc.id
 
   ingress = [
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -237,10 +275,21 @@ resource "aws_security_group" "rkcy_grafana" {
       self             = false
     },
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "grafana server"
       from_port        = 3000
       to_port          = 3000
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter listener"
+      from_port        = 9100
+      to_port          = 9100
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -251,7 +300,7 @@ resource "aws_security_group" "rkcy_grafana" {
 
   egress = [
     {
-      cidr_blocks      = [ data.aws_vpc.rkcy.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -301,17 +350,43 @@ resource "aws_instance" "grafana" {
 
 resource "aws_route53_record" "grafana_private" {
   count = var.grafana_count
-  zone_id = data.aws_route53_zone.zone.zone_id
-  name    = "grafana-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"
+  zone_id = var.dns_zone.zone_id
+  name    = "grafana-${count.index}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.grafana_ips[count.index]]
 
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
+
   provisioner "file" {
     content = templatefile("${path.module}/grafana.ini.tpl", {
-      balancer_url = var.balancer_url
+      balancer_url = var.balancer_urls.edge
     })
     destination = "/home/ubuntu/grafana.ini"
+  }
+
+  provisioner "file" {
+    content = templatefile("${path.module}/datasources.yaml.tpl", {
+      balancer_url = var.balancer_urls.app
+    })
+    destination = "/home/ubuntu/datasources.yaml"
   }
 
   provisioner "remote-exec" {
@@ -320,6 +395,9 @@ resource "aws_route53_record" "grafana_private" {
 sudo mv /etc/grafana/grafana.ini /etc/grafana/grafana.ini.orig
 sudo mv /home/ubuntu/grafana.ini /etc/grafana/grafana.ini
 sudo chown root:grafana /etc/grafana/grafana.ini
+
+sudo mv /home/ubuntu/datasources.yaml /etc/grafana/provisioning/datasources/datasources.yaml
+sudo chown root:grafana /etc/grafana/provisioning/datasources/datasources.yaml
 
 sudo systemctl daemon-reload
 sudo systemctl enable grafana-server
@@ -345,5 +423,13 @@ EOF
 #-------------------------------------------------------------------------------
 
 output "prometheus_hosts" {
-  value = [for host in aws_route53_record.prometheus_private.*.name: "${host}:9090"]
+  value = sort(aws_route53_record.prometheus_private.*.name)
+}
+
+output "prometheus_hostports" {
+  value = [for host in sort(aws_route53_record.prometheus_private.*.name): "${host}:9090"]
+}
+
+output "grafana_hostports" {
+  value = [for host in sort(aws_route53_record.grafana_private.*.name): "${host}:3000"]
 }

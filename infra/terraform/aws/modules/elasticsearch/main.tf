@@ -104,6 +104,17 @@ resource "aws_security_group" "rkcy_elasticsearch" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "node_exporter"
+      from_port        = 9100
+      to_port          = 9100
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -163,6 +174,25 @@ resource "aws_route53_record" "elasticsearch_private" {
   ttl     = "300"
   records = [local.elasticsearch_ips[count.index]]
 
+  #---------------------------------------------------------
+  # node_exporter
+  #---------------------------------------------------------
+  provisioner "file" {
+    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    destination = "/home/ubuntu/node_exporter_install.sh"
+  }
+  provisioner "remote-exec" {
+    inline = [
+      <<EOF
+sudo bash /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
+EOF
+    ]
+  }
+  #---------------------------------------------------------
+  # node_exporter (END)
+  #---------------------------------------------------------
+
   provisioner "file" {
     content = templatefile(
       "${path.module}/elasticsearch.yml.tpl",
@@ -206,4 +236,8 @@ EOF
 
 output "elasticsearch_urls" {
   value = [for host in sort(aws_route53_record.elasticsearch_private.*.name): "http://${host}:9200"]
+}
+
+output "elasticsearch_hosts" {
+  value = sort(aws_route53_record.elasticsearch_private.*.name)
 }
