@@ -185,14 +185,14 @@ resource "aws_instance" "zookeeper" {
   }
 
   tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index+1}"
+    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index}"
   }
 }
 
 resource "aws_route53_record" "zookeeper_private" {
   count = var.zookeeper_count
   zone_id = var.dns_zone.zone_id
-  name    = "zookeeper-${count.index+1}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
+  name    = "zookeeper-${count.index}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
@@ -209,7 +209,7 @@ resource "aws_route53_record" "zookeeper_private" {
     inline = [
       <<EOF
 sudo bash /home/ubuntu/node_exporter_install.sh
-#rm /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
 EOF
     ]
   }
@@ -384,7 +384,7 @@ resource "aws_route53_record" "kafka_private" {
     inline = [
       <<EOF
 sudo bash /home/ubuntu/node_exporter_install.sh
-#rm /home/ubuntu/node_exporter_install.sh
+rm /home/ubuntu/node_exporter_install.sh
 EOF
     ]
   }
