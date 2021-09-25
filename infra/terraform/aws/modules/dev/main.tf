@@ -230,6 +230,8 @@ echo 'export DATABASE_URL=postgresql://postgres@${var.postgresql_hosts[0]}:5432/
 
 chmod +x /code/rocketcycle/build/bin/init_db_aws.sh
 chmod +x /code/rocketcycle/build/bin/run_aws.sh
+
+ulimit -n 10240
 EOF
     ]
   }
