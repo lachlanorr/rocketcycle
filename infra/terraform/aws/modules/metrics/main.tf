@@ -178,7 +178,13 @@ resource "aws_route53_record" "prometheus_private" {
   type    = "A"
   ttl     = "300"
   records = [local.prometheus_ips[count.index]]
+}
 
+resource "null_resource" "prometheus_provisioner" {
+  count = var.prometheus_count
+  depends_on = [
+    aws_instance.prometheus
+  ]
 
   #---------------------------------------------------------
   # node_exporter
@@ -262,6 +268,7 @@ EOF
     private_key = file(var.ssh_key_path)
   }
 }
+
 #-------------------------------------------------------------------------------
 # prometheus (END)
 #-------------------------------------------------------------------------------
@@ -371,6 +378,13 @@ resource "aws_route53_record" "grafana_private" {
   type    = "A"
   ttl     = "300"
   records = [local.grafana_ips[count.index]]
+}
+
+resource "null_resource" "grafana_provisioner" {
+  count = var.grafana_count
+  depends_on = [
+    aws_instance.grafana
+  ]
 
   #---------------------------------------------------------
   # node_exporter

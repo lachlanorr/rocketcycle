@@ -174,6 +174,12 @@ resource "aws_route53_record" "dev_private" {
   type    = "A"
   ttl     = "300"
   records = [local.dev_ip]
+}
+
+resource "null_resource" "dev_provisioner" {
+  depends_on = [
+    aws_instance.dev
+  ]
 
   #---------------------------------------------------------
   # node_exporter

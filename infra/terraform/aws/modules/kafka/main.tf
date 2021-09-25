@@ -196,7 +196,13 @@ resource "aws_route53_record" "zookeeper_private" {
   type    = "A"
   ttl     = "300"
   records = [local.zookeeper_ips[count.index]]
+}
 
+resource "null_resource" "zookeeper_provisioner" {
+  count = var.zookeeper_count
+  depends_on = [
+    aws_instance.zookeeper
+  ]
 
   #---------------------------------------------------------
   # node_exporter
@@ -371,7 +377,13 @@ resource "aws_route53_record" "kafka_private" {
   type    = "A"
   ttl     = "300"
   records = [local.kafka_ips[count.index]]
+}
 
+resource "null_resource" "kafka_provisioner" {
+  count = var.kafka_count
+  depends_on = [
+    aws_instance.kafka
+  ]
 
   #---------------------------------------------------------
   # node_exporter

@@ -196,7 +196,13 @@ resource "aws_route53_record" "collector_private" {
   type    = "A"
   ttl     = "300"
   records = [local.collector_ips[count.index]]
+}
 
+resource "null_resource" "collector_provisioner" {
+  count = var.collector_count
+  depends_on = [
+    aws_instance.collector
+  ]
 
   #---------------------------------------------------------
   # node_exporter
@@ -379,6 +385,13 @@ resource "aws_route53_record" "query_private" {
   type    = "A"
   ttl     = "300"
   records = [local.query_ips[count.index]]
+}
+
+resource "null_resource" "query_provisioner" {
+  count = var.query_count
+  depends_on = [
+    aws_instance.query
+  ]
 
   #---------------------------------------------------------
   # node_exporter
@@ -582,6 +595,13 @@ resource "aws_route53_record" "otelcol_private" {
   type    = "A"
   ttl     = "300"
   records = [local.otelcol_ips[count.index]]
+}
+
+resource "null_resource" "otelcol_provisioner" {
+  count = var.collector_count
+  depends_on = [
+    aws_instance.otelcol
+  ]
 
   #---------------------------------------------------------
   # node_exporter

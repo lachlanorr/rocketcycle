@@ -162,6 +162,13 @@ resource "aws_route53_record" "postgresql_private" {
   type    = "A"
   ttl     = "300"
   records = [local.postgresql_ips[count.index]]
+}
+
+resource "null_resource" "postgresql_provisioner" {
+  count = var.postgresql_count
+  depends_on = [
+    aws_instance.postgresql
+  ]
 
   #---------------------------------------------------------
   # node_exporter

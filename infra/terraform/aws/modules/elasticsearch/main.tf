@@ -173,6 +173,13 @@ resource "aws_route53_record" "elasticsearch_private" {
   type    = "A"
   ttl     = "300"
   records = [local.elasticsearch_ips[count.index]]
+}
+
+resource "null_resource" "elasticsearch_provisioner" {
+  count = var.elasticsearch_count
+  depends_on = [
+    aws_instance.elasticsearch
+  ]
 
   #---------------------------------------------------------
   # node_exporter

@@ -196,6 +196,13 @@ resource "aws_route53_record" "nginx_private" {
   type    = "A"
   ttl     = "300"
   records = [local.nginx_ips[count.index]]
+}
+
+resource "null_resource" "nginx_provisioner" {
+  count = var.nginx_count
+  depends_on = [
+    aws_instance.nginx
+  ]
 
   #---------------------------------------------------------
   # node_exporter
@@ -258,4 +265,8 @@ EOF
 
 output "balancer_url" {
   value = "http://${var.public ? aws_route53_record.nginx_public[0].name : aws_route53_record.nginx_private_aggregate.name}"
+}
+
+output "nginx_hosts" {
+  value = sort(aws_route53_record.nginx_private.*.name)
 }

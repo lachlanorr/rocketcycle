@@ -266,6 +266,13 @@ resource "aws_route53_record" "bastion_private" {
   type    = "A"
   ttl     = "300"
   records = [local.bastion_private_ips[count.index]]
+}
+
+resource "null_resource" "bastion_provisioner" {
+  count = var.bastion_count
+  depends_on = [
+    aws_instance.bastion
+  ]
 
   #---------------------------------------------------------
   # node_exporter

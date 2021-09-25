@@ -177,6 +177,24 @@ module "metrics" {
       ]
     },
     {
+      name = "nginx",
+      targets = [for host in module.balancers.nginx_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+        {
+          source_labels = ["__address__"]
+          regex: "[^\\.]+\\.([^\\.]+).*"
+          target_label = "cluster"
+          replacement = "$${1}"
+        },
+      ]
+    },
+    {
       name = "dev",
       targets = [for host in module.dev.dev_hosts: "${host}:9100"]
       relabel = [

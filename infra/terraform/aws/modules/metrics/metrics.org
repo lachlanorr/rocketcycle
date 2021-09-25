@@ -1,2 +1,14 @@
 process_resident_memory_bytes
 rate(process_cpu_seconds_total[30s]) * 100
+
+
+rate(node_cpu_seconds_total{mode=~"(system|user)"}[1m])
+
+
+sum without(cpu,mode) (irate(node_cpu_seconds_total{job="dev", mode=~"(system|user)"}[1m]))
+
+sum (irate(node_cpu_seconds_total{job="dev", mode=~"(system|user)"}[1m]))
+
+avg without (cpu) (irate(node_cpu_seconds_total{mode=~"(system|user)"}[1m]))
+
+avg by (instance) (sum by (instance, cpu) (irate(node_cpu_seconds_total{mode=~"(system|user)"}[1m])))

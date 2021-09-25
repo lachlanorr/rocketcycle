@@ -123,3 +123,7 @@ output "balancer_urls" {
     app = module.nginx_app.balancer_url
   }
 }
+
+output "nginx_hosts" {
+  value = sort(concat(module.nginx_edge.nginx_hosts, module.nginx_app.nginx_hosts))
+}
