@@ -27,4 +27,11 @@ scrape_configs:
 %{ for target in job.targets ~}
         - ${target}
 %{ endfor ~}
+    relabel_configs:
+%{ for relabel in job.relabel ~}
+      - source_labels: ${jsonencode(relabel.source_labels)}
+        regex: '${relabel.regex}'
+        target_label: '${relabel.target_label}'
+        replacement: '${relabel.replacement}'
+%{ endfor ~}
 %{ endfor ~}

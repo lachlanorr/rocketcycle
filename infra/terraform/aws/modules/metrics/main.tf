@@ -212,10 +212,26 @@ EOF
         {
           name = "prometheus",
           targets = [for host in sort(aws_route53_record.prometheus_private.*.name): "${host}:9100"]
+          relabel = [
+            {
+              source_labels = ["__address__"]
+              regex: "([^\\.]+).*"
+              target_label = "instance"
+              replacement = "$${1}"
+            },
+          ]
         },
         {
           name = "grafana",
           targets = [for host in sort(aws_route53_record.grafana_private.*.name): "${host}:9100"]
+          relabel = [
+            {
+              source_labels = ["__address__"]
+              regex: "([^\\.]+).*"
+              target_label = "instance"
+              replacement = "$${1}"
+            },
+          ]
         },
       ])
     })
@@ -374,7 +390,6 @@ EOF
   #---------------------------------------------------------
   # node_exporter (END)
   #---------------------------------------------------------
-
   provisioner "file" {
     content = templatefile("${path.module}/grafana.ini.tpl", {
       balancer_url = var.balancer_urls.edge
@@ -389,6 +404,16 @@ EOF
     destination = "/home/ubuntu/datasources.yaml"
   }
 
+  provisioner "file" {
+    content = templatefile("${path.module}/dashboards.yaml.tpl", {})
+    destination = "/home/ubuntu/dashboards.yaml"
+  }
+
+  provisioner "file" {
+    source = "${path.module}/dashboards"
+    destination = "/home/ubuntu/dashboards"
+  }
+
   provisioner "remote-exec" {
     inline = [
       <<EOF
@@ -398,6 +423,10 @@ sudo chown root:grafana /etc/grafana/grafana.ini
 
 sudo mv /home/ubuntu/datasources.yaml /etc/grafana/provisioning/datasources/datasources.yaml
 sudo chown root:grafana /etc/grafana/provisioning/datasources/datasources.yaml
+
+sudo mv /home/ubuntu/dashboards.yaml /etc/grafana/provisioning/dashboards/dashboards.yaml
+sudo mv /home/ubuntu/dashboards /etc/grafana/provisioning/dashboards/dashboards
+sudo chown -R root:grafana /etc/grafana/provisioning/dashboards
 
 sudo systemctl daemon-reload
 sudo systemctl enable grafana-server

@@ -83,34 +83,110 @@ module "metrics" {
     {
       name = "telemetry_otelcol",
       targets = [for host in module.telemetry.otelcol_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "telemetry_query",
       targets = [for host in module.telemetry.query_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "telemetry_collector",
       targets = [for host in module.telemetry.collector_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "elasticsearch",
       targets = [for host in module.elasticsearch.elasticsearch_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "kafka",
       targets = [for host in module.kafka.kafka_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+        {
+          source_labels = ["__address__"]
+          regex: "[^\\.]+\\.([^\\.]+).*"
+          target_label = "cluster"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "zookeeper",
       targets = [for host in module.kafka.zookeeper_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+        {
+          source_labels = ["__address__"]
+          regex: "[^\\.]+\\.([^\\.]+).*"
+          target_label = "cluster"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "postgresql",
       targets = [for host in module.postgresql.postgresql_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
     {
       name = "dev",
       targets = [for host in module.dev.dev_hosts: "${host}:9100"]
+      relabel = [
+        {
+          source_labels = ["__address__"]
+          regex: "([^\\.]+).*"
+          target_label = "instance"
+          replacement = "$${1}"
+        },
+      ]
     },
   ]
 }
