@@ -7,7 +7,7 @@ After=network.target
 [Service]
 Type=simple
 User=telem
-Groupr=telem
+Group=telem
 Environment=SPAN_STORAGE_TYPE=elasticsearch
 ExecStart=/usr/local/bin/otelcol --config /etc/otelcol.yaml
 ExecStop=pgrep -f otelcol | xargs kill

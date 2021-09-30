@@ -34,20 +34,43 @@ variable "subnet_app" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
-variable "jaeger_query_hostports" {
+variable "jaeger_query_hosts" {
   type = list
 }
-
-variable "prometheus_hostports" {
-  type = list
+variable "jaeger_query_port" {
+  type = number
 }
 
-variable "grafana_hostports" {
+variable "jaeger_collector_hosts" {
   type = list
+}
+variable "jaeger_collector_port" {
+  type = number
+}
+
+variable "otelcol_hosts" {
+  type = list
+}
+variable "otelcol_port" {
+  type = number
+}
+
+variable "prometheus_hosts" {
+  type = list
+}
+variable "prometheus_port" {
+  type = number
+}
+
+variable "grafana_hosts" {
+  type = list
+}
+variable "grafana_port" {
+  type = number
 }
 
 variable "ssh_key_path" {
@@ -69,6 +92,45 @@ variable "app_count" {
   default = 1
 }
 
+variable "public" {
+  type = bool
+}
+
+locals {
+  default_routes = [
+    {
+      name = "grafana"
+      hosts = var.grafana_hosts
+      port = var.grafana_port
+    },
+    {
+      name = "jaeger"
+      hosts = var.jaeger_query_hosts
+      port = var.jaeger_query_port
+    },
+  ]
+  private_routes = [
+    {
+      name = "jaegercol"
+      hosts = var.jaeger_collector_hosts
+      port = var.jaeger_collector_port
+      grpc = true
+    },
+    {
+      name = "otelcol"
+      hosts = var.otelcol_hosts
+      port = var.otelcol_port
+      grpc = true
+    },
+    {
+      name = "prometheus"
+      hosts = var.prometheus_hosts
+      port = var.prometheus_port
+    },
+  ]
+  public_routes = concat(local.default_routes, var.public ? tolist(local.private_routes) : tolist([]))
+}
+
 module "nginx_edge" {
   source = "../../modules/nginx"
 
@@ -77,24 +139,11 @@ module "nginx_edge" {
   vpc = var.vpc
   subnet = var.subnet_edge
   dns_zone = var.dns_zone
-  bastion_hosts = var.bastion_hosts
+  bastion_ips = var.bastion_ips
   inbound_cidr = "${chomp(data.http.myip.body)}/32"
   public = true
   nginx_count = var.edge_count
-  routes = [
-    {
-      name = "jaeger",
-      servers = var.jaeger_query_hostports,
-    },
-    {
-      name = "prometheus",
-      servers = var.prometheus_hostports,
-    },
-    {
-      name = "grafana",
-      servers = var.grafana_hostports,
-    },
-  ]
+  routes = local.public_routes
 }
 
 module "nginx_app" {
@@ -105,25 +154,30 @@ module "nginx_app" {
   vpc = var.vpc
   subnet = var.subnet_app
   dns_zone = var.dns_zone
-  bastion_hosts = var.bastion_hosts
+  bastion_ips = var.bastion_ips
   inbound_cidr = var.vpc.cidr_block
-  public = false
+  public = var.public
   nginx_count = var.app_count
-  routes = [
-    {
-      name = "prometheus",
-      servers = var.prometheus_hostports,
-    },
-  ]
+  routes = local.private_routes
 }
 
-output "balancer_urls" {
+output "balancer_internal_urls" {
   value = {
-    edge = module.nginx_edge.balancer_url
-    app = module.nginx_app.balancer_url
+    edge = module.nginx_edge.balancer_internal_url
+    app = module.nginx_app.balancer_internal_url
+  }
+}
+
+output "balancer_external_urls" {
+  value = {
+    edge = module.nginx_edge.balancer_external_url
+    app = module.nginx_app.balancer_external_url
   }
 }
 
 output "nginx_hosts" {
-  value = sort(concat(module.nginx_edge.nginx_hosts, module.nginx_app.nginx_hosts))
+  value = {
+    edge = sort(module.nginx_edge.nginx_hosts)
+    app = sort(module.nginx_app.nginx_hosts)
+  }
 }

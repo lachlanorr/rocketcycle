@@ -30,7 +30,7 @@ variable "dns_zone" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
@@ -232,7 +232,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = "${var.bastion_hosts[0]}"
+    bastion_host        = "${var.bastion_ips[0]}"
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"

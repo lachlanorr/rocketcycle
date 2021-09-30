@@ -26,6 +26,9 @@ variable "vpc_cidr_block" {
   type = string
 }
 
+variable "public" {
+  type = bool
+}
 module "network" {
   source = "../../modules/network"
 
@@ -43,8 +46,8 @@ module "dev" {
   subnet_edge = module.network.subnet_edge
   postgresql_hosts = module.postgresql.postgresql_hosts
   kafka_cluster = module.kafka.kafka_cluster
-  kafka_hosts = module.kafka.kafka_hosts
-  otelcol_endpoint = module.telemetry.otelcol_endpoint
+  kafka_hosts = module.kafka.kafka_internal_hosts
+  otelcol_endpoint = "${module.balancers.nginx_hosts.app[0]}:${module.telemetry.otelcol_port}"
 }
 
 module "kafka" {
@@ -55,7 +58,8 @@ module "kafka" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app
-  bastion_hosts = module.network.bastion_hosts
+  bastion_ips = module.network.bastion_ips
+  public = var.public
 }
 
 module "telemetry" {
@@ -65,8 +69,9 @@ module "telemetry" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app
-  bastion_hosts = module.network.bastion_hosts
+  bastion_ips = module.network.bastion_ips
   elasticsearch_urls = module.elasticsearch.elasticsearch_urls
+  nginx_hosts = module.balancers.nginx_hosts
 }
 
 module "metrics" {
@@ -76,8 +81,9 @@ module "metrics" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app
-  bastion_hosts = module.network.bastion_hosts
-  balancer_urls = module.balancers.balancer_urls
+  bastion_ips = module.network.bastion_ips
+  balancer_internal_urls = module.balancers.balancer_internal_urls
+  balancer_external_urls = module.balancers.balancer_external_urls
 
   jobs = [
     {
@@ -94,7 +100,7 @@ module "metrics" {
     },
     {
       name = "telemetry_query",
-      targets = [for host in module.telemetry.query_hosts: "${host}:9100"]
+      targets = [for host in module.telemetry.jaeger_query_hosts: "${host}:9100"]
       relabel = [
         {
           source_labels = ["__address__"]
@@ -106,7 +112,7 @@ module "metrics" {
     },
     {
       name = "telemetry_collector",
-      targets = [for host in module.telemetry.collector_hosts: "${host}:9100"]
+      targets = [for host in module.telemetry.jaeger_collector_hosts: "${host}:9100"]
       relabel = [
         {
           source_labels = ["__address__"]
@@ -130,7 +136,7 @@ module "metrics" {
     },
     {
       name = "kafka",
-      targets = [for host in module.kafka.kafka_hosts: "${host}:9100"]
+      targets = [for host in module.kafka.kafka_internal_hosts: "${host}:9100"]
       relabel = [
         {
           source_labels = ["__address__"]
@@ -178,7 +184,7 @@ module "metrics" {
     },
     {
       name = "nginx",
-      targets = [for host in module.balancers.nginx_hosts: "${host}:9100"]
+      targets = [for host in concat(module.balancers.nginx_hosts.edge, module.balancers.nginx_hosts.edge): "${host}:9100"]
       relabel = [
         {
           source_labels = ["__address__"]
@@ -216,7 +222,7 @@ module "elasticsearch" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_storage = module.network.subnet_storage
-  bastion_hosts = module.network.bastion_hosts
+  bastion_ips = module.network.bastion_ips
 }
 
 module "postgresql" {
@@ -226,7 +232,7 @@ module "postgresql" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_storage = module.network.subnet_storage
-  bastion_hosts = module.network.bastion_hosts
+  bastion_ips = module.network.bastion_ips
 }
 
 module "balancers" {
@@ -237,8 +243,16 @@ module "balancers" {
   vpc = module.network.vpc
   subnet_edge = module.network.subnet_edge
   subnet_app = module.network.subnet_app
-  bastion_hosts = module.network.bastion_hosts
-  jaeger_query_hostports = module.telemetry.jaeger_query_hostports
-  prometheus_hostports = module.metrics.prometheus_hostports
-  grafana_hostports = module.metrics.grafana_hostports
+  bastion_ips = module.network.bastion_ips
+  jaeger_query_hosts = module.telemetry.jaeger_query_hosts
+  jaeger_query_port = module.telemetry.jaeger_query_port
+  jaeger_collector_hosts = module.telemetry.jaeger_collector_hosts
+  jaeger_collector_port = module.telemetry.jaeger_collector_port
+  otelcol_hosts = module.telemetry.otelcol_hosts
+  otelcol_port = module.telemetry.otelcol_port
+  prometheus_hosts = module.metrics.prometheus_hosts
+  prometheus_port = module.metrics.prometheus_port
+  grafana_hosts = module.metrics.grafana_hosts
+  grafana_port = module.metrics.grafana_port
+  public = var.public
 }

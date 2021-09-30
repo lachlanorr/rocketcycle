@@ -20,4 +20,5 @@ module "rkcy" {
   vpc_cidr_block = "10.0.0.0/16"
   stack = basename(abspath(path.module))
   dns_zone = "rkcy.net"
+  public = false
 }

@@ -30,11 +30,15 @@ variable "subnet_app" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
-variable "balancer_urls" {
+variable "balancer_external_urls" {
+  type = any
+}
+
+variable "balancer_internal_urls" {
   type = any
 }
 
@@ -51,10 +55,18 @@ variable "prometheus_count" {
   type = number
   default = 1
 }
+variable "prometheus_port" {
+  type = number
+  default = 9090
+}
 
 variable "grafana_count" {
   type = number
   default = 1
+}
+variable "grafana_port" {
+  type = number
+  default = 3000
 }
 
 locals {
@@ -100,8 +112,8 @@ resource "aws_security_group" "rkcy_prometheus" {
     {
       cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "prometheus server"
-      from_port        = 9090
-      to_port          = 9090
+      from_port        = var.prometheus_port
+      to_port          = var.prometheus_port
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -207,7 +219,8 @@ EOF
 
   provisioner "file" {
     content = templatefile("${path.module}/prometheus.service.tpl", {
-      balancer_url = var.balancer_urls.edge
+      balancer_url = var.balancer_external_urls.edge
+      prometheus_port = var.prometheus_port
     })
     destination = "/home/ubuntu/prometheus.service"
   }
@@ -260,7 +273,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -300,8 +313,8 @@ resource "aws_security_group" "rkcy_grafana" {
     {
       cidr_blocks      = [ var.vpc.cidr_block ]
       description      = "grafana server"
-      from_port        = 3000
-      to_port          = 3000
+      from_port        = var.grafana_port
+      to_port          = var.grafana_port
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -406,14 +419,15 @@ EOF
   #---------------------------------------------------------
   provisioner "file" {
     content = templatefile("${path.module}/grafana.ini.tpl", {
-      balancer_url = var.balancer_urls.edge
+      balancer_url = var.balancer_external_urls.edge
+      grafana_port = var.grafana_port
     })
     destination = "/home/ubuntu/grafana.ini"
   }
 
   provisioner "file" {
     content = templatefile("${path.module}/datasources.yaml.tpl", {
-      balancer_url = var.balancer_urls.app
+      balancer_url = var.balancer_internal_urls.app
     })
     destination = "/home/ubuntu/datasources.yaml"
   }
@@ -453,7 +467,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -468,11 +482,13 @@ EOF
 output "prometheus_hosts" {
   value = sort(aws_route53_record.prometheus_private.*.name)
 }
-
-output "prometheus_hostports" {
-  value = [for host in sort(aws_route53_record.prometheus_private.*.name): "${host}:9090"]
+output "prometheus_port" {
+  value = var.prometheus_port
 }
 
-output "grafana_hostports" {
-  value = [for host in sort(aws_route53_record.grafana_private.*.name): "${host}:3000"]
+output "grafana_hosts" {
+  value = sort(aws_route53_record.grafana_private.*.name)
+}
+output "grafana_port" {
+  value = var.grafana_port
 }

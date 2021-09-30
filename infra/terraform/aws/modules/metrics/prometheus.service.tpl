@@ -9,7 +9,7 @@ Type=simple
 User=prometheus
 Group=prometheus
 WorkingDirectory=/opt/prometheus
-ExecStart=/opt/prometheus/prometheus --config.file=/opt/prometheus/prometheus.yml --web.external-url=${ balancer_url }/prometheus
+ExecStart=/opt/prometheus/prometheus --config.file=/opt/prometheus/prometheus.yml --web.external-url=${ balancer_url }/prometheus --web.listen-address=:${ prometheus_port}
 ExecStop=pgrep -f prometheus | xargs kill
 
 [Install]

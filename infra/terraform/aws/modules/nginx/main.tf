@@ -18,7 +18,7 @@ variable "dns_zone" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
@@ -107,6 +107,28 @@ resource "aws_security_group" "rkcy_nginx" {
       security_groups  = []
       self             = false
     },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "otelcol"
+      from_port        = 4317
+      to_port          = 4317
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
+    {
+      cidr_blocks      = [ var.vpc.cidr_block ]
+      description      = "jaeger collector"
+      from_port        = 14250
+      to_port          = 14250
+      ipv6_cidr_blocks = []
+      prefix_list_ids  = []
+      protocol         = "tcp"
+      security_groups  = []
+      self             = false
+    },
   ]
 
   egress = [
@@ -170,6 +192,10 @@ resource "aws_eip" "nginx" {
 
   instance = aws_instance.nginx[count.index].id
   associate_with_private_ip = local.nginx_ips[count.index]
+
+  tags = {
+    Name = "rkcy_${var.cluster}_${var.stack}_eip_nginx_${count.index}"
+  }
 }
 
 resource "aws_route53_record" "nginx_public" {
@@ -183,7 +209,7 @@ resource "aws_route53_record" "nginx_public" {
 
 resource "aws_route53_record" "nginx_private_aggregate" {
   zone_id = var.dns_zone.zone_id
-  name    = "${var.cluster}.local.${var.stack}.${var.dns_zone.name}"
+  name    = "${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
   type    = "A"
   ttl     = "300"
   records = local.nginx_ips
@@ -254,7 +280,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -263,8 +289,12 @@ EOF
   }
 }
 
-output "balancer_url" {
-  value = "http://${var.public ? aws_route53_record.nginx_public[0].name : aws_route53_record.nginx_private_aggregate.name}"
+output "balancer_internal_url" {
+  value = "http://${aws_route53_record.nginx_private_aggregate.name}"
+}
+
+output "balancer_external_url" {
+  value = var.public ? "http://${aws_route53_record.nginx_public[0].name}" : ""
 }
 
 output "nginx_hosts" {

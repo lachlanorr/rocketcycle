@@ -13,15 +13,16 @@ broker.id=${idx}
 #     listeners = listener_name://host_name:port
 #   EXAMPLE:
 #     listeners = PLAINTEXT://your.host.name:9092
-listeners=PLAINTEXT://:9092
+listeners=INTERNAL://${kafka_internal_ips[idx]}:9092%{ if public },EXTERNAL://${kafka_internal_ips[idx]}:9093%{ endif }
 
 # Hostname and port the broker will advertise to producers and consumers. If not set,
 # it uses the value for "listeners" if configured.  Otherwise, it will use the value
 # returned from java.net.InetAddress.getCanonicalHostName().
-advertised.listeners=PLAINTEXT://${kafka_hosts[idx]}:9092
+advertised.listeners=INTERNAL://${kafka_internal_hosts[idx]}:9092%{ if public },EXTERNAL://${kafka_external_hosts[idx]}:9093%{ endif }
 
 # Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details
-#listener.security.protocol.map=PLAINTEXT:PLAINTEXT,SSL:SSL,SASL_PLAINTEXT:SASL_PLAINTEXT,SASL_SSL:SASL_SSL
+listener.security.protocol.map=INTERNAL:PLAINTEXT%{ if public },EXTERNAL:PLAINTEXT%{ endif }
+inter.broker.listener.name=INTERNAL
 
 # The number of threads that the server uses for receiving requests from the network and sending responses to the network
 num.network.threads=3

@@ -34,7 +34,7 @@ variable "dns_zone" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
@@ -67,6 +67,17 @@ data "aws_ami" "kafka" {
 resource "aws_key_pair" "kafka" {
   key_name = "rkcy-${var.cluster}-${var.stack}-kafka"
   public_key = file("${var.ssh_key_path}.pub")
+}
+
+variable "public" {
+  type = bool
+}
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
+locals {
+  ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
+  egress_cidrs = var.public ? [ "0.0.0.0/0" ] : [ var.vpc.cidr_block ]
 }
 
 #-------------------------------------------------------------------------------
@@ -258,7 +269,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -275,8 +286,10 @@ EOF
 # Brokers
 #-------------------------------------------------------------------------------
 locals {
-  kafka_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
-  kafka_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"]
+  kafka_internal_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
+  kafka_internal_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"]
+  kafka_external_ips = aws_eip.kafka.*.public_ip
+  kafka_external_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.${var.dns_zone.name}"]
 }
 
 resource "aws_security_group" "rkcy_kafka" {
@@ -286,7 +299,7 @@ resource "aws_security_group" "rkcy_kafka" {
 
   ingress = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -297,10 +310,10 @@ resource "aws_security_group" "rkcy_kafka" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = ""
       from_port        = 9092
-      to_port          = 9092
+      to_port          = 9093
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -308,7 +321,7 @@ resource "aws_security_group" "rkcy_kafka" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = "node_exporter"
       from_port        = 9100
       to_port          = 9100
@@ -322,7 +335,7 @@ resource "aws_security_group" "rkcy_kafka" {
 
   egress = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.egress_cidrs
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -338,7 +351,7 @@ resource "aws_security_group" "rkcy_kafka" {
 resource "aws_network_interface" "kafka" {
   count = var.kafka_count
   subnet_id   = local.sn_ids[count.index]
-  private_ips = [local.kafka_ips[count.index]]
+  private_ips = [local.kafka_internal_ips[count.index]]
 
   security_groups = [aws_security_group.rkcy_kafka.id]
 }
@@ -370,13 +383,34 @@ resource "aws_instance" "kafka" {
   }
 }
 
+resource "aws_eip" "kafka" {
+  count = var.public ? var.kafka_count : 0
+  vpc = true
+
+  instance = aws_instance.kafka[count.index].id
+  associate_with_private_ip = local.kafka_internal_ips[count.index]
+
+  tags = {
+    Name = "rkcy_${var.cluster}_${var.stack}_eip_kafka_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "kafka_public" {
+  count = var.public ? var.kafka_count : 0
+  zone_id = var.dns_zone.zone_id
+  name    = local.kafka_external_hosts[count.index]
+  type    = "A"
+  ttl     = "300"
+  records = [aws_eip.kafka[count.index].public_ip]
+}
+
 resource "aws_route53_record" "kafka_private" {
   count = var.kafka_count
   zone_id = var.dns_zone.zone_id
-  name    = local.kafka_hosts[count.index]
+  name    = local.kafka_internal_hosts[count.index]
   type    = "A"
   ttl     = "300"
-  records = [local.kafka_ips[count.index]]
+  records = [local.kafka_internal_ips[count.index]]
 }
 
 resource "null_resource" "kafka_provisioner" {
@@ -414,9 +448,11 @@ EOF
       "${path.module}/kafka.properties.tpl",
       {
         idx = count.index,
-        kafka_ips = local.kafka_ips,
-        kafka_hosts = local.kafka_hosts,
-        zookeeper_ips = local.zookeeper_ips
+        kafka_internal_ips = local.kafka_internal_ips,
+        kafka_internal_hosts = local.kafka_internal_hosts,
+        kafka_external_hosts = local.kafka_external_hosts,
+        public = var.public,
+        zookeeper_ips = local.zookeeper_ips,
       })
     destination = "/home/ubuntu/kafka.properties"
   }
@@ -434,15 +470,14 @@ sudo systemctl daemon-reload
 
 %{for ip in local.zookeeper_ips}
 RET=1
-while [ \$RET -ne 0]; do
+while [ $RET -ne 0 ]; do
   echo Trying zookeeper ${ip}:2181
   nc -z ${ip} 2181
-  RET=\$?
+  RET=$?
+  sleep 2
 done
 echo Connected zookeeper ${ip}:2181
 %{endfor}
-
-sleep 10
 
 sudo systemctl start kafka
 sudo systemctl enable kafka
@@ -454,11 +489,11 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
-    host        = local.kafka_ips[count.index]
+    host        = local.kafka_internal_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
 }
@@ -474,6 +509,10 @@ output "kafka_cluster" {
   value = "${var.stack}_${var.cluster}"
 }
 
-output "kafka_hosts" {
+output "kafka_internal_hosts" {
   value = sort(aws_route53_record.kafka_private.*.name)
+}
+
+output "kafka_external_hosts" {
+  value = sort(aws_route53_record.kafka_public.*.name)
 }

@@ -176,7 +176,7 @@ resource "aws_subnet" "rkcy_storage" {
   }
 }
 
-resource "aws_route_table" "rkcy_edge" {
+resource "aws_route_table" "rkcy" {
   vpc_id = aws_vpc.rkcy.id
   route {
     cidr_block = "0.0.0.0/0"
@@ -190,7 +190,19 @@ resource "aws_route_table" "rkcy_edge" {
 resource "aws_route_table_association" "rkcy_edge" {
   count          = var.edge_subnet_count
   subnet_id      = aws_subnet.rkcy_edge[count.index].id
-  route_table_id = aws_route_table.rkcy_edge.id
+  route_table_id = aws_route_table.rkcy.id
+}
+
+resource "aws_route_table_association" "rkcy_app" {
+  count          = var.app_subnet_count
+  subnet_id      = aws_subnet.rkcy_app[count.index].id
+  route_table_id = aws_route_table.rkcy.id
+}
+
+resource "aws_route_table_association" "rkcy_storage" {
+  count          = var.storage_subnet_count
+  subnet_id      = aws_subnet.rkcy_storage[count.index].id
+  route_table_id = aws_route_table.rkcy.id
 }
 
 locals {
@@ -244,6 +256,10 @@ resource "aws_eip" "bastion" {
   instance = aws_instance.bastion[count.index].id
   associate_with_private_ip = local.bastion_private_ips[count.index]
   depends_on = [aws_internet_gateway.rkcy]
+
+  tags = {
+    Name = "rkcy_${var.stack}_eip_bastion_${count.index}"
+  }
 }
 
 data "aws_route53_zone" "zone" {
@@ -336,6 +352,6 @@ output "subnet_storage" {
   value = aws_subnet.rkcy_storage
 }
 
-output "bastion_hosts" {
-  value = sort(aws_route53_record.bastion_public.*.name)
+output "bastion_ips" {
+  value = aws_eip.bastion.*.public_ip
 }

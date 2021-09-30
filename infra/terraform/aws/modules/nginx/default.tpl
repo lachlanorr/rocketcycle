@@ -1,21 +1,23 @@
 %{ for route in routes ~}
 upstream ${ route.name } {
-%{ for server in route.servers ~}
-    server ${ server };
+%{ for server in [for host in route.hosts: "${host}:${route.port}"] ~}
+	server ${ server };
 %{ endfor ~}
 }
 %{ endfor ~}
 
 server {
-	listen 80 default_server;
-	listen [::]:80 default_server;
+	listen 80;
+	listen [::]:80;
 
 
 %{ for route in routes ~}
+%{ if !lookup(route, "grpc", false) ~}
 	location /${ route.name } {
 #		 rewrite /${ route.name }/(.*) /$1;
 		 proxy_pass http://${ route.name };
 	}
+%{ endif ~}
 %{ endfor ~}
 
 	location / {
@@ -24,8 +26,8 @@ server {
 }
 
 server {
-	listen 8000 default_server;
-	listen [::]:8000 default_server;
+	listen 8000;
+	listen [::]:8000;
 
 	root /var/www/html;
 
@@ -37,3 +39,16 @@ server {
 		try_files $uri $uri/ =404;
 	}
 }
+%{ for route in routes ~}
+%{ if lookup(route, "grpc", false) ~}
+
+server {
+	listen ${ route.port } http2;
+	listen [::]:${ route.port } http2;
+
+	location / {
+		grpc_pass grpc://${ route.name };
+	}
+}
+%{ endif ~}
+%{ endfor ~}

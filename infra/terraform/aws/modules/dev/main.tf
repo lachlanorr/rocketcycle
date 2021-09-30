@@ -77,7 +77,7 @@ resource "aws_security_group" "rkcy_dev" {
 
   ingress = [
     {
-      cidr_blocks      = [ "${chomp(data.http.myip.body)}/32" ]
+      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -88,7 +88,7 @@ resource "aws_security_group" "rkcy_dev" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
       description      = ""
       from_port        = 11300
       to_port          = 11399
@@ -99,7 +99,7 @@ resource "aws_security_group" "rkcy_dev" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
       description      = "node_exporter"
       from_port        = 9100
       to_port          = 9100
@@ -158,6 +158,10 @@ resource "aws_eip" "dev" {
 
   instance = aws_instance.dev.id
   associate_with_private_ip = local.dev_ip
+
+  tags = {
+    Name = "rkcy_${var.stack}_eip_dev"
+  }
 }
 
 resource "aws_route53_record" "dev_public" {

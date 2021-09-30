@@ -30,7 +30,7 @@ variable "subnet_storage" {
   type = any
 }
 
-variable "bastion_hosts" {
+variable "bastion_ips" {
   type = list
 }
 
@@ -42,6 +42,11 @@ variable "ssh_key_path" {
 variable "elasticsearch_count" {
   type = number
   default = 3
+}
+
+variable "elasticsearch_port" {
+  type = number
+  default = 9200
 }
 
 locals {
@@ -85,8 +90,8 @@ resource "aws_security_group" "rkcy_elasticsearch" {
     {
       cidr_blocks      = [ var.vpc.cidr_block ]
       description      = ""
-      from_port        = 9200
-      to_port          = 9200
+      from_port        = var.elasticsearch_port
+      to_port          = var.elasticsearch_port
       ipv6_cidr_blocks = []
       prefix_list_ids  = []
       protocol         = "tcp"
@@ -232,7 +237,7 @@ EOF
     type     = "ssh"
 
     bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_hosts[0]
+    bastion_host        = var.bastion_ips[0]
     bastion_private_key = file(var.ssh_key_path)
 
     user        = "ubuntu"
@@ -242,9 +247,13 @@ EOF
 }
 
 output "elasticsearch_urls" {
-  value = [for host in sort(aws_route53_record.elasticsearch_private.*.name): "http://${host}:9200"]
+  value = [for host in sort(aws_route53_record.elasticsearch_private.*.name): "http://${host}:${var.elasticsearch_port}"]
 }
 
 output "elasticsearch_hosts" {
   value = sort(aws_route53_record.elasticsearch_private.*.name)
+}
+
+output "elasticsearch_port" {
+  value = var.elasticsearch_port
 }
