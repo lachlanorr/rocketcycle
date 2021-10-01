@@ -102,11 +102,13 @@ locals {
       name = "grafana"
       hosts = var.grafana_hosts
       port = var.grafana_port
+      grpc = false
     },
     {
       name = "jaeger"
       hosts = var.jaeger_query_hosts
       port = var.jaeger_query_port
+      grpc = false
     },
   ]
   private_routes = [
@@ -126,6 +128,7 @@ locals {
       name = "prometheus"
       hosts = var.prometheus_hosts
       port = var.prometheus_port
+      grpc = false
     },
   ]
   public_routes = concat(local.default_routes, var.public ? tolist(local.private_routes) : tolist([]))
