@@ -233,6 +233,7 @@ module "postgresql" {
   vpc = module.network.vpc
   subnet_storage = module.network.subnet_storage
   bastion_ips = module.network.bastion_ips
+  public = var.public
 }
 
 module "balancers" {

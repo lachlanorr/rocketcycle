@@ -26,10 +26,6 @@ variable "inbound_cidr" {
   type = string
 }
 
-variable "public" {
-  type = bool
-}
-
 variable "routes" {
   type = any
 }
@@ -57,6 +53,17 @@ locals {
   nginx_ips = [for i in range(var.nginx_count) : "${cidrhost(local.sn_cidrs[i], 80)}"]
 }
 
+variable "public" {
+  type = bool
+}
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
+locals {
+  ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
+  ingress_80443_cidrs = var.public ? [ var.inbound_cidr, "${chomp(data.http.myip.body)}/32"] : [ var.inbound_cidr ]
+}
+
 resource "aws_security_group" "rkcy_nginx" {
   name        = "rkcy_${var.cluster}_${var.stack}_nginx"
   description = "Allow SSH, HTTP, and HTTPS inbound traffic"
@@ -64,7 +71,7 @@ resource "aws_security_group" "rkcy_nginx" {
 
   ingress = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -75,7 +82,7 @@ resource "aws_security_group" "rkcy_nginx" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.inbound_cidr ]
+      cidr_blocks      = local.ingress_80443_cidrs
       description      = ""
       from_port        = 80
       to_port          = 80
@@ -86,7 +93,7 @@ resource "aws_security_group" "rkcy_nginx" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.inbound_cidr ]
+      cidr_blocks      = local.ingress_80443_cidrs
       description      = ""
       from_port        = 443
       to_port          = 443
@@ -97,7 +104,7 @@ resource "aws_security_group" "rkcy_nginx" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = "node_exporter"
       from_port        = 9100
       to_port          = 9100
@@ -108,7 +115,7 @@ resource "aws_security_group" "rkcy_nginx" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = "otelcol"
       from_port        = 4317
       to_port          = 4317
@@ -119,7 +126,7 @@ resource "aws_security_group" "rkcy_nginx" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = "jaeger collector"
       from_port        = 14250
       to_port          = 14250

@@ -60,6 +60,17 @@ resource "aws_key_pair" "postgresql" {
   public_key = file("${var.ssh_key_path}.pub")
 }
 
+variable "public" {
+  type = bool
+}
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
+locals {
+  ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
+  egress_cidrs = var.public ? [ "0.0.0.0/0" ] : [ var.vpc.cidr_block ]
+}
+
 locals {
   postgresql_ips = [for i in range(var.postgresql_count) : "${cidrhost(local.sn_cidrs[i], 100)}"]
 }
@@ -71,7 +82,7 @@ resource "aws_security_group" "rkcy_postgresql" {
 
   ingress = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = ""
       from_port        = 22
       to_port          = 22
@@ -82,7 +93,7 @@ resource "aws_security_group" "rkcy_postgresql" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = ""
       from_port        = 5432
       to_port          = 5432
@@ -93,7 +104,7 @@ resource "aws_security_group" "rkcy_postgresql" {
       self             = false
     },
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.ingress_cidrs
       description      = "node_exporter"
       from_port        = 9100
       to_port          = 9100
@@ -107,7 +118,7 @@ resource "aws_security_group" "rkcy_postgresql" {
 
   egress = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block ]
+      cidr_blocks      = local.egress_cidrs
       description      = ""
       from_port        = 0
       ipv6_cidr_blocks = []
@@ -153,6 +164,27 @@ resource "aws_instance" "postgresql" {
   tags = {
     Name = "rkcy_${var.stack}_inst_postgresql_${count.index}"
   }
+}
+
+resource "aws_eip" "postgresql" {
+  count = var.public ? var.postgresql_count : 0
+  vpc = true
+
+  instance = aws_instance.postgresql[count.index].id
+  associate_with_private_ip = local.postgresql_ips[count.index]
+
+  tags = {
+    Name = "rkcy_${var.stack}_eip_postgresql_${count.index}"
+  }
+}
+
+resource "aws_route53_record" "postgresql_public" {
+  count = var.public ? var.postgresql_count : 0
+  zone_id = var.dns_zone.zone_id
+  name    = "postgresql-${count.index}.${var.stack}.${var.dns_zone.name}"
+  type    = "A"
+  ttl     = "300"
+  records = [aws_eip.postgresql[count.index].public_ip]
 }
 
 resource "aws_route53_record" "postgresql_private" {
