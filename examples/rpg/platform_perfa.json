@@ -1,0 +1,69 @@
+{
+    "name": "rpg",
+    "concerns": [
+        {
+            "type": "GENERAL",
+            "name": "edge",
+
+            "topics": [
+                {
+                    "name": "response",
+                    "current": {
+                        "partitionCount": 1
+                    },
+                    "consumerProgram": {
+                        "name": "./@platform",
+                        "args": ["edge", "serve", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
+                        "abbrev": "edge/@partition",
+                        "tags": {"service.name": "rkcy.@platform.@concern"}
+                    }
+                }
+            ]
+        },
+        {
+            "type": "APECS",
+            "name": "Player",
+
+            "topics": [
+                {
+                    "name": "process",
+                    "current": {
+                        "partitionCount": 1
+                    }
+                },
+                {
+                    "name": "storage",
+                    "current": {
+                        "partitionCount": 1
+                    }
+                }
+            ]
+        },
+        {
+            "type": "APECS",
+            "name": "Character",
+
+            "topics": [
+                {
+                    "name": "process",
+                    "current": {
+                        "partitionCount": 1
+                    }
+                },
+                {
+                    "name": "storage",
+                    "current": {
+                        "partitionCount": 1
+                    }
+                }
+            ]
+        }
+    ],
+
+    "clusters": [
+        {
+            "name": "rkcy-perfa",
+            "brokers": "kafka-0.clusa.perfa.rkcy.net:9093"
+        }
+    ]
+}

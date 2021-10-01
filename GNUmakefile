@@ -58,6 +58,9 @@ rpg: ## compile rpg example
 	-o $(BUILD_BIN_DIR)/rpg \
 	./examples/rpg
 	@cp ./examples/rpg/platform.json $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/init_db_perfa.sh $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/run_perfa.sh $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/platform_perfa.json $(BUILD_BIN_DIR)
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help
