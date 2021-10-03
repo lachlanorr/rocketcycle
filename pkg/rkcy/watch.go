@@ -35,7 +35,7 @@ func (wt *watchTopic) String() string {
 
 func (wt *watchTopic) consume(ctx context.Context) {
 	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", gPlatformName, wt)
-	log.Info().Msgf("watching: %s", wt.topicName)
+	log.Info().Msgf("watching: %s, groupname: %s", wt.topicName, groupName)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        wt.brokers,
@@ -72,6 +72,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				log.WithLevel(wt.logLevel).
 					Str("Directive", fmt.Sprintf("0x%08X", int(GetDirective(msg)))).
 					Str("TraceId", GetTraceId(msg)).
+					Int("Offset", int(msg.TopicPartition.Offset)).
 					Msg(wt.topicName)
 				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)

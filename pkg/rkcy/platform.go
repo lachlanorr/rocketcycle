@@ -345,9 +345,10 @@ func consumeAdminTopic(
 	}
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":  adminBrokers,
-		"group.id":           groupName,
-		"enable.auto.commit": false,
+		"bootstrap.servers":        adminBrokers,
+		"group.id":                 groupName,
+		"enable.auto.commit":       false, // we never commit this topic, always want every consumer go have latest
+		"enable.auto.offset.store": false, // we never commit this topic
 	})
 	if err != nil {
 		slog.Error().

@@ -305,8 +305,8 @@ func consumeApecsTopic(
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        consumerBrokers,
 		"group.id":                 groupName,
-		"enable.auto.commit":       true,  // librdkafka will commit to brokers for us on an interval and when we close consumer
-		"enable.auto.offset.store": false, // we explicitely commit to local store to get "at least once" behavior
+		"enable.auto.commit":       false, // we commit manually on an interval
+		"enable.auto.offset.store": false, // we commit to local store after processeing to get at least once behavior
 	})
 	if err != nil {
 		log.Fatal().
@@ -329,12 +329,24 @@ func consumeApecsTopic(
 			Msg("Failed to Assign")
 	}
 
+	commitTicker := time.NewTicker(5 * time.Second)
+	shouldCommit := false
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().
 				Msg("consumeStorage exiting, ctx.Done()")
 			return
+		case <-commitTicker.C:
+			if shouldCommit {
+				_, err = cons.Commit()
+				shouldCommit = false
+				if err != nil {
+					log.Fatal().
+						Err(err).
+						Msgf("Unable to commit")
+				}
+			}
 		default:
 			msg, err := cons.ReadMessage(time.Second * 5)
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
@@ -342,9 +354,7 @@ func consumeApecsTopic(
 				log.Fatal().
 					Err(err).
 					Msg("Error during ReadMessage")
-			}
-
-			if !timedOut && msg != nil {
+			} else if !timedOut && msg != nil {
 				directive := GetDirective(msg)
 				if directive == Directive_APECS_TXN {
 					txn := ApecsTxn{}
@@ -387,6 +397,7 @@ func consumeApecsTopic(
 						Err(err).
 						Msgf("Unable to store offsets %s/%d/%d", fullTopic, partition, msg.TopicPartition.Offset)
 				}
+				shouldCommit = true
 			}
 		}
 	}

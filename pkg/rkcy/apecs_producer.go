@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -33,6 +34,7 @@ type ApecsProducer struct {
 	platformName      string
 	respTarget        *TopicTarget
 	producers         map[string]map[StandardTopicName]*Producer
+	producersMu       sync.Mutex
 	respRegisterCh    chan *RespChan
 	respConsumerClose context.CancelFunc
 }
@@ -74,6 +76,8 @@ func (aprod *ApecsProducer) Close() {
 		aprod.respConsumerClose()
 	}
 
+	aprod.producersMu.Lock()
+	defer aprod.producersMu.Unlock()
 	for _, concernProds := range aprod.producers {
 		for _, pdc := range concernProds {
 			pdc.Close()
@@ -87,6 +91,9 @@ func (aprod *ApecsProducer) getProducer(
 	concernName string,
 	topicName StandardTopicName,
 ) (*Producer, error) {
+	aprod.producersMu.Lock()
+	defer aprod.producersMu.Unlock()
+
 	concernProds, ok := aprod.producers[concernName]
 	if !ok {
 		concernProds = make(map[StandardTopicName]*Producer)
@@ -147,8 +154,8 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        respTarget.Brokers,
 		"group.id":                 groupName,
-		"enable.auto.commit":       true, // librdkafka will commit to brokers for us on an interval and when we close consumer
-		"enable.auto.offset.store": true, // librdkafka will commit to local store to get "at most once" behavior
+		"enable.auto.commit":       false, // we commit manually on an interval
+		"enable.auto.offset.store": false, // we commit to local store after processeing to get at least once behavior
 	})
 	if err != nil {
 		log.Fatal().
@@ -172,7 +179,9 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 			Msg("Failed to Assign")
 	}
 
-	cleanupTicker := time.NewTicker(5 * time.Second)
+	cleanupTicker := time.NewTicker(10 * time.Second)
+	commitTicker := time.NewTicker(5 * time.Second)
+	shouldCommit := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -182,7 +191,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 		case <-cleanupTicker.C:
 			for traceId, respCh := range reqMap {
 				now := time.Now()
-				if now.Sub(respCh.StartTime) >= time.Second*10 {
+				if now.Sub(respCh.StartTime) >= time.Second*60 {
 					log.Warn().
 						Str("TraceId", traceId).
 						Msgf("Deleting request channel info, this is not normal and this transaction may have been lost")
@@ -190,8 +199,18 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 					delete(reqMap, traceId)
 				}
 			}
+		case <-commitTicker.C:
+			if shouldCommit {
+				_, err = cons.Commit()
+				shouldCommit = false
+				if err != nil {
+					log.Fatal().
+						Err(err).
+						Msgf("Unable to commit")
+				}
+			}
 		default:
-			msg, err := cons.ReadMessage(time.Millisecond * 10)
+			msg, err := cons.ReadMessage(5 * time.Second)
 
 			// Read all registration messages here so we are sure to catch them before handling message
 			moreRegistrations := true
@@ -242,6 +261,21 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 						Int("Directive", int(directive)).
 						Msg("Invalid directive on ApecsTxn topic")
 				}
+
+				_, err = cons.StoreOffsets([]kafka.TopicPartition{
+					{
+						Topic:     &respTarget.Topic,
+						Partition: respTarget.Partition,
+						Offset:    msg.TopicPartition.Offset + 1,
+					},
+				})
+				if err != nil {
+					log.Fatal().
+						Err(err).
+						Msgf("Unable to store offsets %s/%d/%d", respTarget.Topic, respTarget.Partition, msg.TopicPartition.Offset)
+				}
+				shouldCommit = true
+
 			}
 		}
 	}
