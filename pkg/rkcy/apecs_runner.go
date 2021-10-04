@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -298,8 +299,11 @@ func consumeApecsTopic(
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
+	wg *sync.WaitGroup,
 ) {
-	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil)
+	defer wg.Done()
+
+	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil, wg)
 
 	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
@@ -313,7 +317,25 @@ func consumeApecsTopic(
 			Err(err).
 			Msg("failed to kafka.NewConsumer")
 	}
-	defer cons.Close()
+	shouldCommit := false
+	defer func() {
+		log.Warn().
+			Str("Topic", fullTopic).
+			Msgf("Closing kafka consumer")
+		if shouldCommit {
+			_, err = cons.Commit()
+			shouldCommit = false
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msgf("Unable to commit")
+			}
+		}
+		cons.Close()
+		log.Warn().
+			Str("Topic", fullTopic).
+			Msgf("Closed kafka consumer")
+	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
@@ -330,7 +352,6 @@ func consumeApecsTopic(
 	}
 
 	commitTicker := time.NewTicker(5 * time.Second)
-	shouldCommit := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -348,7 +369,7 @@ func consumeApecsTopic(
 				}
 			}
 		default:
-			msg, err := cons.ReadMessage(time.Second * 5)
+			msg, err := cons.ReadMessage(100 * time.Millisecond)
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
 			if err != nil && !timedOut {
 				log.Fatal().
@@ -410,7 +431,10 @@ func startApecsRunner(
 	platformName string,
 	fullTopic string,
 	partition int32,
+	wg *sync.WaitGroup,
 ) {
+	defer wg.Done()
+
 	tp, err := ParseFullTopicName(fullTopic)
 	if err != nil {
 		log.Fatal().
@@ -426,6 +450,7 @@ func startApecsRunner(
 			Msg("startApecsRunner: not an APECS topic")
 	}
 
+	wg.Add(1)
 	go consumeApecsTopic(
 		ctx,
 		adminBrokers,
@@ -434,5 +459,6 @@ func startApecsRunner(
 		fullTopic,
 		partition,
 		tp,
+		wg,
 	)
 }

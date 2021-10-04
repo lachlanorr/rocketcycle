@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -22,8 +23,15 @@ func cobraProcess(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go startApecsRunner(
 		ctx,
 		gSettings.AdminBrokers,
@@ -31,15 +39,15 @@ func cobraProcess(cmd *cobra.Command, args []string) {
 		gPlatformName,
 		gSettings.Topic,
 		gSettings.Partition,
+		&wg,
 	)
 
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
 		log.Info().
 			Msg("APECS PROCESS consumer stopped")
 		cancel()
+		wg.Wait()
 		return
 	}
 }

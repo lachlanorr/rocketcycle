@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -100,11 +101,11 @@ func (rtProg *rtProgram) isRunning() bool {
 
 func (rtProg *rtProgram) wait() {
 	err := rtProg.cmd.Wait()
-	if err != nil {
+	if err != nil && err.Error() != "signal: killed" {
 		log.Error().
 			Err(err).
 			Str("Program", rtProg.program.Abbrev).
-			Msg("Wait returned error")
+			Msgf("Wait returned error")
 	}
 }
 
@@ -210,8 +211,6 @@ func printer(ctx context.Context, printCh <-chan string) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
-				Msg("printer exiting, ctx.Done()")
 			return
 		case line := <-printCh:
 			fmt.Println(line)
@@ -281,7 +280,9 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 	)
 }
 
-func runConsumerPrograms(ctx context.Context) {
+func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	adminCh := make(chan *AdminMessage)
 
 	go consumeAdminTopic(
@@ -306,8 +307,9 @@ func runConsumerPrograms(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
-				Msg("runConsumerPrograms exiting, ctx.Done()")
+			for _, prog := range running {
+				prog.kill()
+			}
 			return
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
@@ -325,16 +327,21 @@ func runConsumerPrograms(ctx context.Context) {
 
 func cobraRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	interruptCh := make(chan os.Signal)
+	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
 
-	go runConsumerPrograms(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go runConsumerPrograms(ctx, &wg)
 	for {
 		select {
 		case <-interruptCh:
 			cancel()
+			wg.Wait()
 			return
 		}
 	}

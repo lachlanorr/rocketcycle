@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -385,6 +386,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	var wg sync.WaitGroup
 	aprod = rkcy.NewApecsProducer(
 		ctx,
 		settings.AdminBrokers,
@@ -394,6 +396,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 			Topic:     settings.Topic,
 			Partition: settings.Partition,
 		},
+		&wg,
 	)
 
 	if aprod == nil {
@@ -410,6 +413,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 		log.Info().
 			Msg("edge server stopped")
 		cancel()
+		wg.Wait()
 		return
 	}
 }

@@ -382,7 +382,7 @@ func consumeAdminTopic(
 				Msg("consumeAdminTopic exiting, ctx.Done()")
 			return
 		default:
-			msg, err := cons.ReadMessage(time.Second * 5)
+			msg, err := cons.ReadMessage(100 * time.Millisecond)
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
 			if err != nil && !timedOut {
 				slog.Error().

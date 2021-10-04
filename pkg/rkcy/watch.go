@@ -62,7 +62,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				Msg("watchTopic.consume exiting, ctx.Done()")
 			return
 		default:
-			msg, err := cons.ReadMessage(time.Second * 5)
+			msg, err := cons.ReadMessage(100 * time.Millisecond)
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
 			if err != nil && !timedOut {
 				log.Error().

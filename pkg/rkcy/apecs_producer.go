@@ -50,8 +50,8 @@ func NewApecsProducer(
 	adminBrokers string,
 	platformName string,
 	respTarget *TopicTarget,
+	wg *sync.WaitGroup,
 ) *ApecsProducer {
-
 	aprod := &ApecsProducer{
 		ctx:          ctx,
 		adminBrokers: adminBrokers,
@@ -65,7 +65,8 @@ func NewApecsProducer(
 	if aprod.respTarget != nil {
 		var respConsumerCtx context.Context
 		respConsumerCtx, aprod.respConsumerClose = context.WithCancel(aprod.ctx)
-		go aprod.consumeResponseTopic(respConsumerCtx, aprod.respTarget)
+		wg.Add(1)
+		go aprod.consumeResponseTopic(respConsumerCtx, aprod.respTarget, wg)
 	}
 
 	return aprod
@@ -146,7 +147,13 @@ func respondThroughChannel(traceId string, respCh chan *ApecsTxn, txn *ApecsTxn)
 	respCh <- txn
 }
 
-func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget *TopicTarget) {
+func (aprod *ApecsProducer) consumeResponseTopic(
+	ctx context.Context,
+	respTarget *TopicTarget,
+	wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+
 	reqMap := make(map[string]*RespChan)
 
 	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", aprod.platformName, respTarget.Topic, respTarget.Partition)
@@ -164,7 +171,25 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 	}
-	defer cons.Close()
+	shouldCommit := false
+	defer func() {
+		log.Warn().
+			Str("Topic", respTarget.Topic).
+			Msgf("Closing kafka consumer")
+		if shouldCommit {
+			_, err = cons.Commit()
+			shouldCommit = false
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msgf("Unable to commit")
+			}
+		}
+		cons.Close()
+		log.Warn().
+			Str("Topic", respTarget.Topic).
+			Msgf("Closed kafka consumer")
+	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
@@ -181,12 +206,11 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 
 	cleanupTicker := time.NewTicker(10 * time.Second)
 	commitTicker := time.NewTicker(5 * time.Second)
-	shouldCommit := false
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().
-				Msg("watchTopic.consume exiting, ctx.Done()")
+				Msg("consumeResponseTopic exiting, ctx.Done()")
 			return
 		case <-cleanupTicker.C:
 			for traceId, respCh := range reqMap {
@@ -210,7 +234,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(ctx context.Context, respTarget
 				}
 			}
 		default:
-			msg, err := cons.ReadMessage(5 * time.Second)
+			msg, err := cons.ReadMessage(100 * time.Millisecond)
 
 			// Read all registration messages here so we are sure to catch them before handling message
 			moreRegistrations := true

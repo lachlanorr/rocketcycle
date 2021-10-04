@@ -77,7 +77,7 @@ func findMostRecentMatching(
 	lastRead := int64(0)
 	matchingOffset := int64(-1)
 	for lastRead < high-1 {
-		msg, err := cons.ReadMessage(time.Second * 5)
+		msg, err := cons.ReadMessage(5 * time.Second)
 		timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
 		if timedOut {
 			return false, 0, errors.New("findMostRecentMatching timed out")

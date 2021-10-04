@@ -88,9 +88,6 @@ func computeRatios(commands map[CommandId]Command) []float64 {
 	return ratios
 }
 
-func logResult(msg string, err error, simIdx uint, args *RunnerArgs) {
-}
-
 func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	defer wg.Done()
 

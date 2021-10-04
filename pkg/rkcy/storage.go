@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -24,6 +25,8 @@ func cobraStorage(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go startApecsRunner(
 		ctx,
 		gSettings.AdminBrokers,
@@ -31,6 +34,7 @@ func cobraStorage(cmd *cobra.Command, args []string) {
 		gPlatformName,
 		gSettings.Topic,
 		gSettings.Partition,
+		&wg,
 	)
 
 	interruptCh := make(chan os.Signal, 1)
@@ -40,6 +44,7 @@ func cobraStorage(cmd *cobra.Command, args []string) {
 		log.Info().
 			Msg("APECS STORAGE consumer stopped")
 		cancel()
+		wg.Wait()
 		return
 	}
 }
