@@ -1,0 +1,7 @@
+* kafka commands
+** get consumer offsets for a specific group
+bin/kafka-consumer-groups.sh --bootstrap-server kafka-0.clusa.perfa.local.rkcy.net:9092 --group rkcy_rpg_edge__rkcy.rpg.edge.GENERAL.response.0001_0 --describe
+** get all consumer offsets
+bin/kafka-consumer-groups.sh --bootstrap-server kafka-0.clusa.perfa.local.rkcy.net:9092 --describe --all-groups
+** get partition offsets
+bin/kafka-get-offsets.sh --bootstrap-server kafka-2.clusa.perfa.local.rkcy.net:9092
