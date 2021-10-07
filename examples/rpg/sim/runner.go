@@ -113,7 +113,7 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 		if err != nil {
 			log.Fatal().
 				Err(err).
-				Msg("Failed to creat initial characters")
+				Msg("Failed to create initial characters")
 		} else {
 			log.Info().
 				Msgf("%d:%d/%d INIT %s", args.RunnerIdx, i, args.InitCharacterCount, msg)
