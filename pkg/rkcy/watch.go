@@ -23,10 +23,11 @@ import (
 )
 
 type watchTopic struct {
-	clusterName string
-	brokers     string
-	topicName   string
-	logLevel    zerolog.Level
+	clusterName    string
+	brokers        string
+	topicName      string
+	partitionCount int32
+	logLevel       zerolog.Level
 }
 
 func (wt *watchTopic) String() string {
@@ -34,14 +35,14 @@ func (wt *watchTopic) String() string {
 }
 
 func (wt *watchTopic) consume(ctx context.Context) {
-	groupName := fmt.Sprintf("rkcy_%s__%s_watcher", gPlatformName, wt)
+	groupName := fmt.Sprintf("rkcy_watch_%s", wt.topicName)
 	log.Info().Msgf("watching: %s, groupname: %s", wt.topicName, groupName)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        wt.brokers,
 		"group.id":                 groupName,
-		"enable.auto.commit":       true, // librdkafka will commit to brokers for us on an interval and when we close consumer
-		"enable.auto.offset.store": true, // librdkafka will commit to local store to get "at most once" behavior
+		"enable.auto.commit":       false, // we don't commit the watcher, only want new stuff
+		"enable.auto.offset.store": false, // we don't commit the watcher, only want new stuff
 	})
 	if err != nil {
 		log.Error().
@@ -53,7 +54,15 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	}
 	defer cons.Close()
 
-	cons.Subscribe(wt.topicName, nil)
+	topicParts := make([]kafka.TopicPartition, wt.partitionCount)
+	for i := int32(0); i < wt.partitionCount; i++ {
+		topicParts[i] = kafka.TopicPartition{
+			Topic:     &wt.topicName,
+			Partition: i,
+			Offset:    kafka.OffsetEnd,
+		}
+	}
+	cons.Assign(topicParts)
 
 	for {
 		select {
@@ -105,10 +114,12 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
 				if tp.Topic == ERROR || tp.Topic == COMPLETE {
+					log.Info().Msgf("topic: %+v", topic)
 					wt := watchTopic{
-						clusterName: topic.CurrentCluster.Name,
-						brokers:     topic.CurrentCluster.Brokers,
-						topicName:   topic.CurrentTopic,
+						clusterName:    topic.CurrentCluster.Name,
+						brokers:        topic.CurrentCluster.Brokers,
+						topicName:      topic.CurrentTopic,
+						partitionCount: topic.CurrentTopicPartitionCount,
 					}
 					if tp.Topic == ERROR {
 						wt.logLevel = zerolog.ErrorLevel

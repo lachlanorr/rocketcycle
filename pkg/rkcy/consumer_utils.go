@@ -136,7 +136,11 @@ func FindMostRecentMatching(
 			return found, mro, nil
 		}
 		delta *= 10
-		log.Warn().Msgf("Not found, new delta: %d", delta)
+		log.Warn().
+			Str("Topic", topic).
+			Int("Partition", int(partition)).
+			Int("Match", int(match)).
+			Msgf("Not found, new delta: %d", delta)
 	}
 
 	return found, mro, nil

@@ -51,11 +51,13 @@ type rtConcern struct {
 }
 
 type rtTopics struct {
-	Topics         *Platform_Concern_Topics
-	CurrentTopic   string
-	CurrentCluster *Platform_Cluster
-	FutureTopic    string
-	FutureCluster  *Platform_Cluster
+	Topics                     *Platform_Concern_Topics
+	CurrentTopic               string
+	CurrentTopicPartitionCount int32
+	CurrentCluster             *Platform_Cluster
+	FutureTopic                string
+	FutureTopicPartitionCount  int32
+	FutureCluster              *Platform_Cluster
 }
 
 func newRtConcern(rtPlat *rtPlatform, concern *Platform_Concern) (*rtConcern, error) {
@@ -86,6 +88,7 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 	var ok bool
 
 	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
+	rtTops.CurrentTopicPartitionCount = topics.Current.PartitionCount
 	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.Cluster]
 	if !ok {
 		return nil, fmt.Errorf("Topic '%s' has invalid Current Cluster '%s'", topics.Name, topics.Current.Cluster)
@@ -93,6 +96,7 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 
 	if topics.Future != nil {
 		rtTops.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
+		rtTops.FutureTopicPartitionCount = topics.Future.PartitionCount
 		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.Cluster]
 		if !ok {
 			return nil, fmt.Errorf("Topic '%s' has invalid Future Cluster '%s'", topics.Name, topics.Future.Cluster)

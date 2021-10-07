@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	otel_codes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -141,7 +142,7 @@ func advanceApecsTxn(
 	tp *TopicParts,
 	offset *Offset,
 	aprod *ApecsProducer,
-) {
+) (Code, StepCommitDirective) {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
 	ctx, span, step := gPlatformImpl.Telem.StartStep(ctx, rtxn)
 	defer span.End()
@@ -152,22 +153,22 @@ func advanceApecsTxn(
 
 	if step.Result != nil {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
-		return
+		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.Concern != tp.Concern {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
-		return
+		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.System != tp.System {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
-		return
+		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.Key == "" {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: No key in step")
-		return
+		return Code_INTERNAL, SCD_Commit
 	}
 
 	// Grab current timestamp, which will be used in a couple places below
@@ -190,7 +191,7 @@ func advanceApecsTxn(
 				Payload:       step.Payload,
 			}
 			produceNextStep(span, rtxn, step, offset, aprod)
-			return
+			return Code_OK, SCD_Commit
 		} else {
 			inst = gInstanceCache.Get(step.Key)
 
@@ -218,24 +219,24 @@ func advanceApecsTxn(
 				if err != nil {
 					log.Error().Err(err).Msg("error in insertSteps")
 					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
-					return
+					return Code_INTERNAL, SCD_Commit
 				}
 				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
 				if err != nil {
 					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
-					return
+					return Code_INTERNAL, SCD_Commit
 				}
-				return
+				return Code_OK, SCD_Commit
 			} else if inst != nil && step.Command == CREATE {
 				produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
-				return
+				return Code_INTERNAL, SCD_Commit
 			}
 		}
 	}
 
 	if step.Offset == nil {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
-		return
+		return Code_INTERNAL, SCD_Commit
 	}
 
 	args := &StepArgs{
@@ -247,11 +248,33 @@ func advanceApecsTxn(
 		Offset:        step.Offset,
 	}
 
-	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
+	var scd StepCommitDirective
+	step.Result, scd = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
+
+	if scd == SCD_Bailout {
+		// We'll bailout up the chain, but down here we can at least
+		// log any info we have about the result.
+		var code Code
+		if step.Result != nil {
+			code = step.Result.Code
+			for _, logEvt := range step.Result.LogEvents {
+				log.Error().
+					Str("TraceId", args.TraceId).
+					Str("Concern", step.Concern).
+					Str("System", step.System.String()).
+					Str("Command", step.Command).
+					Str("Direction", rtxn.txn.Direction.String()).
+					Msgf("BAILOUT LogEvent: %s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
+			}
+		} else {
+			code = Code_INTERNAL
+		}
+		return code, scd
+	}
 
 	if step.Result == nil {
 		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
-		return
+		return step.Result.Code, scd
 	}
 
 	step.Result.ProcessedTime = now
@@ -274,7 +297,7 @@ func advanceApecsTxn(
 	)
 	if step.Result.Code != Code_OK {
 		produceApecsTxnError(span, rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
-		return
+		return step.Result.Code, scd
 	}
 
 	// Unless explcitly set by the handler, always assume we should
@@ -289,6 +312,7 @@ func advanceApecsTxn(
 	}
 
 	produceNextStep(span, rtxn, step, offset, aprod)
+	return step.Result.Code, scd
 }
 
 func consumeApecsTopic(
@@ -305,7 +329,7 @@ func consumeApecsTopic(
 
 	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil, wg)
 
-	groupName := fmt.Sprintf("rkcy_%s", fullTopic)
+	groupName := fmt.Sprintf("rkcy_apecs_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        consumerBrokers,
 		"group.id":                 groupName,
@@ -351,6 +375,7 @@ func consumeApecsTopic(
 			Msg("Failed to Assign")
 	}
 
+	firstMessage := true
 	commitTicker := time.NewTicker(5 * time.Second)
 	for {
 		select {
@@ -376,6 +401,40 @@ func consumeApecsTopic(
 					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
+				// If this is the first message read, commit the
+				// offset to current to ensure we have an offset in
+				// kafka, and if we blow up and start again we will
+				// not default to latest.
+				if firstMessage {
+					firstMessage = false
+					log.Info().
+						Str("Topic", fullTopic).
+						Int32("Partition", partition).
+						Int64("Offset", int64(msg.TopicPartition.Offset)).
+						Msg("Initial commit to current offset")
+
+					comOffs, err := cons.CommitOffsets([]kafka.TopicPartition{
+						{
+							Topic:     &fullTopic,
+							Partition: partition,
+							Offset:    msg.TopicPartition.Offset,
+						},
+					})
+					if err != nil {
+						log.Fatal().
+							Err(err).
+							Str("Topic", fullTopic).
+							Int32("Partition", partition).
+							Int64("Offset", int64(msg.TopicPartition.Offset)).
+							Msgf("Unable to commit initial offset")
+					}
+					log.Info().
+						Str("Topic", fullTopic).
+						Int32("Partition", partition).
+						Int64("Offset", int64(msg.TopicPartition.Offset)).
+						Msgf("Initial offset committed: %+v", comOffs)
+				}
+
 				directive := GetDirective(msg)
 				if directive == Directive_APECS_TXN {
 					txn := ApecsTxn{}
@@ -397,7 +456,38 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							advanceApecsTxn(ctx, rtxn, tp, offset, aprod)
+							code, scd := advanceApecsTxn(ctx, rtxn, tp, offset, aprod)
+							// Bailout is necessary when a storage step fails.
+							// Those must be retried indefinitely until success.
+							// So... we force commit the offset to current and
+							// kill ourselves, and we'll pick up where we left
+							// off when we are restarted.
+							if scd == SCD_Bailout {
+								_, err := cons.CommitOffsets([]kafka.TopicPartition{
+									{
+										Topic:     &fullTopic,
+										Partition: partition,
+										Offset:    msg.TopicPartition.Offset,
+									},
+								})
+								if err != nil {
+									log.Error().
+										Err(err).
+										Str("Topic", fullTopic).
+										Int32("Partition", partition).
+										Int64("Offset", int64(msg.TopicPartition.Offset)).
+										Msgf("BAILOUT commit error")
+								}
+
+								log.Fatal().
+									Int("Code", int(code)).
+									Str("TraceId", rtxn.txn.TraceId).
+									Str("Txn", protojson.Format(proto.Message(rtxn.txn))).
+									Str("Topic", fullTopic).
+									Int32("Partition", partition).
+									Int64("Offset", int64(msg.TopicPartition.Offset)).
+									Msgf("BAILOUT")
+							}
 						}
 					}
 				} else {
@@ -416,7 +506,7 @@ func consumeApecsTopic(
 				if err != nil {
 					log.Fatal().
 						Err(err).
-						Msgf("Unable to store offsets %s/%d/%d", fullTopic, partition, msg.TopicPartition.Offset)
+						Msgf("Unable to store offsets %s/%d/%d", fullTopic, partition, msg.TopicPartition.Offset+1)
 				}
 				shouldCommit = true
 			}

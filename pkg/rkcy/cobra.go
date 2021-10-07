@@ -27,9 +27,7 @@ type Settings struct {
 	Topic     string
 	Partition int32
 
-	WatchError    bool
-	WatchComplete bool
-	WatchDecode   bool
+	WatchDecode bool
 }
 
 var (
@@ -174,8 +172,6 @@ func runCobra(impl *PlatformImpl) {
 		Long:  "Runs a watch consumer against all error/complete topics",
 		Run:   cobraWatch,
 	}
-	watchCmd.PersistentFlags().BoolVarP(&gSettings.WatchError, "error", "e", true, "Whether to watch error topics")
-	watchCmd.PersistentFlags().BoolVarP(&gSettings.WatchComplete, "complete", "c", true, "Whether to watch complete topics")
 	watchCmd.PersistentFlags().BoolVarP(&gSettings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(watchCmd)
 

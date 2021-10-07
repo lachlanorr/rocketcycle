@@ -156,7 +156,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 
 	reqMap := make(map[string]*RespChan)
 
-	groupName := fmt.Sprintf("rkcy_%s_edge__%s_%d", aprod.platformName, respTarget.Topic, respTarget.Partition)
+	groupName := fmt.Sprintf("rkcy_response_%s", respTarget.Topic)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        respTarget.Brokers,
@@ -204,6 +204,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 			Msg("Failed to Assign")
 	}
 
+	firstMessage := true
 	cleanupTicker := time.NewTicker(10 * time.Second)
 	commitTicker := time.NewTicker(5 * time.Second)
 	for {
@@ -219,7 +220,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 					log.Warn().
 						Str("TraceId", traceId).
 						Msgf("Deleting request channel info, this is not normal and this transaction may have been lost")
-					respCh.RespCh <- nil
+					respondThroughChannel(traceId, respCh.RespCh, nil)
 					delete(reqMap, traceId)
 				}
 			}
@@ -259,6 +260,40 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 					Err(err).
 					Msg("Error during ReadMessage")
 			} else if !timedOut && msg != nil {
+				// If this is the first message read, commit the
+				// offset to current to ensure we have an offset in
+				// kafka, and if we blow up and start again we will
+				// not default to latest.
+				if firstMessage {
+					firstMessage = false
+					log.Info().
+						Str("Topic", respTarget.Topic).
+						Int32("Partition", respTarget.Partition).
+						Int64("Offset", int64(msg.TopicPartition.Offset)).
+						Msg("Initial commit to current offset")
+
+					comOffs, err := cons.CommitOffsets([]kafka.TopicPartition{
+						{
+							Topic:     &respTarget.Topic,
+							Partition: respTarget.Partition,
+							Offset:    msg.TopicPartition.Offset,
+						},
+					})
+					if err != nil {
+						log.Fatal().
+							Err(err).
+							Str("Topic", respTarget.Topic).
+							Int32("Partition", respTarget.Partition).
+							Int64("Offset", int64(msg.TopicPartition.Offset)).
+							Msgf("Unable to commit initial offset")
+					}
+					log.Info().
+						Str("Topic", respTarget.Topic).
+						Int32("Partition", respTarget.Partition).
+						Int64("Offset", int64(msg.TopicPartition.Offset)).
+						Msgf("Initial offset committed: %+v", comOffs)
+				}
+
 				directive := GetDirective(msg)
 				if directive == Directive_APECS_TXN {
 					traceId := GetTraceId(msg)
@@ -296,10 +331,9 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 				if err != nil {
 					log.Fatal().
 						Err(err).
-						Msgf("Unable to store offsets %s/%d/%d", respTarget.Topic, respTarget.Partition, msg.TopicPartition.Offset)
+						Msgf("Unable to store offsets %s/%d/%d", respTarget.Topic, respTarget.Partition, msg.TopicPartition.Offset+1)
 				}
 				shouldCommit = true
-
 			}
 		}
 	}
