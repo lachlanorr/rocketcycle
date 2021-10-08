@@ -346,7 +346,7 @@ func cobraRun(cmd *cobra.Command, args []string) {
 		select {
 		case <-interruptCh:
 			cancel()
-			wg.Wait()
+			// We don't do wg.Wait() to exit quickly and we are readonly
 			return
 		}
 	}

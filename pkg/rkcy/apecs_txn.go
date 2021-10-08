@@ -14,18 +14,24 @@ type rtApecsTxn struct {
 	traceParent string
 }
 
-func newApecsTxn(traceId string, assocTraceId string, rspTgt *TopicTarget, canRevert bool, steps []*ApecsTxn_Step) (*ApecsTxn, error) {
+func newApecsTxn(
+	traceId string,
+	assocTraceId string,
+	rspTgt *TopicTarget,
+	uponError UponError,
+	steps []*ApecsTxn_Step,
+) (*ApecsTxn, error) {
 	if rspTgt != nil && (rspTgt.Topic == "" || rspTgt.Partition < 0) {
 		return nil, fmt.Errorf("NewApecsTxn TraceId=%s TopicTarget=%+v: Invalid TopicTarget", traceId, rspTgt)
 	}
 
 	txn := ApecsTxn{
 		TraceId:        traceId,
-		AssocTraceId:   assocTraceId,
+		AssocTraceIds:  []string{assocTraceId},
 		ResponseTarget: rspTgt,
 		CurrentStepIdx: 0,
 		Direction:      Direction_FORWARD,
-		CanRevert:      canRevert,
+		UponError:      uponError,
 		ForwardSteps:   make([]*ApecsTxn_Step, 0, len(steps)),
 	}
 

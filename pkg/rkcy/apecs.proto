@@ -13,14 +13,14 @@ option go_package = "github.com/lachlanorr/rocketcycle/pkg/rkcy";
 message Void {}
 
 message ApecsTxn {
-    string trace_id = 1;       // uuid of txn used for tracing and reporting
-    string assoc_trace_id = 2; // req_id of associated transaction
+    string trace_id = 1; // uuid of txn used for tracing and reporting
+    repeated string assoc_trace_ids = 2; // trace_id's of associated transaction
 
     TopicTarget response_target = 3;
 
     int32 current_step_idx = 4;
     Direction direction = 5; // starts in forward, can potentially go to reverse if the transaction is reversible
-    bool can_revert = 6;     // whether or not this transaction can be rolled back.
+    UponError upon_error = 6; // how to handle errors
 
     repeated Step forward_steps = 7;  // filled upon creation with forward steps
     repeated Step reverse_steps = 8;  // upon an error in a "can_revert==true" transaction, this gets filled with the right rollback steps. Separatiing reverse from forward steps preserves the history for review of the nature of the failure.
@@ -68,6 +68,12 @@ enum System {
     STORAGE = 2;
 }
 
+enum UponError {
+    REPORT = 0;
+    REVERT = 1;
+    BAILOUT = 2;
+}
+
 message TopicTarget {
     string brokers = 1;
     string topic = 2;
@@ -96,6 +102,7 @@ enum Code {
 	UNKNOWN_COMMAND = 6;
     INVALID_ARGUMENT = 7;
     NOT_IMPLEMENTED = 8;
+    NIL_RESULT = 9;
 
     // User defined codes should be greater than RKCY_INTERNAL_MAX
     RKCY_INTERNAL_MAX_CODE = 32;

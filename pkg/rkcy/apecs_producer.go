@@ -485,11 +485,18 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	}
 	traceId := TraceIdFromTraceParent(traceParent)
 
+	var uponError UponError
+	if canRevert {
+		uponError = UponError_REVERT
+	} else {
+		uponError = UponError_REPORT
+	}
+
 	return aprod.executeTxn(
 		traceId,
 		"",
 		traceParent,
-		canRevert,
+		uponError,
 		stepsPb,
 		wg,
 	)
@@ -499,11 +506,11 @@ func (aprod *ApecsProducer) executeTxn(
 	traceId string,
 	assocTraceId string,
 	traceParent string,
-	canRevert bool,
+	uponError UponError,
 	steps []*ApecsTxn_Step,
 	wg *sync.WaitGroup,
 ) error {
-	txn, err := newApecsTxn(traceId, assocTraceId, aprod.respTarget, canRevert, steps)
+	txn, err := newApecsTxn(traceId, assocTraceId, aprod.respTarget, uponError, steps)
 	if err != nil {
 		return err
 	}

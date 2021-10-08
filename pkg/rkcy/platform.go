@@ -528,7 +528,11 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 		Msgf("Created platform admin topic: %s", adminTopic)
 
 	// At this point we are guaranteed to have a platform admin topic
-	prod, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": gSettings.AdminBrokers})
+	prod, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers":  gSettings.AdminBrokers,
+		"acks":               -1,     // acks required from all in-sync replicas
+		"message.timeout.ms": 600000, // 10 minutes
+	})
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

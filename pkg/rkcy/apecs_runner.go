@@ -109,26 +109,30 @@ func produceNextStep(
 					}
 				}
 			}
-			if len(storageStepsMap) > 0 {
-				storageSteps := make([]*ApecsTxn_Step, len(storageStepsMap))
-				i := 0
-				for _, v := range storageStepsMap {
-					storageSteps[i] = v
-					i++
-				}
+
+			// generate a distinct storage transaction with a single
+			// UPDATE storage step for every instance modified
+			for _, step := range storageStepsMap {
+				storageSteps := []*ApecsTxn_Step{step}
 				storageTraceId := NewTraceId()
-				rtxn.txn.AssocTraceId = storageTraceId
+				rtxn.txn.AssocTraceIds = append(rtxn.txn.AssocTraceIds, storageTraceId)
+
 				err := aprod.executeTxn(
 					storageTraceId,
 					rtxn.txn.TraceId,
 					rtxn.traceParent,
-					false,
+					UponError_BAILOUT,
 					storageSteps,
 					wg,
 				)
 				if err != nil {
 					produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
-					return
+					// This should be extremely rare, maybe impossible
+					// assuming we can produce at all.  Without proper
+					// storage messages going through, we are better
+					// of failing very loudly.
+					log.Fatal().
+						Msgf("produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 				}
 			}
 		}
@@ -148,7 +152,7 @@ func advanceApecsTxn(
 	offset *Offset,
 	aprod *ApecsProducer,
 	wg *sync.WaitGroup,
-) (Code, StepCommitDirective) {
+) Code {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
 	ctx, span, step := gPlatformImpl.Telem.StartStep(ctx, rtxn)
 	defer span.End()
@@ -159,22 +163,22 @@ func advanceApecsTxn(
 
 	if step.Result != nil {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
-		return Code_INTERNAL, SCD_Commit
+		return Code_INTERNAL
 	}
 
 	if step.Concern != tp.Concern {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
-		return Code_INTERNAL, SCD_Commit
+		return Code_INTERNAL
 	}
 
 	if step.System != tp.System {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
-		return Code_INTERNAL, SCD_Commit
+		return Code_INTERNAL
 	}
 
 	if step.Key == "" {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step")
-		return Code_INTERNAL, SCD_Commit
+		return Code_INTERNAL
 	}
 
 	// Grab current timestamp, which will be used in a couple places below
@@ -197,7 +201,7 @@ func advanceApecsTxn(
 				Payload:       step.Payload,
 			}
 			produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
-			return Code_OK, SCD_Commit
+			return Code_OK
 		} else {
 			inst = gInstanceCache.Get(step.Key)
 
@@ -225,24 +229,24 @@ func advanceApecsTxn(
 				if err != nil {
 					log.Error().Err(err).Msg("error in insertSteps")
 					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
-					return Code_INTERNAL, SCD_Commit
+					return Code_INTERNAL
 				}
 				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
 				if err != nil {
 					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
-					return Code_INTERNAL, SCD_Commit
+					return Code_INTERNAL
 				}
-				return Code_OK, SCD_Commit
+				return Code_OK
 			} else if inst != nil && step.Command == CREATE {
 				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
-				return Code_INTERNAL, SCD_Commit
+				return Code_INTERNAL
 			}
 		}
 	}
 
 	if step.Offset == nil {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Nil offset")
-		return Code_INTERNAL, SCD_Commit
+		return Code_INTERNAL
 	}
 
 	args := &StepArgs{
@@ -254,10 +258,10 @@ func advanceApecsTxn(
 		Offset:        step.Offset,
 	}
 
-	var scd StepCommitDirective
-	step.Result, scd = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
+	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
 
-	if scd == SCD_Bailout {
+	if (step.Result == nil || step.Result.Code != Code_OK) &&
+		rtxn.txn.UponError == UponError_BAILOUT {
 		// We'll bailout up the chain, but down here we can at least
 		// log any info we have about the result.
 		var code Code
@@ -273,14 +277,14 @@ func advanceApecsTxn(
 					Msgf("BAILOUT LogEvent: %s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
 			}
 		} else {
-			code = Code_INTERNAL
+			code = Code_NIL_RESULT
 		}
-		return code, scd
+		return code
 	}
 
 	if step.Result == nil {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
-		return step.Result.Code, scd
+		return step.Result.Code
 	}
 
 	step.Result.ProcessedTime = now
@@ -303,7 +307,7 @@ func advanceApecsTxn(
 	)
 	if step.Result.Code != Code_OK {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, step.Result.Code, false, wg, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
-		return step.Result.Code, scd
+		return step.Result.Code
 	}
 
 	// Unless explcitly set by the handler, always assume we should
@@ -318,7 +322,7 @@ func advanceApecsTxn(
 	}
 
 	produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
-	return step.Result.Code, scd
+	return step.Result.Code
 }
 
 func consumeApecsTopic(
@@ -462,13 +466,13 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							code, scd := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, wg)
+							code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, wg)
 							// Bailout is necessary when a storage step fails.
 							// Those must be retried indefinitely until success.
 							// So... we force commit the offset to current and
 							// kill ourselves, and we'll pick up where we left
 							// off when we are restarted.
-							if scd == SCD_Bailout {
+							if code != Code_OK && rtxn.txn.UponError == UponError_BAILOUT {
 								_, err := cons.CommitOffsets([]kafka.TopicPartition{
 									{
 										Topic:     &fullTopic,

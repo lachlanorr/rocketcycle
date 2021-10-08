@@ -27,13 +27,6 @@ const (
 	REFRESH = "Refresh"
 )
 
-type StepCommitDirective int
-
-const (
-	SCD_Commit  StepCommitDirective = 0
-	SCD_Bailout                     = 1
-)
-
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
 type CommandHandler func(context.Context, System, string, Direction, *StepArgs) *ApecsTxn_Step_Result
@@ -121,7 +114,7 @@ func handleCommand(
 	command string,
 	direction Direction,
 	args *StepArgs,
-) (*ApecsTxn_Step_Result, StepCommitDirective) {
+) *ApecsTxn_Step_Result {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -147,7 +140,7 @@ func handleCommand(
 				Code:     Code_OK,
 				Payload:  args.Payload,
 				Instance: args.Payload,
-			}, SCD_Commit
+			}
 		case READ:
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
@@ -155,7 +148,7 @@ func handleCommand(
 			return &ApecsTxn_Step_Result{
 				Code:    Code_OK,
 				Payload: args.Instance,
-			}, SCD_Commit
+			}
 		case DELETE:
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
@@ -163,7 +156,7 @@ func handleCommand(
 			gInstanceCache.Remove(args.Key)
 			return &ApecsTxn_Step_Result{
 				Code: Code_OK,
-			}, SCD_Commit
+			}
 		}
 	}
 
@@ -171,20 +164,10 @@ func handleCommand(
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
-		return rslt, SCD_Commit
+		return rslt
 	}
 
-	rslt := concernHandler.Handler(ctx, system, command, direction, args)
-
-	// STORAGE errors are fatal events, under no circumstances
-	// shall we commit an offset after a storage failure.
-	if system == System_STORAGE {
-		if rslt == nil || rslt.Code != Code_OK {
-			return rslt, SCD_Bailout
-		}
-	}
-
-	return rslt, SCD_Commit
+	return concernHandler.Handler(ctx, system, command, direction, args)
 }
 
 type StepArgs struct {

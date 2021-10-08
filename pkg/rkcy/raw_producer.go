@@ -35,7 +35,9 @@ func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) Prod
 	var err error
 	cp = &ChanneledProducer{Brokers: brokers}
 	cp.Prod, err = kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": brokers,
+		"bootstrap.servers":  brokers,
+		"acks":               -1,     // acks required from all in-sync replicas
+		"message.timeout.ms": 600000, // 10 minutes
 	})
 
 	if err != nil {
