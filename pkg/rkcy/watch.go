@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -67,7 +68,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("watchTopic.consume exiting, ctx.Done()")
 			return
 		default:
@@ -260,16 +261,28 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 	return jsonSer, nil
 }
 
-func watchResultTopics(ctx context.Context, adminBrokers string) {
+func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	wtMap := make(map[string]bool)
 
 	adminCh := make(chan *AdminMessage)
-	go consumeAdminTopic(ctx, adminCh, adminBrokers, gPlatformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
+	wg.Add(1)
+	go consumeAdminTopic(
+		ctx,
+		adminCh,
+		adminBrokers,
+		gPlatformName,
+		Directive_PLATFORM,
+		Directive_PLATFORM,
+		kAtLastMatch,
+		wg,
+	)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
 		case adminMsg := <-adminCh:
@@ -293,17 +306,23 @@ func cobraWatch(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	go watchResultTopics(ctx, gSettings.AdminBrokers)
-
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go watchResultTopics(ctx, gSettings.AdminBrokers, &wg)
+
 	select {
 	case <-interruptCh:
 		log.Info().
 			Msg("APECS WATCH stopped")
 		cancel()
+		wg.Wait()
 		return
 	}
 }

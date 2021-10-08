@@ -27,12 +27,14 @@ var (
 )
 
 func produceApecsTxnError(
+	ctx context.Context,
 	span trace.Span,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
 	aprod *ApecsProducer,
 	code Code,
 	logToResult bool,
+	wg *sync.WaitGroup,
 	format string,
 	args ...interface{},
 ) {
@@ -47,7 +49,7 @@ func produceApecsTxnError(
 		span.RecordError(errors.New(logMsg))
 	}
 
-	err := aprod.produceError(rtxn, step, code, logToResult, logMsg)
+	err := aprod.produceError(ctx, rtxn, step, code, logToResult, logMsg, wg)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -57,11 +59,13 @@ func produceApecsTxnError(
 }
 
 func produceNextStep(
+	ctx context.Context,
 	span trace.Span,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
 	offset *Offset,
 	aprod *ApecsProducer,
+	wg *sync.WaitGroup,
 ) {
 	if rtxn.advanceStepIdx() {
 		nextStep := rtxn.currentStep()
@@ -83,9 +87,9 @@ func produceNextStep(
 				nextStep.Offset = offset
 			}
 		}
-		err := aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
+		err := aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
 		if err != nil {
-			produceApecsTxnError(span, rtxn, nextStep, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(ctx, span, rtxn, nextStep, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
@@ -120,17 +124,18 @@ func produceNextStep(
 					rtxn.traceParent,
 					false,
 					storageSteps,
+					wg,
 				)
 				if err != nil {
-					produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+					produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 					return
 				}
 			}
 		}
 
-		err := aprod.produceComplete(rtxn)
+		err := aprod.produceComplete(ctx, rtxn, wg)
 		if err != nil {
-			produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
@@ -142,6 +147,7 @@ func advanceApecsTxn(
 	tp *TopicParts,
 	offset *Offset,
 	aprod *ApecsProducer,
+	wg *sync.WaitGroup,
 ) (Code, StepCommitDirective) {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
 	ctx, span, step := gPlatformImpl.Telem.StartStep(ctx, rtxn)
@@ -152,22 +158,22 @@ func advanceApecsTxn(
 		Msgf("Advancing ApecsTxn: %s %d %+v", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, step)
 
 	if step.Result != nil {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
 		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.Concern != tp.Concern {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
 		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.System != tp.System {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
 		return Code_INTERNAL, SCD_Commit
 	}
 
 	if step.Key == "" {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: No key in step")
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step")
 		return Code_INTERNAL, SCD_Commit
 	}
 
@@ -190,7 +196,7 @@ func advanceApecsTxn(
 				EffectiveTime: now,
 				Payload:       step.Payload,
 			}
-			produceNextStep(span, rtxn, step, offset, aprod)
+			produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
 			return Code_OK, SCD_Commit
 		} else {
 			inst = gInstanceCache.Get(step.Key)
@@ -218,24 +224,24 @@ func advanceApecsTxn(
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("error in insertSteps")
-					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
+					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
 					return Code_INTERNAL, SCD_Commit
 				}
-				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent)
+				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
 				if err != nil {
-					produceApecsTxnError(span, rtxn, nil, aprod, Code_INTERNAL, true, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 					return Code_INTERNAL, SCD_Commit
 				}
 				return Code_OK, SCD_Commit
 			} else if inst != nil && step.Command == CREATE {
-				produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
+				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
 				return Code_INTERNAL, SCD_Commit
 			}
 		}
 	}
 
 	if step.Offset == nil {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn: Nil offset")
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Nil offset")
 		return Code_INTERNAL, SCD_Commit
 	}
 
@@ -273,7 +279,7 @@ func advanceApecsTxn(
 	}
 
 	if step.Result == nil {
-		produceApecsTxnError(span, rtxn, step, aprod, Code_INTERNAL, true, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
 		return step.Result.Code, scd
 	}
 
@@ -296,7 +302,7 @@ func advanceApecsTxn(
 		attribute.String("rkcy.code", strconv.Itoa(int(step.Result.Code))),
 	)
 	if step.Result.Code != Code_OK {
-		produceApecsTxnError(span, rtxn, step, aprod, step.Result.Code, false, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, step.Result.Code, false, wg, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
 		return step.Result.Code, scd
 	}
 
@@ -311,7 +317,7 @@ func advanceApecsTxn(
 		gInstanceCache.Set(step.Key, step.Result.Instance, offset)
 	}
 
-	produceNextStep(span, rtxn, step, offset, aprod)
+	produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
 	return step.Result.Code, scd
 }
 
@@ -380,7 +386,7 @@ func consumeApecsTopic(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("consumeStorage exiting, ctx.Done()")
 			return
 		case <-commitTicker.C:
@@ -456,7 +462,7 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							code, scd := advanceApecsTxn(ctx, rtxn, tp, offset, aprod)
+							code, scd := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, wg)
 							// Bailout is necessary when a storage step fails.
 							// Those must be retried indefinitely until success.
 							// So... we force commit the offset to current and
@@ -523,8 +529,6 @@ func startApecsRunner(
 	partition int32,
 	wg *sync.WaitGroup,
 ) {
-	defer wg.Done()
-
 	tp, err := ParseFullTopicName(fullTopic)
 	if err != nil {
 		log.Fatal().

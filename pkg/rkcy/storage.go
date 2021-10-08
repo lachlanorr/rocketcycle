@@ -23,7 +23,12 @@ func cobraStorage(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -37,8 +42,6 @@ func cobraStorage(cmd *cobra.Command, args []string) {
 		&wg,
 	)
 
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
 		log.Info().

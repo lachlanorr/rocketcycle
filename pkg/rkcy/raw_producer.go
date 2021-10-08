@@ -5,6 +5,7 @@
 package rkcy
 
 import (
+	"context"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -22,7 +23,7 @@ type ChanneledProducer struct {
 var gProducers = make(map[string]*ChanneledProducer)
 var gProducersMtx = &sync.Mutex{}
 
-func getProducerCh(brokers string) ProducerCh {
+func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) ProducerCh {
 	gProducersMtx.Lock()
 	defer gProducersMtx.Unlock()
 
@@ -70,26 +71,37 @@ func getProducerCh(brokers string) ProducerCh {
 	cp.Ch = make(ProducerCh)
 	gProducers[brokers] = cp
 
-	go runProducer(cp)
+	wg.Add(1)
+	go runProducer(ctx, cp, wg)
 	return cp.Ch
 }
 
 func closeProducer(cp *ChanneledProducer) {
-	log.Info().Msgf("Closing producer for %s", cp.Brokers)
+	log.Warn().
+		Str("Brokers", cp.Brokers).
+		Msg("Closing producer")
 	if cp.Ch != nil {
 		close(cp.Ch)
 	}
 	if cp.Prod != nil {
-		cp.Prod.Flush(5 * 1000)
+		cp.Prod.Flush(60 * 1000)
 		cp.Prod.Close()
 	}
+	log.Warn().
+		Str("Brokers", cp.Brokers).
+		Msg("Closed producer")
 }
 
-func runProducer(cp *ChanneledProducer) {
+func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup) {
+	defer wg.Done()
 	defer closeProducer(cp)
 
 	for {
 		select {
+		case <-ctx.Done():
+			log.Warn().
+				Msg("runProducer exiting, ctx.Done()")
+			return
 		case msg := <-cp.Ch:
 			err := cp.Prod.Produce(msg, nil)
 			if err != nil {

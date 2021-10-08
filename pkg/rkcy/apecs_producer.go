@@ -91,6 +91,7 @@ func (aprod *ApecsProducer) Close() {
 func (aprod *ApecsProducer) getProducer(
 	concernName string,
 	topicName StandardTopicName,
+	wg *sync.WaitGroup,
 ) (*Producer, error) {
 	aprod.producersMu.Lock()
 	defer aprod.producersMu.Unlock()
@@ -102,7 +103,7 @@ func (aprod *ApecsProducer) getProducer(
 	}
 	pdc, ok := concernProds[topicName]
 	if !ok {
-		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, concernName, string(topicName))
+		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, concernName, string(topicName), wg)
 
 		if pdc == nil {
 			return nil, fmt.Errorf(
@@ -118,7 +119,11 @@ func (aprod *ApecsProducer) getProducer(
 	return pdc, nil
 }
 
-func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
+func (aprod *ApecsProducer) produceResponse(
+	ctx context.Context,
+	rtxn *rtApecsTxn,
+	wg *sync.WaitGroup,
+) error {
 	if rtxn.txn.ResponseTarget == nil {
 		return nil
 	}
@@ -130,7 +135,7 @@ func (aprod *ApecsProducer) produceResponse(rtxn *rtApecsTxn) error {
 		return err
 	}
 
-	prodCh := getProducerCh(respTgt.Brokers)
+	prodCh := getProducerCh(ctx, respTgt.Brokers, wg)
 	prodCh <- kMsg
 
 	return nil
@@ -210,7 +215,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("consumeResponseTopic exiting, ctx.Done()")
 			return
 		case <-cleanupTicker.C:
@@ -383,6 +388,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 	payload proto.Message,
 	steps []Step,
 	timeout time.Duration,
+	wg *sync.WaitGroup,
 ) (*ApecsTxn_Step_Result, error) {
 
 	ctx, span := Telem().StartFunc(ctx)
@@ -406,6 +412,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		canRevert,
 		payload,
 		steps,
+		wg,
 	)
 
 	if err != nil {
@@ -446,6 +453,7 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	canRevert bool,
 	payload proto.Message,
 	steps []Step,
+	wg *sync.WaitGroup,
 ) error {
 	stepsPb := make([]*ApecsTxn_Step, len(steps))
 	for i, step := range steps {
@@ -483,6 +491,7 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 		traceParent,
 		canRevert,
 		stepsPb,
+		wg,
 	)
 }
 
@@ -492,13 +501,14 @@ func (aprod *ApecsProducer) executeTxn(
 	traceParent string,
 	canRevert bool,
 	steps []*ApecsTxn_Step,
+	wg *sync.WaitGroup,
 ) error {
 	txn, err := newApecsTxn(traceId, assocTraceId, aprod.respTarget, canRevert, steps)
 	if err != nil {
 		return err
 	}
 
-	return aprod.produceCurrentStep(txn, traceParent)
+	return aprod.produceCurrentStep(txn, traceParent, wg)
 }
 
 var gSystemToTopic = map[System]StandardTopicName{
@@ -506,7 +516,15 @@ var gSystemToTopic = map[System]StandardTopicName{
 	System_STORAGE: STORAGE,
 }
 
-func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, code Code, logToResult bool, msg string) error {
+func (aprod *ApecsProducer) produceError(
+	ctx context.Context,
+	rtxn *rtApecsTxn,
+	step *ApecsTxn_Step,
+	code Code,
+	logToResult bool,
+	msg string,
+	wg *sync.WaitGroup,
+) error {
 	if step == nil {
 		step = rtxn.firstForwardStep()
 		if step == nil {
@@ -534,7 +552,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 		)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, ERROR)
+	prd, err := aprod.getProducer(step.Concern, ERROR, wg)
 	if err != nil {
 		return err
 	}
@@ -546,7 +564,7 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 
 	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(rtxn)
+	err = aprod.produceResponse(ctx, rtxn, wg)
 	if err != nil {
 		return err
 	}
@@ -554,7 +572,11 @@ func (aprod *ApecsProducer) produceError(rtxn *rtApecsTxn, step *ApecsTxn_Step, 
 	return nil
 }
 
-func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
+func (aprod *ApecsProducer) produceComplete(
+	ctx context.Context,
+	rtxn *rtApecsTxn,
+	wg *sync.WaitGroup,
+) error {
 	// LORRNOTE 2021-03-21: Complete messages to to the concern of the
 	// first step, which I think makes sense in most cases
 	step := rtxn.firstForwardStep()
@@ -562,7 +584,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 		return fmt.Errorf("ApecsProducer.complete TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, COMPLETE)
+	prd, err := aprod.getProducer(step.Concern, COMPLETE, wg)
 	if err != nil {
 		return err
 	}
@@ -574,7 +596,7 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 
 	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(rtxn)
+	err = aprod.produceResponse(ctx, rtxn, wg)
 	if err != nil {
 		return err
 	}
@@ -582,7 +604,11 @@ func (aprod *ApecsProducer) produceComplete(rtxn *rtApecsTxn) error {
 	return nil
 }
 
-func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn, traceParent string) error {
+func (aprod *ApecsProducer) produceCurrentStep(
+	txn *ApecsTxn,
+	traceParent string,
+	wg *sync.WaitGroup,
+) error {
 	rtxn, err := newRtApecsTxn(txn, traceParent)
 	if err != nil {
 		return err
@@ -596,7 +622,7 @@ func (aprod *ApecsProducer) produceCurrentStep(txn *ApecsTxn, traceParent string
 		return fmt.Errorf("ApecsProducer.Process TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
 	}
 
-	prd, err = aprod.getProducer(step.Concern, topicName)
+	prd, err = aprod.getProducer(step.Concern, topicName, wg)
 	if err != nil {
 		return err
 	}

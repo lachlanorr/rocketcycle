@@ -8,6 +8,7 @@ import (
 	"context"
 	"hash"
 	"hash/fnv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -77,6 +78,7 @@ func NewProducer(
 	platformName string,
 	concernName string,
 	topicName string,
+	wg *sync.WaitGroup,
 ) *Producer {
 	prod := Producer{
 		id: uuid.NewString(),
@@ -96,19 +98,33 @@ func NewProducer(
 	prod.produceCh = make(chan *message)
 
 	prod.adminTopic = AdminTopic(platformName)
-	prod.adminProdCh = getProducerCh(adminBrokers)
+	prod.adminProdCh = getProducerCh(ctx, adminBrokers, wg)
 
-	go consumeAdminTopic(ctx, prod.adminCh, adminBrokers, platformName, Directive_PLATFORM, Directive_PLATFORM, kAtLastMatch)
+	wg.Add(1)
+	go consumeAdminTopic(
+		ctx,
+		prod.adminCh,
+		adminBrokers,
+		platformName,
+		Directive_PLATFORM,
+		Directive_PLATFORM,
+		kAtLastMatch,
+		wg,
+	)
 
 	adminMsg := <-prod.adminCh
-	prod.updatePlatform(adminMsg.NewRtPlat)
+	prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
 
-	go prod.run(ctx)
+	go prod.run(ctx, wg)
 
 	return &prod
 }
 
-func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
+func (prod *Producer) updatePlatform(
+	ctx context.Context,
+	rtPlat *rtPlatform,
+	wg *sync.WaitGroup,
+) {
 	var ok bool
 	prod.concern, ok = rtPlat.Concerns[prod.concernName]
 	if !ok {
@@ -130,7 +146,7 @@ func (prod *Producer) updatePlatform(rtPlat *rtPlatform) {
 	// update producer if necessary
 	if prod.brokers != prod.topics.CurrentCluster.Brokers {
 		prod.brokers = prod.topics.CurrentCluster.Brokers
-		prod.prodCh = getProducerCh(prod.brokers)
+		prod.prodCh = getProducerCh(ctx, prod.brokers, wg)
 		prod.slog = prod.slog.With().
 			Str("Brokers", prod.brokers).
 			Logger()
@@ -167,7 +183,7 @@ func (prod *Producer) Close() {
 	prod.doneCh <- struct{}{}
 }
 
-func (prod *Producer) run(ctx context.Context) {
+func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 	pingAdminTicker := time.NewTicker(gAdminPingInterval)
 	pingMsg, err := kafkaMessage(
 		&prod.adminTopic,
@@ -215,7 +231,7 @@ func (prod *Producer) run(ctx context.Context) {
 				log.Info().Msgf("pause produce %+v", msg)
 				prod.adminProdCh <- msg
 			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(adminMsg.NewRtPlat)
+				prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
 			case msg := <-prod.produceCh:
 				if prod.prodCh == nil {
 					prod.slog.Error().
@@ -252,7 +268,7 @@ func (prod *Producer) run(ctx context.Context) {
 			case paused = <-prod.pauseCh:
 				continue
 			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(adminMsg.NewRtPlat)
+				prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
 			}
 		}
 	}

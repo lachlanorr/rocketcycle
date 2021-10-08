@@ -130,18 +130,28 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 		Str("GitCommit", version.GitCommit).
 		Msg("admin server started")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
 
 	gProducerTracker = NewProducerTracker(gPlatformName)
 
-	go managePlatform(ctx, gPlatformName)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go managePlatform(ctx, gPlatformName, &wg)
 	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
 
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
+		log.Warn().
+			Msg("Admin server stopped")
+		cancel()
+		wg.Wait()
 		return
 	}
 }
@@ -489,11 +499,12 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(ctx context.Context, platformName string) {
+func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup) {
 	adminTopic := AdminTopic(platformName)
-	adminProdCh := getProducerCh(gSettings.AdminBrokers)
+	adminProdCh := getProducerCh(ctx, gSettings.AdminBrokers, wg)
 
 	adminCh := make(chan *AdminMessage)
+	wg.Add(1)
 	go consumeAdminTopic(
 		ctx,
 		adminCh,
@@ -502,6 +513,7 @@ func managePlatform(ctx context.Context, platformName string) {
 		Directive_PLATFORM|Directive_PRODUCER_STATUS,
 		Directive_PLATFORM,
 		kAtLastMatch,
+		wg,
 	)
 
 	republishTicker := time.NewTicker(gPlatformRepublishInterval)
@@ -512,7 +524,7 @@ func managePlatform(ctx context.Context, platformName string) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("managePlatform exiting, ctx.Done()")
 			return
 		case <-republishTicker.C:

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -326,7 +327,10 @@ func consumeAdminTopic(
 	match Directive,
 	startMatch Directive,
 	startMatchLoc MatchLoc,
+	wg *sync.WaitGroup,
 ) {
+	defer wg.Done()
+
 	platformTopic := AdminTopic(platformName)
 	groupName := uncommittedGroupName(platformTopic, 0)
 
@@ -360,7 +364,15 @@ func consumeAdminTopic(
 			Msg("Failed to NewConsumer")
 		return
 	}
-	defer cons.Close()
+	defer func() {
+		log.Warn().
+			Str("Topic", platformTopic).
+			Msgf("Closing kafka consumer")
+		cons.Close()
+		log.Warn().
+			Str("Topic", platformTopic).
+			Msgf("Closed kafka consumer")
+	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
@@ -382,7 +394,7 @@ func consumeAdminTopic(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info().
+			log.Warn().
 				Msg("consumeAdminTopic exiting, ctx.Done()")
 			return
 		default:
@@ -523,7 +535,15 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 			Err(err).
 			Msg("Failed to NewProducer")
 	}
-	defer prod.Close()
+	defer func() {
+		log.Warn().
+			Str("Brokers", gSettings.AdminBrokers).
+			Msg("Closing kafka producer")
+		prod.Close()
+		log.Warn().
+			Str("Brokers", gSettings.AdminBrokers).
+			Msg("Closed kafka producer")
+	}()
 
 	msg, err := kafkaMessage(&adminTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
 	if err != nil {

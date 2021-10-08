@@ -43,6 +43,8 @@ type server struct {
 
 	httpAddr string
 	grpcAddr string
+
+	wg *sync.WaitGroup
 }
 
 func (srv server) HttpAddr() string {
@@ -81,6 +83,7 @@ func processCrudRequest(
 	command string,
 	key string,
 	payload proto.Message,
+	wg *sync.WaitGroup,
 ) (*rkcy.ApecsTxn_Step_Result, error) {
 
 	ctx, span := rkcy.Telem().StartFunc(ctx)
@@ -114,6 +117,7 @@ func processCrudRequest(
 		payload,
 		steps,
 		time.Duration(settings.TimeoutSecs)*time.Second,
+		wg,
 	)
 	if err != nil {
 		recordError(span, err)
@@ -132,6 +136,7 @@ func processCrudRequestPlayer(
 	traceId string,
 	command string,
 	plyr *concerns.Player,
+	wg *sync.WaitGroup,
 ) (*concerns.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
@@ -151,7 +156,7 @@ func processCrudRequestPlayer(
 		}
 	}
 
-	result, err := processCrudRequest(ctx, traceId, consts.Player, command, plyr.Id, plyr)
+	result, err := processCrudRequest(ctx, traceId, consts.Player, command, plyr.Id, plyr, wg)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -180,6 +185,7 @@ func processCrudRequestCharacter(
 	traceId string,
 	command string,
 	char *concerns.Character,
+	wg *sync.WaitGroup,
 ) (*concerns.Character, error) {
 
 	ctx, span := rkcy.Telem().StartFunc(ctx)
@@ -200,7 +206,7 @@ func processCrudRequestCharacter(
 		}
 	}
 
-	result, err := processCrudRequest(ctx, traceId, consts.Character, command, char.Id, char)
+	result, err := processCrudRequest(ctx, traceId, consts.Character, command, char.Id, char, wg)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -224,63 +230,63 @@ func processCrudRequestCharacter(
 	return characterResult, nil
 }
 
-func (server) ReadPlayer(ctx context.Context, req *RpgRequest) (*concerns.Player, error) {
+func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &concerns.Player{Id: req.Id})
+	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &concerns.Player{Id: req.Id}, srv.wg)
 }
 
-func (server) CreatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
+func (srv server) CreatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.CREATE, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.CREATE, plyr, srv.wg)
 }
 
-func (server) UpdatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
+func (srv server) UpdatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.UPDATE, plyr)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.UPDATE, plyr, srv.wg)
 }
 
-func (server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
+func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.DELETE, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.DELETE, req.Id, nil, srv.wg)
 	if err != nil {
 		return nil, err
 	}
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) ReadCharacter(ctx context.Context, req *RpgRequest) (*concerns.Character, error) {
+func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &concerns.Character{Id: req.Id})
+	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &concerns.Character{Id: req.Id}, srv.wg)
 }
 
-func (server) CreateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
+func (srv server) CreateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.CREATE, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.CREATE, char, srv.wg)
 }
 
-func (server) UpdateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
+func (srv server) UpdateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.UPDATE, char)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.UPDATE, char, srv.wg)
 }
 
-func (server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
+func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.DELETE, req.Id, nil)
+	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.DELETE, req.Id, nil, srv.wg)
 	if err != nil {
 		return nil, err
 	}
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*concerns.Character, error) {
+func (srv server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*concerns.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 	traceId := span.SpanContext().TraceID().String()
@@ -297,6 +303,7 @@ func (server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*
 			},
 		},
 		time.Duration(settings.TimeoutSecs)*time.Second,
+		srv.wg,
 	)
 	if err != nil {
 		recordError(span, err)
@@ -316,7 +323,7 @@ func (server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*
 	return characterResult, nil
 }
 
-func (server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, error) {
+func (srv server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 	traceId := span.SpanContext().TraceID().String()
@@ -352,6 +359,7 @@ func (server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, e
 			},
 		},
 		time.Duration(settings.TimeoutSecs)*time.Second,
+		srv.wg,
 	)
 
 	if err != nil {
@@ -372,8 +380,18 @@ func (server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, e
 	return &rkcy.Void{}, nil
 }
 
-func serve(ctx context.Context, httpAddr string, grpcAddr string, platformName string) {
-	srv := server{httpAddr: httpAddr, grpcAddr: grpcAddr}
+func serve(
+	ctx context.Context,
+	httpAddr string,
+	grpcAddr string,
+	platformName string,
+	wg *sync.WaitGroup,
+) {
+	srv := server{
+		httpAddr: httpAddr,
+		grpcAddr: grpcAddr,
+		wg:       wg,
+	}
 	rkcy.ServeGrpcGateway(ctx, srv)
 }
 
@@ -384,7 +402,12 @@ func cobraServe(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
 
 	var wg sync.WaitGroup
 	aprod = rkcy.NewApecsProducer(
@@ -404,10 +427,8 @@ func cobraServe(cmd *cobra.Command, args []string) {
 			Msg("Failed to NewApecsProducer")
 	}
 
-	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName())
+	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName(), &wg)
 
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
 	select {
 	case <-interruptCh:
 		log.Info().

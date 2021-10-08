@@ -207,7 +207,9 @@ func updateRunning(
 	}
 }
 
-func printer(ctx context.Context, printCh <-chan string) {
+func printer(ctx context.Context, printCh <-chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -285,6 +287,7 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 
 	adminCh := make(chan *AdminMessage)
 
+	wg.Add(1)
 	go consumeAdminTopic(
 		ctx,
 		adminCh,
@@ -293,12 +296,14 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 		Directive_CONSUMER,
 		Directive_CONSUMER,
 		kPastLastMatch,
+		wg,
 	)
 
 	running := map[string]*rtProgram{}
 
 	printCh := make(chan string, 100)
-	go printer(ctx, printCh)
+	wg.Add(1)
+	go printer(ctx, printCh, wg)
 	startAdminServer(ctx, running, printCh)
 	startWatch(ctx, running, printCh)
 
