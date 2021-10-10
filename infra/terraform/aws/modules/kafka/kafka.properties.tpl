@@ -30,6 +30,8 @@ num.network.threads=3
 # The number of threads that the server uses for processing requests, which may include disk I/O
 num.io.threads=8
 
+min.insync.replicas=${ min(2, length(kafka_internal_ips)) }
+
 # The send buffer (SO_SNDBUF) used by the socket server
 socket.send.buffer.bytes=102400
 
@@ -57,8 +59,8 @@ num.recovery.threads.per.data.dir=1
 ############################# Internal Topic Settings  #############################
 # The replication factor for the group metadata internal topics "__consumer_offsets" and "__transaction_state"
 # For anything other than development testing, a value greater than 1 is recommended to ensure availability such as 3.
-offsets.topic.replication.factor=1
-transaction.state.log.replication.factor=1
+offsets.topic.replication.factor=${ min(3, length(kafka_internal_ips)) }
+transaction.state.log.replication.factor=${ min(3, length(kafka_internal_ips)) }
 transaction.state.log.min.isr=1
 
 ############################# Log Flush Policy #############################
