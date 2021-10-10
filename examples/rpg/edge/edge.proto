@@ -10,8 +10,7 @@ option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/edge";
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
-import "pkg/rkcy/apecs.proto";
-
+import "rkcy/apecs.proto";
 import "examples/rpg/concerns/player.proto";
 import "examples/rpg/concerns/character.proto";
 
