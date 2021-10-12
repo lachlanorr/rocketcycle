@@ -47,7 +47,7 @@ protoc-gen-rkcy: ## compile rkcy mgmt app
 	-o $(BUILD_BIN_DIR)/protoc-gen-rkcy \
 	./cmd/protoc-gen-rkcy
 
-.PHONY: examples
+.PHONY: examples proto
 examples: rpg ## compile rpg example
 
 .PHONY: rpg

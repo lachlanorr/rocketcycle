@@ -21,13 +21,33 @@ import (
 //go:embed templates
 var templates embed.FS
 
-type concernInfo struct {
-	Name            string
+type parseResult struct {
 	Package         string
-	Message         *descriptorpb.DescriptorProto
-	Service         *descriptorpb.ServiceDescriptorProto
-	Commands        []*commandInfo
+	PbPackage       string
 	LeadingComments string
+
+	MessageMap     map[string]*messageInfo
+	Messages       []*messageInfo
+	Configs        []*configInfo
+	Concerns       []*concernInfo
+	PrimaryConcern *concernInfo
+}
+
+type messageInfo struct {
+	Name    string
+	Message *descriptorpb.DescriptorProto
+}
+
+type configInfo struct {
+	Name    string
+	Message *descriptorpb.DescriptorProto
+}
+
+type concernInfo struct {
+	Name     string
+	Message  *descriptorpb.DescriptorProto
+	Service  *descriptorpb.ServiceDescriptorProto
+	Commands []*commandInfo
 }
 
 type commandInfo struct {
@@ -38,69 +58,123 @@ type commandInfo struct {
 	OutputType string
 }
 
-func findConcern(fdp *descriptorpb.FileDescriptorProto) (*concernInfo, error) {
+func extractMessages(pbMsg *descriptorpb.DescriptorProto, parent string) []*messageInfo {
+	var name string
+	if parent != "" {
+		name = fmt.Sprintf("%s_%s", parent, *pbMsg.Name)
+	} else {
+		name = *pbMsg.Name
+	}
 
-	ci := concernInfo{Commands: make([]*commandInfo, 0)}
+	msg := &messageInfo{
+		Name:    name,
+		Message: pbMsg,
+	}
+	msgs := []*messageInfo{msg}
 
-	typePrefix := "." + *fdp.Package + "."
+	for _, nested := range pbMsg.NestedType {
+		msgs = append(msgs, extractMessages(nested, name)...)
+	}
+
+	return msgs
+}
+
+func parseDescriptor(fdp *descriptorpb.FileDescriptorProto, rkcyPackage string) (*parseResult, error) {
+	parseRes := &parseResult{
+		MessageMap: make(map[string]*messageInfo),
+	}
+
+	typePrefix := *fdp.Package + "."
 	packageParts := strings.Split(*fdp.Package, ".")
-	ci.Package = packageParts[len(packageParts)-1]
 
-	for _, svc := range fdp.Service {
-		if strings.HasSuffix(*svc.Name, "Commands") {
-			ci.Service = svc
-			break
-		}
+	if rkcyPackage != "" {
+		parseRes.Package = rkcyPackage
+	} else {
+		parseRes.Package = packageParts[len(packageParts)-1]
 	}
-
-	if ci.Service == nil {
-		return nil, nil
-	}
-
-	ci.Name = strings.TrimSuffix(*ci.Service.Name, "Commands")
-
-	for _, msg := range fdp.MessageType {
-		if *msg.Name == ci.Name {
-			ci.Message = msg
-			break
-		}
-	}
-
-	if ci.Message == nil {
-		return nil, fmt.Errorf("No Concern Message type matches %sCommands service", *ci.Message.Name)
-	}
+	parseRes.PbPackage = *fdp.Options.GoPackage
 
 	for _, loc := range fdp.SourceCodeInfo.Location {
 		if len(loc.LeadingDetachedComments) > 0 {
 			for _, cmt := range loc.LeadingDetachedComments {
-				ci.LeadingComments += "//" + strings.Replace(strings.TrimRight(cmt, "\n"), "\n", "\n//", -1)
+				parseRes.LeadingComments += "//" + strings.Replace(strings.TrimRight(cmt, "\n"), "\n", "\n//", -1)
 			}
 		}
 	}
 
-	for _, method := range ci.Service.Method {
-		cmd := commandInfo{}
+	// find and cleanup messages
+	for _, pbMsg := range fdp.MessageType {
+		parseRes.Messages = append(parseRes.Messages, extractMessages(pbMsg, "")...)
 
-		cmd.Name = *method.Name
-
-		if *method.InputType != ".rkcy.Void" {
-			cmd.HasInput = true
-			cmd.InputType = strings.TrimPrefix(*method.InputType, typePrefix)
-		} else {
-			cmd.HasInput = false
-		}
-
-		if *method.OutputType != ".rkcy.Void" {
-			cmd.HasOutput = true
-			cmd.OutputType = strings.TrimPrefix(*method.OutputType, typePrefix)
-		} else {
-			cmd.HasOutput = false
-		}
-
-		ci.Commands = append(ci.Commands, &cmd)
+		// TODO: add config if this is a config message
 	}
 
-	return &ci, nil
+	for _, msg := range parseRes.Messages {
+		parseRes.MessageMap[msg.Name] = msg
+	}
+
+	// find and cleanup concerns
+	for _, pbSvc := range fdp.Service {
+		if strings.HasSuffix(*pbSvc.Name, "Commands") {
+			cncName := strings.TrimSuffix(*pbSvc.Name, "Commands")
+
+			msg, ok := parseRes.MessageMap[cncName]
+			if !ok {
+				return nil, fmt.Errorf("No matching message for concern commands: %s", *pbSvc.Name)
+			}
+			cnc := &concernInfo{
+				Name:    cncName,
+				Message: msg.Message,
+				Service: pbSvc,
+			}
+
+			for _, method := range cnc.Service.Method {
+				cmd := &commandInfo{}
+
+				cmd.Name = *method.Name
+
+				if *method.InputType != ".rkcy.Void" {
+					cmd.HasInput = true
+					cmd.InputType = strings.TrimPrefix(*method.InputType, ".")
+					cmd.InputType = strings.TrimPrefix(cmd.InputType, typePrefix)
+				} else {
+					cmd.HasInput = false
+				}
+
+				if *method.OutputType != ".rkcy.Void" {
+					cmd.HasOutput = true
+					cmd.OutputType = strings.TrimPrefix(*method.OutputType, ".")
+					cmd.OutputType = strings.TrimPrefix(cmd.OutputType, typePrefix)
+				} else {
+					cmd.HasOutput = false
+				}
+
+				cnc.Commands = append(cnc.Commands, cmd)
+			}
+
+			parseRes.Concerns = append(parseRes.Concerns, cnc)
+			if parseRes.PrimaryConcern == nil {
+				parseRes.PrimaryConcern = cnc
+			}
+		}
+	}
+
+	return parseRes, nil
+}
+
+func parseParameters(params *string) map[string]string {
+	paramMap := make(map[string]string)
+	if params != nil {
+		for _, param := range strings.Split(*params, ",") {
+			parts := strings.SplitN(param, "=", 2)
+			if len(parts) == 1 {
+				paramMap[param] = ""
+			} else {
+				paramMap[parts[0]] = parts[1]
+			}
+		}
+	}
+	return paramMap
 }
 
 func main() {
@@ -113,6 +187,12 @@ func main() {
 	err = proto.Unmarshal(reqBytes, req)
 	if err != nil {
 		panic(err)
+	}
+
+	params := parseParameters(req.Parameter)
+	rkcyPackage := ""
+	if paramPackage, ok := params["package"]; ok {
+		rkcyPackage = paramPackage
 	}
 
 	rkcyTmplContent, err := templates.ReadFile("templates/rkcy.go.tmpl")
@@ -130,17 +210,20 @@ func main() {
 	//os.Stderr.Write([]byte(reqJson))
 
 	for _, fileToGen := range req.ProtoFile {
-		ci, err := findConcern(fileToGen)
+		parseRes, err := parseDescriptor(fileToGen, rkcyPackage)
 		if err != nil {
 			panic(err)
 		}
-		if ci != nil {
+		if len(parseRes.Concerns) > 1 {
+			panic(fmt.Errorf("More than one concern defined in same file"))
+		}
+		if len(parseRes.Concerns) > 0 {
 			mdFile := plugin.CodeGeneratorResponse_File{}
 			name := strings.Replace(*fileToGen.Name, ".proto", ".rkcy.go", -1)
 			mdFile.Name = &name
 
 			var contentBld strings.Builder
-			err = rkcyTmpl.Execute(&contentBld, ci)
+			err = rkcyTmpl.Execute(&contentBld, parseRes)
 			if err != nil {
 				panic(err)
 			}

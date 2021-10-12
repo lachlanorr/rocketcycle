@@ -2,6 +2,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+package concerns
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+)
+
 /*
 // Implement the following functions to enable this concern:
 
@@ -13,6 +26,10 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
+
+// -----------------------------------------------------------------------------
+// Concern Player
+// -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
@@ -79,19 +96,6 @@ func (inst *Player) ValidateUpdate(ctx context.Context, payload *Player) (*Playe
 // PROCESS Command Handlers (END)
 // -----------------------------------------------------------------------------
 */
-
-package concerns
-
-import (
-	"bytes"
-	"context"
-	"fmt"
-
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-)
 
 func (*Player) Concern() string {
 	return "Player"
@@ -412,3 +416,6 @@ func init() {
 		},
 	)
 }
+// -----------------------------------------------------------------------------
+// Concern Player END
+// -----------------------------------------------------------------------------
