@@ -12,6 +12,12 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
+{{- if gt (len .Configs) 0 }}
+{{ range $config := .Configs }}
+// TODO: Config stuff for {{ $config.Name }}
+{{- end }}
+{{- end }}
+{{- if gt (len .Concerns) 0 }}
 
 /*
 // Implement the following functions to enable this concern:
@@ -23,7 +29,6 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
-
 {{ range $concern := .Concerns }}
 // -----------------------------------------------------------------------------
 // Concern {{ .Name }}
@@ -66,7 +71,6 @@ func (inst *{{ $concern.Name }}) Delete(ctx context.Context, key string, offset 
 // STORAGE CRUD Handlers (END)
 // -----------------------------------------------------------------------------
 
-
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers
 // -----------------------------------------------------------------------------
@@ -86,7 +90,6 @@ func (inst *{{ $concern.Name }}) ValidateUpdate(ctx context.Context, payload *{{
 // PROCESS Standard Handlers (END)
 // -----------------------------------------------------------------------------
 
-
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers
 // -----------------------------------------------------------------------------
@@ -99,8 +102,15 @@ func (inst *{{ $concern.Name }}) {{ .Name }}(ctx context.Context{{ if .HasInput 
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers (END)
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Concern {{ .Name }} (END)
+// -----------------------------------------------------------------------------
 */
-
+{{- end }}
+{{ range $concern := .Concerns }}
+// -----------------------------------------------------------------------------
+// Concern {{ .Name }}
+// -----------------------------------------------------------------------------
 func (*{{ $concern.Name }}) Concern() string {
 	return "{{ $concern.Name }}"
 }
@@ -491,3 +501,4 @@ func init() {
 // Concern {{ .Name }} END
 // -----------------------------------------------------------------------------
 {{- end }}
+{{- end }}{{/* if gt (len .Concerns) 0 */}}

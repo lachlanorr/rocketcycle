@@ -16,6 +16,8 @@ import (
 	//"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
 //go:embed templates
@@ -25,12 +27,12 @@ type parseResult struct {
 	Package         string
 	PbPackage       string
 	LeadingComments string
+	ShouldGenerate  bool
 
-	MessageMap     map[string]*messageInfo
-	Messages       []*messageInfo
-	Configs        []*configInfo
-	Concerns       []*concernInfo
-	PrimaryConcern *concernInfo
+	MessageMap map[string]*messageInfo
+	Messages   []*messageInfo
+	Configs    []*configInfo
+	Concerns   []*concernInfo
 }
 
 type messageInfo struct {
@@ -106,7 +108,15 @@ func parseDescriptor(fdp *descriptorpb.FileDescriptorProto, rkcyPackage string) 
 	for _, pbMsg := range fdp.MessageType {
 		parseRes.Messages = append(parseRes.Messages, extractMessages(pbMsg, "")...)
 
-		// TODO: add config if this is a config message
+		is_config := proto.GetExtension(pbMsg.Options, rkcy.E_Config).(bool)
+		if is_config {
+			conf := &configInfo{
+				Name:    *pbMsg.Name,
+				Message: pbMsg,
+			}
+			parseRes.Configs = append(parseRes.Configs, conf)
+			parseRes.ShouldGenerate = true
+		}
 	}
 
 	for _, msg := range parseRes.Messages {
@@ -153,9 +163,7 @@ func parseDescriptor(fdp *descriptorpb.FileDescriptorProto, rkcyPackage string) 
 			}
 
 			parseRes.Concerns = append(parseRes.Concerns, cnc)
-			if parseRes.PrimaryConcern == nil {
-				parseRes.PrimaryConcern = cnc
-			}
+			parseRes.ShouldGenerate = true
 		}
 	}
 
@@ -214,10 +222,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if len(parseRes.Concerns) > 1 {
-			panic(fmt.Errorf("More than one concern defined in same file"))
-		}
-		if len(parseRes.Concerns) > 0 {
+		if parseRes.ShouldGenerate {
 			mdFile := plugin.CodeGeneratorResponse_File{}
 			name := strings.Replace(*fileToGen.Name, ".proto", ".rkcy.go", -1)
 			mdFile.Name = &name
