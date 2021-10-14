@@ -59,6 +59,7 @@ module "kafka" {
   vpc = module.network.vpc
   subnet_app = module.network.subnet_app
   bastion_ips = module.network.bastion_ips
+  availability_zones = module.network.availability_zones
   public = var.public
 }
 
@@ -222,6 +223,7 @@ module "elasticsearch" {
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
   subnet_storage = module.network.subnet_storage
+  availability_zones = module.network.availability_zones
   bastion_ips = module.network.bastion_ips
 }
 

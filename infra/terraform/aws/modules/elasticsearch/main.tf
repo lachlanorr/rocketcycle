@@ -34,6 +34,10 @@ variable "bastion_ips" {
   type = list
 }
 
+variable "availability_zones" {
+  type = list
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -66,6 +70,7 @@ resource "aws_key_pair" "elasticsearch" {
 }
 
 locals {
+  elasticsearch_racks = [for i in range(var.elasticsearch_count) : "${var.availability_zones[i % var.elasticsearch_count]}"]
   elasticsearch_ips = [for i in range(var.elasticsearch_count) : "${cidrhost(local.sn_cidrs[i], 92)}"]
   elasticsearch_nodes = [for i in range(var.elasticsearch_count) : "master-${i}"]
 }
@@ -213,6 +218,7 @@ EOF
         idx = count.index
         elasticsearch_ips = local.elasticsearch_ips
         elasticsearch_nodes = local.elasticsearch_nodes
+        elasticsearch_racks = local.elasticsearch_racks
       })
     destination = "/home/ubuntu/elasticsearch.yml"
   }

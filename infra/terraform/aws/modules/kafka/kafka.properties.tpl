@@ -4,6 +4,7 @@
 
 # The id of the broker. This must be set to a unique integer for each broker.
 broker.id=${idx}
+broker.rack=${kafka_racks[idx]}
 
 ############################# Socket Server Settings #############################
 

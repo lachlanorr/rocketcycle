@@ -38,6 +38,10 @@ variable "bastion_ips" {
   type = list
 }
 
+variable "availability_zones" {
+  type = list
+}
+
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
@@ -286,6 +290,7 @@ EOF
 # Brokers
 #-------------------------------------------------------------------------------
 locals {
+  kafka_racks = [for i in range(var.kafka_count) : "${var.availability_zones[i % var.kafka_count]}"]
   kafka_internal_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
   kafka_internal_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"]
   kafka_external_ips = aws_eip.kafka.*.public_ip
@@ -448,6 +453,7 @@ EOF
       "${path.module}/kafka.properties.tpl",
       {
         idx = count.index,
+        kafka_racks = local.kafka_racks,
         kafka_internal_ips = local.kafka_internal_ips,
         kafka_internal_hosts = local.kafka_internal_hosts,
         kafka_external_hosts = local.kafka_external_hosts,

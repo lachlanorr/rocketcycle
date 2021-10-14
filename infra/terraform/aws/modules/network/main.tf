@@ -355,3 +355,7 @@ output "subnet_storage" {
 output "bastion_ips" {
   value = aws_eip.bastion.*.public_ip
 }
+
+output "availability_zones" {
+  value = local.azs
+}

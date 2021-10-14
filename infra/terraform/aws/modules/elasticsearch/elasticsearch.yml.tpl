@@ -24,7 +24,8 @@ node.name: ${elasticsearch_nodes[idx]}
 #
 # Add custom attributes to the node:
 #
-#node.attr.rack: r1
+node.attr.rack: ${elasticsearch_racks[idx]}
+cluster.routing.allocation.awareness.attributes: rack
 #
 # ----------------------------------- Paths ------------------------------------
 #
