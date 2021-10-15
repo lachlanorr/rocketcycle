@@ -63,7 +63,7 @@ func produceNextStep(
 	span trace.Span,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
-	offset *Offset,
+	cmpdOffset *CompoundOffset,
 	aprod *ApecsProducer,
 	wg *sync.WaitGroup,
 ) {
@@ -73,18 +73,18 @@ func produceNextStep(
 		if nextStep.Payload == nil {
 			nextStep.Payload = step.Result.Payload
 		}
-		if nextStep.System == System_STORAGE && nextStep.Offset == nil {
+		if nextStep.System == System_STORAGE && nextStep.CmpdOffset == nil {
 			// STORAGE steps always need the value PROCESS Offset
-			if step.Offset != nil {
+			if step.CmpdOffset != nil {
 				// if current step has an offset, set that one
 				// This allows multiple STORAGE steps in a row, and the same
 				// PROCESS offset will get set on all of them.
-				nextStep.Offset = step.Offset
+				nextStep.CmpdOffset = step.CmpdOffset
 			} else {
 				// step has no offset, it's likely a PROCESS step, and we
 				// default to the argument, which is the most recent offset
 				// read from kafka
-				nextStep.Offset = offset
+				nextStep.CmpdOffset = cmpdOffset
 			}
 		}
 		err := aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
@@ -100,12 +100,12 @@ func produceNextStep(
 				if step.System == System_PROCESS && step.Result.Instance != nil {
 					stepKey := fmt.Sprintf("%s_%s", step.Concern, step.Key)
 					storageStepsMap[stepKey] = &ApecsTxn_Step{
-						System:  System_STORAGE,
-						Concern: step.Concern,
-						Command: UPDATE,
-						Key:     step.Key,
-						Payload: step.Result.Instance,
-						Offset:  step.Offset,
+						System:     System_STORAGE,
+						Concern:    step.Concern,
+						Command:    UPDATE,
+						Key:        step.Key,
+						Payload:    step.Result.Instance,
+						CmpdOffset: step.CmpdOffset,
 					}
 				}
 			}
@@ -149,7 +149,7 @@ func advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
-	offset *Offset,
+	cmpdOffset *CompoundOffset,
 	aprod *ApecsProducer,
 	wg *sync.WaitGroup,
 ) Code {
@@ -187,20 +187,20 @@ func advanceApecsTxn(
 	// Read instance from InstanceCache
 	var inst []byte
 	if step.System == System_PROCESS {
-		step.Offset = offset
+		step.CmpdOffset = cmpdOffset
 
 		// Special case "REFRESH" command
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
 		if step.Command == REFRESH {
-			gInstanceCache.Set(step.Key, step.Payload, offset)
+			gInstanceCache.Set(step.Key, step.Payload, cmpdOffset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
 				EffectiveTime: now,
 				Payload:       step.Payload,
 			}
-			produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
+			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 			return Code_OK
 		} else {
 			inst = gInstanceCache.Get(step.Key)
@@ -213,11 +213,11 @@ func advanceApecsTxn(
 				err := rtxn.insertSteps(
 					rtxn.txn.CurrentStepIdx,
 					&ApecsTxn_Step{
-						System:  System_STORAGE,
-						Concern: step.Concern,
-						Command: READ,
-						Key:     step.Key,
-						Offset:  offset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
+						System:     System_STORAGE,
+						Concern:    step.Concern,
+						Command:    READ,
+						Key:        step.Key,
+						CmpdOffset: cmpdOffset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 					&ApecsTxn_Step{
 						System:  System_PROCESS,
@@ -244,7 +244,7 @@ func advanceApecsTxn(
 		}
 	}
 
-	if step.Offset == nil {
+	if step.CmpdOffset == nil {
 		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Nil offset")
 		return Code_INTERNAL
 	}
@@ -255,7 +255,7 @@ func advanceApecsTxn(
 		Key:           step.Key,
 		Instance:      inst,
 		Payload:       step.Payload,
-		Offset:        step.Offset,
+		CmpdOffset:    step.CmpdOffset,
 	}
 
 	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
@@ -318,10 +318,10 @@ func advanceApecsTxn(
 
 	// Update InstanceCache if instance contents have changed
 	if tp.System == System_PROCESS && step.Result.Instance != nil {
-		gInstanceCache.Set(step.Key, step.Result.Instance, offset)
+		gInstanceCache.Set(step.Key, step.Result.Instance, cmpdOffset)
 	}
 
-	produceNextStep(ctx, span, rtxn, step, offset, aprod, wg)
+	produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 	return step.Result.Code
 }
 
@@ -454,7 +454,7 @@ func consumeApecsTopic(
 							Err(err).
 							Msg("Failed to Unmarshal ApecsTxn")
 					} else {
-						offset := &Offset{
+						offset := &CompoundOffset{
 							Generation: tp.Generation,
 							Partition:  partition,
 							Offset:     int64(msg.TopicPartition.Offset),

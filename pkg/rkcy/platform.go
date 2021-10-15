@@ -331,16 +331,16 @@ func consumeAdminTopic(
 ) {
 	defer wg.Done()
 
-	platformTopic := AdminTopic(platformName)
-	groupName := uncommittedGroupName(platformTopic, 0)
+	adminTopic := AdminTopic(platformName)
+	groupName := uncommittedGroupName(adminTopic, 0)
 
 	slog := log.With().
-		Str("Topic", platformTopic).
+		Str("Topic", adminTopic).
 		Logger()
 
 	_, lastPlatformOff, err := FindMostRecentMatching(
 		adminBrokers,
-		platformTopic,
+		adminTopic,
 		0,
 		startMatch,
 		startMatchLoc,
@@ -366,17 +366,17 @@ func consumeAdminTopic(
 	}
 	defer func() {
 		log.Warn().
-			Str("Topic", platformTopic).
+			Str("Topic", adminTopic).
 			Msgf("Closing kafka consumer")
 		cons.Close()
 		log.Warn().
-			Str("Topic", platformTopic).
+			Str("Topic", adminTopic).
 			Msgf("Closed kafka consumer")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
-			Topic:     &platformTopic,
+			Topic:     &adminTopic,
 			Partition: 0,
 			Offset:    kafka.Offset(lastPlatformOff),
 		},
@@ -472,17 +472,17 @@ func consumeAdminTopic(
 	}
 }
 
-func cobraPlatUpdate(cmd *cobra.Command, args []string) {
+func cobraPlatReplace(cmd *cobra.Command, args []string) {
 	ctx, span := Telem().StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().
 		Str("Brokers", gSettings.AdminBrokers).
-		Str("ConfigPath", gSettings.ConfigFilePath).
+		Str("PlatformPath", gSettings.PlatformFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(gSettings.ConfigFilePath)
+	conf, err := ioutil.ReadFile(gSettings.PlatformFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -513,19 +513,20 @@ func cobraPlatUpdate(cmd *cobra.Command, args []string) {
 		Str("PlatformJson", string(jsonBytes)).
 		Msg("Platform parsed")
 
-	// connect to kafka and make sure we have our platform topic
-	adminTopic, err := createAdminTopic(context.Background(), gSettings.AdminBrokers, plat.Name)
+	// connect to kafka and make sure we have our platform topics
+	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, plat.Name)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
-			Msgf("Failed to createAdminTopic for platform %s", plat.Name)
+			Str("Platform", plat.Name).
+			Msg("Failed to create platform topics")
 	}
+
+	adminTopic := AdminTopic(plat.Name)
 	slog = slog.With().
 		Str("Topic", adminTopic).
 		Logger()
-	slog.Info().
-		Msgf("Created platform admin topic: %s", adminTopic)
 
 	// At this point we are guaranteed to have a platform admin topic
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{

@@ -11,6 +11,72 @@
     "application/json"
   ],
   "paths": {
+    "/v1/config/read": {
+      "get": {
+        "operationId": "AdminService_ConfigRead",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.ConfigReadResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/config/update": {
+      "post": {
+        "operationId": "AdminService_ConfigUpdate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.Void"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/config/update/complex": {
+      "post": {
+        "operationId": "AdminService_ConfigUpdateComplex",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.Void"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
     "/v1/decode/arg": {
       "post": {
         "operationId": "AdminService_DecodeArgPayload",
@@ -180,6 +246,88 @@
           "items": {
             "$ref": "#/definitions/google.protobuf.Any"
           }
+        }
+      }
+    },
+    "rkcy.Config": {
+      "type": "object",
+      "properties": {
+        "stringVals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "boolVals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "float64Vals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "decimalVals": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/rkcy.Decimal"
+          }
+        },
+        "complexVals": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/rkcy.Config.Complex"
+          },
+          "title": "key is protobuf message type"
+        }
+      }
+    },
+    "rkcy.Config.Complex": {
+      "type": "object",
+      "properties": {
+        "messageVals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "format": "byte"
+          },
+          "title": "key is id of message\nval is serialized protobuf"
+        }
+      }
+    },
+    "rkcy.ConfigReadResponse": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/rkcy.Config"
+        },
+        "configJson": {
+          "type": "string"
+        },
+        "lastChanged": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastChangedOffset": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "rkcy.Decimal": {
+      "type": "object",
+      "properties": {
+        "l": {
+          "type": "string",
+          "format": "int64"
+        },
+        "r": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -423,6 +571,10 @@
           "type": "string"
         }
       }
+    },
+    "rkcy.Void": {
+      "type": "object",
+      "title": "Convenience empty message for services that return or accept no data"
     }
   }
 }

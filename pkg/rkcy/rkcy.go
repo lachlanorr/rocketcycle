@@ -22,7 +22,7 @@ const (
 	RKCY_PARTITION string = "rkcy.partition"
 
 	MAX_PARTITION                  int32 = 1024
-	PLATFORM_ADMIN_RETENTION_BYTES int32 = 10 * 1024 * 1024
+	PLATFORM_TOPIC_RETENTION_BYTES int32 = 10 * 1024 * 1024
 )
 
 type StandardTopicName string

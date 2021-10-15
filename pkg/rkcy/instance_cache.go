@@ -9,8 +9,8 @@ import (
 )
 
 type cachedBuffer struct {
-	buffer []byte
-	offset *Offset
+	buffer     []byte
+	cmpdOffset *CompoundOffset
 }
 
 type InstanceCache struct {
@@ -32,17 +32,17 @@ func (instCache *InstanceCache) Get(key string) []byte {
 	return nil
 }
 
-func (instCache *InstanceCache) Set(key string, val []byte, offset *Offset) {
+func (instCache *InstanceCache) Set(key string, val []byte, cmpdOffset *CompoundOffset) {
 	oldVal, ok := instCache.instances[key]
 	if ok {
-		if !OffsetGreaterThan(offset, oldVal.offset) {
+		if !OffsetGreaterThan(cmpdOffset, oldVal.cmpdOffset) {
 			log.Error().
 				Str("Key", key).
-				Msgf("Out of order InstanceCache.Set: new (%+v), old (%+v)", offset, oldVal.offset)
+				Msgf("Out of order InstanceCache.Set: new (%+v), old (%+v)", cmpdOffset, oldVal.cmpdOffset)
 			return
 		}
 	}
-	instCache.instances[key] = &cachedBuffer{buffer: val, offset: offset}
+	instCache.instances[key] = &cachedBuffer{buffer: val, cmpdOffset: cmpdOffset}
 }
 
 func (instCache *InstanceCache) Remove(key string) {

@@ -12,9 +12,9 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+func (inst *Player) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
 	*inst = Player{}
-	offset := &rkcy.Offset{}
+	offset := &rkcy.CompoundOffset{}
 	err := pool().QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", key).
 		Scan(
 			&inst.Id,
@@ -35,7 +35,7 @@ func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) 
 	return offset, nil
 }
 
-func (inst *Player) upsert(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Player) upsert(ctx context.Context, offset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",
@@ -49,15 +49,15 @@ func (inst *Player) upsert(ctx context.Context, offset *rkcy.Offset) error {
 	return err
 }
 
-func (inst *Player) Create(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Player) Create(ctx context.Context, offset *rkcy.CompoundOffset) error {
 	return inst.upsert(ctx, offset)
 }
 
-func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Player) Update(ctx context.Context, offset *rkcy.CompoundOffset) error {
 	return inst.upsert(ctx, offset)
 }
 
-func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		context.Background(),
 		"CALL rpg.sp_delete_player($1, $2, $3, $4)",

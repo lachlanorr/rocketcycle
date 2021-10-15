@@ -15,6 +15,8 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
+// TODO: Config stuff for Limits
+
 /*
 // Implement the following functions to enable this concern:
 
@@ -26,21 +28,20 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-
 // -----------------------------------------------------------------------------
 // Concern Player
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
-func (inst *Player) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+func (inst *Player) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
 	// Read Player instance from storage system and set in inst
-	// Return Offset as well, as was presented on last Create/Update
+	// Return CompoundOffset as well, as was presented on last Create/Update
 
 	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
 }
 
-func (inst *Player) Create(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Player) Create(ctx context.Context, offset *rkcy.CompoundOffset) error {
 	// Create new Player instance in the storage system, store offset as well.
 	// If storage offset is less than offset argument, do not create,
 	// as this is indicative of a message duplicate.
@@ -48,7 +49,7 @@ func (inst *Player) Create(ctx context.Context, offset *rkcy.Offset) error {
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Create")
 }
 
-func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Player) Update(ctx context.Context, offset *rkcy.CompoundOffset) error {
 	// Update existsing Player instance in the storage system,
 	// store offset as well.
 	// If storage offset is less than offset argument, do not update,
@@ -57,7 +58,7 @@ func (inst *Player) Update(ctx context.Context, offset *rkcy.Offset) error {
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Update")
 }
 
-func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.CompoundOffset) error {
 	// Delete existsing Player instance in the storage system.
 	// If storage offset is less than offset argument, do not delete,
 	// as this is indicative of a message duplicate.
@@ -67,7 +68,6 @@ func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.Offset)
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers (END)
 // -----------------------------------------------------------------------------
-
 
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers
@@ -88,15 +88,20 @@ func (inst *Player) ValidateUpdate(ctx context.Context, payload *Player) (*Playe
 // PROCESS Standard Handlers (END)
 // -----------------------------------------------------------------------------
 
-
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers (END)
 // -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Concern Player (END)
+// -----------------------------------------------------------------------------
 */
 
+// -----------------------------------------------------------------------------
+// Concern Player
+// -----------------------------------------------------------------------------
 func (*Player) Concern() string {
 	return "Player"
 }
@@ -148,12 +153,12 @@ func init() {
 								rslt.SetResult(err)
 								return rslt
 							}
-							err = payloadIn.Create(ctx, args.Offset)
+							err = payloadIn.Create(ctx, args.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
 							}
-							rslt.Offset = args.Offset // for possible delete in rollback
+							rslt.CmpdOffset = args.CmpdOffset // for possible delete in rollback
 							rslt.Payload, err = proto.Marshal(payloadIn)
 							if err != nil {
 								rslt.SetResult(err)
@@ -161,7 +166,7 @@ func init() {
 							}
 						} else {
 							del := &Player{}
-							err = del.Delete(ctx, args.Key, args.ForwardResult.Offset)
+							err = del.Delete(ctx, args.Key, args.ForwardResult.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
@@ -172,7 +177,7 @@ func init() {
 					{
 						if direction == rkcy.Direction_FORWARD {
 							inst := &Player{}
-							rslt.Offset, err = inst.Read(ctx, args.Key)
+							rslt.CmpdOffset, err = inst.Read(ctx, args.Key)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
@@ -200,7 +205,7 @@ func init() {
 								rslt.SetResult(err)
 								return rslt
 							}
-							err = payloadIn.Update(ctx, args.Offset)
+							err = payloadIn.Update(ctx, args.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
@@ -211,7 +216,7 @@ func init() {
 								return rslt
 							}
 							// Set original value into rslt.Instance so we can restore it in the event of a rollback
-							rslt.Offset = args.Offset
+							rslt.CmpdOffset = args.CmpdOffset
 							rslt.Instance, err = proto.Marshal(orig)
 							if err != nil {
 								rslt.SetResult(err)
@@ -224,7 +229,7 @@ func init() {
 								rslt.SetResult(err)
 								return rslt
 							}
-							err = orig.Update(ctx, args.ForwardResult.Offset)
+							err = orig.Update(ctx, args.ForwardResult.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
@@ -242,13 +247,13 @@ func init() {
 								return rslt
 							}
 							del := &Player{}
-							err = del.Delete(ctx, args.Key, args.Offset)
+							err = del.Delete(ctx, args.Key, args.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt
 							}
 							// Set original value into rslt.Instance so we can restore it in the event of a rollback
-							rslt.Offset = args.Offset
+							rslt.CmpdOffset = args.CmpdOffset
 							rslt.Instance, err = proto.Marshal(orig)
 							if err != nil {
 								rslt.SetResult(err)
@@ -261,7 +266,7 @@ func init() {
 								rslt.SetResult(err)
 								return rslt
 							}
-							err = orig.Create(ctx, args.ForwardResult.Offset)
+							err = orig.Create(ctx, args.ForwardResult.CmpdOffset)
 							if err != nil {
 								rslt.SetResult(err)
 								return rslt

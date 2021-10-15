@@ -176,7 +176,7 @@ type StepArgs struct {
 	Key           string
 	Instance      []byte
 	Payload       []byte
-	Offset        *Offset
+	CmpdOffset    *CompoundOffset
 	ForwardResult *ApecsTxn_Step_Result
 }
 

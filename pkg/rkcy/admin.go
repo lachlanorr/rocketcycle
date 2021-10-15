@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -144,7 +145,7 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go managePlatform(ctx, gPlatformName, &wg)
-	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr)
+	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr, &wg)
 
 	select {
 	case <-interruptCh:
@@ -179,6 +180,51 @@ func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(string(body))
+}
+
+func cobraAdminReadConfig(cmd *cobra.Command, args []string) {
+	path := "/v1/config/read"
+
+	slog := log.With().
+		Str("Path", path).
+		Logger()
+
+	resp, err := http.Get(gSettings.AdminAddr + path)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to READ")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to ReadAll")
+		return
+	}
+
+	confRsp := &ConfigReadResponse{}
+	err = protojson.Unmarshal(body, confRsp)
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Msg("Failed to Unmarshal ConfigResponse")
+		return
+	}
+
+	var prettyJson bytes.Buffer
+	err = json.Indent(&prettyJson, []byte(confRsp.ConfigJson), "", "  ")
+	if err != nil {
+		slog.Fatal().
+			Err(err).
+			Str("Json", confRsp.ConfigJson).
+			Msg("Failed to prettify json")
+		return
+	}
+
+	fmt.Printf("%s\n", string(prettyJson.Bytes()))
 }
 
 func cobraAdminReadProducers(cmd *cobra.Command, args []string) {
@@ -258,6 +304,8 @@ type adminServer struct {
 
 	httpAddr string
 	grpcAddr string
+
+	confMgr *ConfigMgr
 }
 
 func (srv adminServer) HttpAddr() string {
@@ -296,6 +344,10 @@ func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
 	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
 }
 
+func (srv adminServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
+	return srv.confMgr.BuildConfigResponse(), nil
+}
+
 func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, error) {
 	return gProducerTracker.toTrackedProducers(), nil
 }
@@ -330,8 +382,12 @@ func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadA
 	}, nil
 }
 
-func adminServe(ctx context.Context, httpAddr string, grpcAddr string) {
-	srv := adminServer{httpAddr: httpAddr, grpcAddr: grpcAddr}
+func adminServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync.WaitGroup) {
+	srv := adminServer{
+		httpAddr: httpAddr,
+		grpcAddr: grpcAddr,
+		confMgr:  NewConfigMgr(ctx, gSettings.AdminBrokers, PlatformName(), wg),
+	}
 	ServeGrpcGateway(ctx, srv)
 }
 
@@ -549,7 +605,7 @@ func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup
 				jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
 				log.Info().
 					Str("PlatformJson", string(jsonBytes)).
-					Msg("Platform Updated")
+					Msg("Platform Replaced")
 
 				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
 				updateTopics(gCurrentRtPlat)

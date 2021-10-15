@@ -1,0 +1,8 @@
+{
+    "testString": "testStringVal",
+    "testBool": true,
+    "testInt": 1234,
+    "testDouble": 1.234,
+    "testDecimal": "d123.456",
+    "testDecimal2": {"l": 987, "r": 654}
+}

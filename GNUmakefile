@@ -58,6 +58,7 @@ rpg: ## compile rpg example
 	-o $(BUILD_BIN_DIR)/rpg \
 	./examples/rpg
 	@cp ./examples/rpg/platform.json $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/config.json $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/init_db_perfa.sh $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/run_perfa.sh $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/perfa_env.sh $(BUILD_BIN_DIR)

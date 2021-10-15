@@ -13,7 +13,8 @@ import (
 
 // Cobra sets these values based on command parsing
 type Settings struct {
-	ConfigFilePath string
+	PlatformFilePath string
+	ConfigFilePath   string
 
 	OtelcolEndpoint string
 
@@ -104,6 +105,13 @@ func runCobra(impl *PlatformImpl) {
 	}
 	adminReadCmd.AddCommand(adminReadPlatformCmd)
 
+	adminReadConfigCmd := &cobra.Command{
+		Use:   "config",
+		Short: "read the current config",
+		Run:   cobraAdminReadConfig,
+	}
+	adminReadCmd.AddCommand(adminReadConfigCmd)
+
 	adminDecodeCmd := &cobra.Command{
 		Use:   "decode",
 		Short: "decode base64 opaque payloads",
@@ -137,6 +145,22 @@ func runCobra(impl *PlatformImpl) {
 	adminServeCmd.PersistentFlags().StringVar(&gSettings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
 	adminCmd.AddCommand(adminServeCmd)
 	// admin sub command (END)
+
+	// config sub command
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "Config manager",
+	}
+	rootCmd.AddCommand(configCmd)
+
+	configReplaceCmd := &cobra.Command{
+		Use:   "replace",
+		Short: "Replace config",
+		Long:  "WARNING: This will fully replace stored config with the file contents!!!! Publishes contents of config file to config topic and fully replaces it.",
+		Run:   cobraConfigReplace,
+	}
+	configReplaceCmd.PersistentFlags().StringVarP(&gSettings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
+	configCmd.AddCommand(configReplaceCmd)
 
 	procCmd := &cobra.Command{
 		Use:   "process",
@@ -190,14 +214,14 @@ func runCobra(impl *PlatformImpl) {
 	}
 	rootCmd.AddCommand(platCmd)
 
-	platUpdateCmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update platform config",
-		Long:  "Publishes contents of platform config file to platform topic. Creates platform topic if it doesn't already exist.",
-		Run:   cobraPlatUpdate,
+	platReplaceCmd := &cobra.Command{
+		Use:   "replace",
+		Short: "Replace platform config",
+		Long:  "WARNING: Only use this to bootstrap a new platform!!!! Publishes contents of platform config file to platform topic and fully replaces platform. Creates platform topics if they do not already exist.",
+		Run:   cobraPlatReplace,
 	}
-	platUpdateCmd.PersistentFlags().StringVarP(&gSettings.ConfigFilePath, "config_file_path", "c", "./platform.json", "Path to json file containing platform configuration")
-	platCmd.AddCommand(platUpdateCmd)
+	platReplaceCmd.PersistentFlags().StringVarP(&gSettings.PlatformFilePath, "platform_file_path", "p", "./platform.json", "Path to json file containing platform configuration")
+	platCmd.AddCommand(platReplaceCmd)
 
 	for _, addtlCmd := range gPlatformImpl.CobraCommands {
 		rootCmd.AddCommand(addtlCmd)

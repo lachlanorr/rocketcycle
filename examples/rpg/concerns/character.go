@@ -30,11 +30,11 @@ func (inst *Character) ReadItems(ctx context.Context) ([]*Character_Item, error)
 	return items, nil
 }
 
-func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, error) {
+func (inst *Character) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
 	*inst = Character{
 		Currency: &Character_Currency{},
 	}
-	offset := rkcy.Offset{}
+	cmpdOffset := rkcy.CompoundOffset{}
 	err := pool().QueryRow(
 		ctx,
 		`SELECT c.id,
@@ -61,9 +61,9 @@ func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, erro
 		&inst.Currency.Faction_0,
 		&inst.Currency.Faction_1,
 		&inst.Currency.Faction_2,
-		&offset.Generation,
-		&offset.Partition,
-		&offset.Offset,
+		&cmpdOffset.Generation,
+		&cmpdOffset.Partition,
+		&cmpdOffset.Offset,
 	)
 
 	if err != nil {
@@ -77,7 +77,7 @@ func (inst *Character) Read(ctx context.Context, key string) (*rkcy.Offset, erro
 	if err != nil {
 		return nil, err
 	}
-	return &offset, nil
+	return &cmpdOffset, nil
 }
 
 func hasItem(id string, items []*Character_Item) bool {
@@ -93,7 +93,7 @@ func hasItem(id string, items []*Character_Item) bool {
 	return false
 }
 
-func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
+func (inst *Character) upsert(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
@@ -101,9 +101,9 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 		inst.PlayerId,
 		inst.Fullname,
 		inst.Active,
-		offset.Generation,
-		offset.Partition,
-		offset.Offset,
+		cmpdOffset.Generation,
+		cmpdOffset.Partition,
+		cmpdOffset.Offset,
 	)
 	if err != nil {
 		return err
@@ -120,9 +120,9 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 		inst.Currency.Faction_0,
 		inst.Currency.Faction_1,
 		inst.Currency.Faction_2,
-		offset.Generation,
-		offset.Partition,
-		offset.Offset,
+		cmpdOffset.Generation,
+		cmpdOffset.Partition,
+		cmpdOffset.Offset,
 	)
 	if err != nil {
 		return err
@@ -142,9 +142,9 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 				dbItem.Id,
 				consts.ZeroUuid,
 				dbItem.Description,
-				offset.Generation,
-				offset.Partition,
-				offset.Offset,
+				cmpdOffset.Generation,
+				cmpdOffset.Partition,
+				cmpdOffset.Offset,
 			)
 
 			if err != nil {
@@ -159,9 +159,9 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 			item.Id,
 			inst.Id,
 			item.Description,
-			offset.Generation,
-			offset.Partition,
-			offset.Offset,
+			cmpdOffset.Generation,
+			cmpdOffset.Partition,
+			cmpdOffset.Offset,
 		)
 
 		if err != nil {
@@ -172,22 +172,22 @@ func (inst *Character) upsert(ctx context.Context, offset *rkcy.Offset) error {
 	return nil
 }
 
-func (inst *Character) Create(ctx context.Context, offset *rkcy.Offset) error {
-	return inst.upsert(ctx, offset)
+func (inst *Character) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
+	return inst.upsert(ctx, cmpdOffset)
 }
 
-func (inst *Character) Update(ctx context.Context, offset *rkcy.Offset) error {
-	return inst.upsert(ctx, offset)
+func (inst *Character) Update(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
+	return inst.upsert(ctx, cmpdOffset)
 }
 
-func (inst *Character) Delete(ctx context.Context, key string, offset *rkcy.Offset) error {
+func (inst *Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_delete_character($1, $2, $3, $4)",
 		key,
-		offset.Generation,
-		offset.Partition,
-		offset.Offset,
+		cmpdOffset.Generation,
+		cmpdOffset.Partition,
+		cmpdOffset.Offset,
 	)
 	return err
 }

@@ -34,7 +34,7 @@ type ApecsProducer struct {
 	platformName      string
 	respTarget        *TopicTarget
 	producers         map[string]map[StandardTopicName]*Producer
-	producersMu       sync.Mutex
+	producersMtx      sync.Mutex
 	respRegisterCh    chan *RespChan
 	respConsumerClose context.CancelFunc
 }
@@ -77,8 +77,8 @@ func (aprod *ApecsProducer) Close() {
 		aprod.respConsumerClose()
 	}
 
-	aprod.producersMu.Lock()
-	defer aprod.producersMu.Unlock()
+	aprod.producersMtx.Lock()
+	defer aprod.producersMtx.Unlock()
 	for _, concernProds := range aprod.producers {
 		for _, pdc := range concernProds {
 			pdc.Close()
@@ -93,8 +93,8 @@ func (aprod *ApecsProducer) getProducer(
 	topicName StandardTopicName,
 	wg *sync.WaitGroup,
 ) (*Producer, error) {
-	aprod.producersMu.Lock()
-	defer aprod.producersMu.Unlock()
+	aprod.producersMtx.Lock()
+	defer aprod.producersMtx.Unlock()
 
 	concernProds, ok := aprod.producers[concernName]
 	if !ok {

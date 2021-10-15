@@ -109,49 +109,61 @@ func AdminTopic(platformName string) string {
 	return fmt.Sprintf("%s.%s.admin", RKCY, platformName)
 }
 
-func createAdminTopic(ctx context.Context, bootstrapServers string, internalName string) (string, error) {
-	topicName := AdminTopic(internalName)
+func ConfigTopic(platformName string) string {
+	return fmt.Sprintf("%s.%s.config", RKCY, platformName)
+}
+
+func createPlatformTopics(ctx context.Context, bootstrapServers string, internalName string) error {
+	topicNames := []string{
+		AdminTopic(internalName),
+		ConfigTopic(internalName),
+	}
 
 	// connect to kafka and make sure we have our platform topic
 	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
 		"bootstrap.servers": bootstrapServers,
 	})
 	if err != nil {
-		return "", errors.New("Failed to NewAdminClient")
+		return errors.New("Failed to NewAdminClient")
 	}
 
 	md, err := admin.GetMetadata(nil, true, 1000)
 	if err != nil {
-		return "", errors.New("Failed to GetMetadata")
+		return errors.New("Failed to GetMetadata")
 	}
 
-	_, ok := md.Topics[topicName]
-	if !ok { // platform topic doesn't exist
-		result, err := admin.CreateTopics(
-			context.Background(),
-			[]kafka.TopicSpecification{
-				{
-					Topic:             topicName,
-					NumPartitions:     1,
-					ReplicationFactor: len(md.Brokers),
-					Config: map[string]string{
-						"retention.ms":    "-1",
-						"retention.bytes": strconv.Itoa(int(PLATFORM_ADMIN_RETENTION_BYTES)),
+	for _, topicName := range topicNames {
+		_, ok := md.Topics[topicName]
+		if !ok { // platform topic doesn't exist
+			result, err := admin.CreateTopics(
+				context.Background(),
+				[]kafka.TopicSpecification{
+					{
+						Topic:             topicName,
+						NumPartitions:     1,
+						ReplicationFactor: mini(3, len(md.Brokers)),
+						Config: map[string]string{
+							"retention.ms":    "-1",
+							"retention.bytes": strconv.Itoa(int(PLATFORM_TOPIC_RETENTION_BYTES)),
+						},
 					},
 				},
-			},
-			nil,
-		)
-		if err != nil {
-			return "", errors.New("Failed to create metadata topic")
-		}
-		for _, res := range result {
-			if res.Error.Code() != kafka.ErrNoError {
-				return "", errors.New("Failed to create metadata topic")
+				nil,
+			)
+			if err != nil {
+				return fmt.Errorf("Failed to create platform topic: %s", topicName)
 			}
+			for _, res := range result {
+				if res.Error.Code() != kafka.ErrNoError {
+					return fmt.Errorf("Failed to create platform topic: %s")
+				}
+			}
+			log.Info().
+				Str("Topic", topicName).
+				Msg("Platform topic created")
 		}
 	}
-	return topicName, nil
+	return nil
 }
 
 func standardHeaders(directive Directive, traceParent string) []kafka.Header {
@@ -223,7 +235,7 @@ func BytesToInt(arr []byte) int {
 	return val
 }
 
-func OffsetGreaterThan(lhs *Offset, rhs *Offset) bool {
+func OffsetGreaterThan(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 	if lhs.Generation == rhs.Generation {
 		if lhs.Partition == rhs.Partition {
 			return lhs.Offset > rhs.Offset

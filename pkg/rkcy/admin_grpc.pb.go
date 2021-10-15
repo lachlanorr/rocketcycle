@@ -18,6 +18,9 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdminServiceClient interface {
 	Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error)
+	ConfigRead(ctx context.Context, in *Void, opts ...grpc.CallOption) (*ConfigReadResponse, error)
+	ConfigUpdate(ctx context.Context, in *ConfigUpdateRequest, opts ...grpc.CallOption) (*Void, error)
+	ConfigUpdateComplex(ctx context.Context, in *ConfigUpdateComplexRequest, opts ...grpc.CallOption) (*Void, error)
 	Producers(ctx context.Context, in *Void, opts ...grpc.CallOption) (*TrackedProducers, error)
 	DecodeInstance(ctx context.Context, in *DecodeInstanceArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeArgPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
@@ -35,6 +38,33 @@ func NewAdminServiceClient(cc grpc.ClientConnInterface) AdminServiceClient {
 func (c *adminServiceClient) Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error) {
 	out := new(Platform)
 	err := c.cc.Invoke(ctx, "/rkcy.AdminService/Platform", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ConfigRead(ctx context.Context, in *Void, opts ...grpc.CallOption) (*ConfigReadResponse, error) {
+	out := new(ConfigReadResponse)
+	err := c.cc.Invoke(ctx, "/rkcy.AdminService/ConfigRead", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ConfigUpdate(ctx context.Context, in *ConfigUpdateRequest, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
+	err := c.cc.Invoke(ctx, "/rkcy.AdminService/ConfigUpdate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) ConfigUpdateComplex(ctx context.Context, in *ConfigUpdateComplexRequest, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
+	err := c.cc.Invoke(ctx, "/rkcy.AdminService/ConfigUpdateComplex", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +112,9 @@ func (c *adminServiceClient) DecodeResultPayload(ctx context.Context, in *Decode
 // for forward compatibility
 type AdminServiceServer interface {
 	Platform(context.Context, *Void) (*Platform, error)
+	ConfigRead(context.Context, *Void) (*ConfigReadResponse, error)
+	ConfigUpdate(context.Context, *ConfigUpdateRequest) (*Void, error)
+	ConfigUpdateComplex(context.Context, *ConfigUpdateComplexRequest) (*Void, error)
 	Producers(context.Context, *Void) (*TrackedProducers, error)
 	DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error)
 	DecodeArgPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
@@ -95,6 +128,15 @@ type UnimplementedAdminServiceServer struct {
 
 func (UnimplementedAdminServiceServer) Platform(context.Context, *Void) (*Platform, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Platform not implemented")
+}
+func (UnimplementedAdminServiceServer) ConfigRead(context.Context, *Void) (*ConfigReadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfigRead not implemented")
+}
+func (UnimplementedAdminServiceServer) ConfigUpdate(context.Context, *ConfigUpdateRequest) (*Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfigUpdate not implemented")
+}
+func (UnimplementedAdminServiceServer) ConfigUpdateComplex(context.Context, *ConfigUpdateComplexRequest) (*Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfigUpdateComplex not implemented")
 }
 func (UnimplementedAdminServiceServer) Producers(context.Context, *Void) (*TrackedProducers, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Producers not implemented")
@@ -135,6 +177,60 @@ func _AdminService_Platform_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AdminServiceServer).Platform(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ConfigRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Void)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ConfigRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.AdminService/ConfigRead",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ConfigRead(ctx, req.(*Void))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ConfigUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ConfigUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.AdminService/ConfigUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ConfigUpdate(ctx, req.(*ConfigUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_ConfigUpdateComplex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigUpdateComplexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).ConfigUpdateComplex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.AdminService/ConfigUpdateComplex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).ConfigUpdateComplex(ctx, req.(*ConfigUpdateComplexRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -218,6 +314,18 @@ var _AdminService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Platform",
 			Handler:    _AdminService_Platform_Handler,
+		},
+		{
+			MethodName: "ConfigRead",
+			Handler:    _AdminService_ConfigRead_Handler,
+		},
+		{
+			MethodName: "ConfigUpdate",
+			Handler:    _AdminService_ConfigUpdate_Handler,
+		},
+		{
+			MethodName: "ConfigUpdateComplex",
+			Handler:    _AdminService_ConfigUpdateComplex_Handler,
 		},
 		{
 			MethodName: "Producers",

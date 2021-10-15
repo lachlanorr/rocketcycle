@@ -428,6 +428,15 @@
         }
       }
     },
+    "rocketcycle.examples.rpg.concerns.Limits": {
+      "type": "object",
+      "properties": {
+        "maxCharactersPerPlayer": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "rocketcycle.examples.rpg.concerns.Player": {
       "type": "object",
       "properties": {
@@ -439,6 +448,9 @@
         },
         "active": {
           "type": "boolean"
+        },
+        "limits": {
+          "$ref": "#/definitions/rocketcycle.examples.rpg.concerns.Limits"
         }
       }
     },
