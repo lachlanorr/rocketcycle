@@ -3,6 +3,7 @@
 package {{ $.Package }}
 
 import (
+{{- if gt (len .Concerns) 0 }}
 	"bytes"
 	"context"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+{{ end }}
 )
 {{- if gt (len .Configs) 0 }}
 {{ range $config := .Configs }}
@@ -43,7 +45,7 @@ func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) (*rkcy.Co
 	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Read")
 }
 
-func (inst *{{ $concern.Name }}) Create(ctx context.Context, offset *rkcy.CompoundOffset) error {
+func (inst *{{ $concern.Name }}) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
 	// Create new {{ $concern.Name }} instance in the storage system, store offset as well.
 	// If storage offset is less than offset argument, do not create,
 	// as this is indicative of a message duplicate.
@@ -51,7 +53,7 @@ func (inst *{{ $concern.Name }}) Create(ctx context.Context, offset *rkcy.Compou
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Create")
 }
 
-func (inst *{{ $concern.Name }}) Update(ctx context.Context, offset *rkcy.CompoundOffset) error {
+func (inst *{{ $concern.Name }}) Update(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
 	// Update existsing {{ $concern.Name }} instance in the storage system,
 	// store offset as well.
 	// If storage offset is less than offset argument, do not update,
@@ -60,7 +62,7 @@ func (inst *{{ $concern.Name }}) Update(ctx context.Context, offset *rkcy.Compou
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Update")
 }
 
-func (inst *{{ $concern.Name }}) Delete(ctx context.Context, key string, offset *rkcy.CompoundOffset) error {
+func (inst *{{ $concern.Name }}) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
 	// Delete existsing {{ $concern.Name }} instance in the storage system.
 	// If storage offset is less than offset argument, do not delete,
 	// as this is indicative of a message duplicate.

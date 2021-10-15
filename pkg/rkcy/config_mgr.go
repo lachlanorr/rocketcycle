@@ -9,16 +9,63 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	otel_codes "go.opentelemetry.io/otel/codes"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
+
+type ComplexConfigHandler interface {
+	Unmarshal(b []byte) (proto.Message, error)
+	UnmarshalJson(b []byte) (proto.Message, error)
+}
+
+var gComplexConfigHandlers map[string]ComplexConfigHandler = make(map[string]ComplexConfigHandler)
+var gComplexConfigHandlersMtx sync.Mutex
+
+func RegisterComplexConfigHandler(msgType string, handler ComplexConfigHandler) {
+	gComplexConfigHandlersMtx.Lock()
+	defer gComplexConfigHandlersMtx.Unlock()
+
+	if gComplexConfigHandlers[msgType] != nil {
+		log.Fatal().
+			Str("Type", msgType).
+			Msg("Multiple ComplexConfigHandlers registered for type")
+	}
+	gComplexConfigHandlers[msgType] = handler
+}
+
+func getComplexConfigHandler(msgType string) (ComplexConfigHandler, bool) {
+	gComplexConfigHandlersMtx.Lock()
+	defer gComplexConfigHandlersMtx.Unlock()
+
+	handler, ok := gComplexConfigHandlers[msgType]
+	return handler, ok
+}
+
+func ComplexConfigUnmarshal(msgType string, b []byte) (proto.Message, error) {
+	handler, ok := getComplexConfigHandler(msgType)
+	if !ok {
+		return nil, fmt.Errorf("No CommandHandler for type: %s", msgType)
+	}
+	return handler.Unmarshal(b)
+}
+
+func ComplexConfigUnmarshalJson(msgType string, b []byte) (proto.Message, error) {
+	handler, ok := getComplexConfigHandler(msgType)
+	if !ok {
+		return nil, fmt.Errorf("No CommandHandler for type: %s", msgType)
+	}
+	return handler.UnmarshalJson(b)
+}
 
 type ConfigMgr struct {
 	config            *Config
@@ -59,12 +106,96 @@ func newEmptyConfig() *Config {
 	}
 }
 
+func (conf *Config) getString(key string) (string, bool) {
+	if conf.StringVals != nil {
+		val, ok := conf.StringVals[key]
+		return val, ok
+	}
+	return "", false
+}
+
+func (conf *Config) setString(key string, val string) {
+	if conf.StringVals == nil {
+		conf.StringVals = make(map[string]string)
+	}
+	conf.StringVals[key] = val
+}
+
+func (conf *Config) getBool(key string) (bool, bool) {
+	if conf.BoolVals != nil {
+		val, ok := conf.BoolVals[key]
+		return val, ok
+	}
+	return false, false
+}
+
+func (conf *Config) setBool(key string, val bool) {
+	if conf.BoolVals == nil {
+		conf.BoolVals = make(map[string]bool)
+	}
+	conf.BoolVals[key] = val
+}
+
+func (conf *Config) getFloat64(key string) (float64, bool) {
+	if conf.Float64Vals != nil {
+		val, ok := conf.Float64Vals[key]
+		return val, ok
+	}
+	return 0.0, false
+}
+
+func (conf *Config) setFloat64(key string, val float64) {
+	if conf.Float64Vals == nil {
+		conf.Float64Vals = make(map[string]float64)
+	}
+	conf.Float64Vals[key] = val
+}
+
+func (conf *Config) getDecimal(key string) (Decimal, bool) {
+	if conf.DecimalVals != nil {
+		val, ok := conf.DecimalVals[key]
+		return *val, ok
+	}
+	return Decimal{}, false
+}
+
+func (conf *Config) setDecimal(key string, val Decimal) {
+	if conf.DecimalVals == nil {
+		conf.DecimalVals = make(map[string]*Decimal)
+	}
+	conf.DecimalVals[key] = &val
+}
+
+func (conf *Config) getComplex(msgType string, key string) ([]byte, bool) {
+	if conf.ComplexVals != nil {
+		confCmplx, ok := conf.ComplexVals[msgType]
+		if ok && confCmplx.MessageVals != nil {
+			val, ok := confCmplx.MessageVals[key]
+			return val, ok
+		}
+	}
+	return nil, false
+}
+
+func (conf *Config) setComplex(msgType string, key string, val []byte) {
+	if conf.ComplexVals == nil {
+		conf.ComplexVals = make(map[string]*Config_Complex)
+	}
+	confCmplx, ok := conf.ComplexVals[msgType]
+	if !ok {
+		confCmplx = &Config_Complex{
+			MessageVals: make(map[string][]byte),
+		}
+		conf.ComplexVals[msgType] = confCmplx
+	}
+	confCmplx.MessageVals[key] = val
+}
+
 func (confMgr *ConfigMgr) GetString(key string) (string, bool) {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
-	if confMgr.config != nil && confMgr.config.StringVals != nil {
-		val, ok := confMgr.config.StringVals[key]
-		return val, ok
+	if confMgr.config != nil {
+		return confMgr.config.getString(key)
 	}
 	return "", false
 }
@@ -75,15 +206,14 @@ func (confMgr *ConfigMgr) SetString(key string, val string) {
 	if confMgr.config == nil {
 		confMgr.config = newEmptyConfig()
 	}
-	confMgr.config.StringVals[key] = val
+	confMgr.config.setString(key, val)
 }
 
 func (confMgr *ConfigMgr) GetBool(key string) (bool, bool) {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
-	if confMgr.config != nil && confMgr.config.BoolVals != nil {
-		val, ok := confMgr.config.BoolVals[key]
-		return val, ok
+	if confMgr.config != nil {
+		return confMgr.config.getBool(key)
 	}
 	return false, false
 }
@@ -94,15 +224,14 @@ func (confMgr *ConfigMgr) SetBool(key string, val bool) {
 	if confMgr.config == nil {
 		confMgr.config = newEmptyConfig()
 	}
-	confMgr.config.BoolVals[key] = val
+	confMgr.config.setBool(key, val)
 }
 
 func (confMgr *ConfigMgr) GetFloat64(key string) (float64, bool) {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
-	if confMgr.config != nil && confMgr.config.Float64Vals != nil {
-		val, ok := confMgr.config.Float64Vals[key]
-		return val, ok
+	if confMgr.config != nil {
+		return confMgr.config.getFloat64(key)
 	}
 	return 0.0, false
 }
@@ -113,15 +242,14 @@ func (confMgr *ConfigMgr) SetFloat64(key string, val float64) {
 	if confMgr.config == nil {
 		confMgr.config = newEmptyConfig()
 	}
-	confMgr.config.Float64Vals[key] = val
+	confMgr.config.setFloat64(key, val)
 }
 
 func (confMgr *ConfigMgr) GetDecimal(key string) (Decimal, bool) {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
-	if confMgr.config != nil && confMgr.config.DecimalVals != nil {
-		val, ok := confMgr.config.DecimalVals[key]
-		return *val, ok
+	if confMgr.config != nil {
+		return confMgr.config.getDecimal(key)
 	}
 	return Decimal{}, false
 }
@@ -132,19 +260,14 @@ func (confMgr *ConfigMgr) SetDecimal(key string, val Decimal) {
 	if confMgr.config == nil {
 		confMgr.config = newEmptyConfig()
 	}
-	confMgr.config.DecimalVals[key] = &val
+	confMgr.config.setDecimal(key, val)
 }
 
 func (confMgr *ConfigMgr) GetComplex(msgType string, key string) ([]byte, bool) {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
-	if confMgr.config != nil && confMgr.config.ComplexVals != nil {
-		complex, ok := confMgr.config.ComplexVals[msgType]
-		if !ok || complex == nil || complex.MessageVals == nil {
-			return nil, false
-		}
-		msgBytes, ok := complex.MessageVals[key]
-		return msgBytes, ok
+	if confMgr.config != nil {
+		return confMgr.config.getComplex(msgType, key)
 	}
 	return nil, false
 }
@@ -155,14 +278,7 @@ func (confMgr *ConfigMgr) SetComplex(msgType string, key string, val []byte) {
 	if confMgr.config == nil {
 		confMgr.config = newEmptyConfig()
 	}
-	complex, ok := confMgr.config.ComplexVals[msgType]
-	if !ok {
-		complex = &Config_Complex{
-			MessageVals: make(map[string][]byte),
-		}
-		confMgr.config.ComplexVals[msgType] = complex
-	}
-	complex.MessageVals[key] = val
+	confMgr.config.setComplex(msgType, key, val)
 }
 
 func (confMgr *ConfigMgr) manageConfigTopic(
@@ -290,6 +406,103 @@ func (confMgr *ConfigMgr) BuildConfigResponse() *ConfigReadResponse {
 	return confRsp
 }
 
+func translateFromAbbreviatedDecimalsList(list []interface{}) {
+	for _, i := range list {
+		switch v := i.(type) {
+		case []interface{}:
+			translateFromAbbreviatedDecimalsList(v)
+		case map[string]interface{}:
+			translateFromAbbreviatedDecimalsObj(v)
+		}
+	}
+}
+
+func translateFromAbbreviatedDecimalsObj(obj map[string]interface{}) {
+	for k, i := range obj {
+		switch v := i.(type) {
+		case string:
+			d, err := DecimalFromString(v)
+			if err == nil {
+				dmap := make(map[string]interface{})
+				dmap["l"] = d.L
+				dmap["r"] = d.R
+				obj[k] = dmap
+			}
+		case []interface{}:
+			translateFromAbbreviatedDecimalsList(v)
+		case map[string]interface{}:
+			translateFromAbbreviatedDecimalsObj(v)
+		}
+	}
+}
+
+func translateToAbbreviatedDecimalsList(list []interface{}) {
+	for _, i := range list {
+		switch v := i.(type) {
+		case []interface{}:
+			translateToAbbreviatedDecimalsList(v)
+		case map[string]interface{}:
+			translateToAbbreviatedDecimalsObj(v)
+		}
+	}
+}
+
+func translateToAbbreviatedDecimalsObj(obj map[string]interface{}) {
+	for k, i := range obj {
+		switch v := i.(type) {
+		case map[string]interface{}:
+			d, err := decimalFromMap(v)
+			if err == nil {
+				obj[k] = d.ToString()
+			} else {
+				translateToAbbreviatedDecimalsObj(v)
+			}
+		case []interface{}:
+			translateToAbbreviatedDecimalsList(v)
+		}
+	}
+}
+
+func decimalDigitFromInterface(i interface{}) (int64, error) {
+	vf, ok := i.(float64)
+	if ok {
+		i64 := int64(vf)
+		if vf-float64(i64) != 0 {
+			return 0, fmt.Errorf("float64 digit with fractional part: %f", vf)
+		}
+		return i64, nil
+	}
+	vs, ok := i.(string)
+	if ok {
+		return strconv.ParseInt(vs, 10, 64)
+	}
+	return 0, fmt.Errorf("invalid interface{} for digit: %+v, type: %T", i, i)
+}
+
+func decimalFromMap(obj map[string]interface{}) (Decimal, error) {
+	lPart, lOk := obj["l"]
+	rPart, rOk := obj["r"]
+	if len(obj) <= 2 && (lOk || rOk) {
+		var lI64, rI64 int64
+		var err error
+		if lOk {
+			lI64, err = decimalDigitFromInterface(lPart)
+			if err != nil {
+				return Decimal{}, err
+			}
+		}
+		if rOk {
+			rI64, err = decimalDigitFromInterface(rPart)
+			if err != nil {
+				return Decimal{}, err
+			}
+		}
+		return Decimal{L: lI64, R: rI64}, nil
+	} else {
+		return Decimal{}, fmt.Errorf("Error parsing Decimal: %+v", obj)
+	}
+}
+
 func json2config(data []byte) (*Config, error) {
 	var confj map[string]interface{}
 	err := json.Unmarshal(data, &confj)
@@ -305,21 +518,54 @@ func json2config(data []byte) (*Config, error) {
 			// try to parse decimal abbreviated string
 			d, err := DecimalFromString(v)
 			if err == nil {
-				conf.DecimalVals[k] = &d
+				conf.setDecimal(k, d)
 			} else {
-				conf.StringVals[k] = v
+				conf.setString(k, v)
 			}
 		case bool:
-			conf.BoolVals[k] = v
+			conf.setBool(k, v)
 		case float64:
-			conf.Float64Vals[k] = v
+			conf.setFloat64(k, v)
 		case map[string]interface{}:
-			lPart, lOk := v["l"]
-			rPart, rOk := v["r"]
-			if len(v) == 2 && lOk && rOk {
-				conf.DecimalVals[k] = &Decimal{L: int64(lPart.(float64)), R: int64(rPart.(float64))}
-			} else {
-				return nil, fmt.Errorf("Complex parsing not implemented: %+v", i)
+			d, err := decimalFromMap(v)
+			if err != nil {
+				return nil, err
+			}
+			conf.setDecimal(k, d)
+		case []interface{}:
+			msgType := strings.TrimSuffix(k, "List")
+			if msgType == k || len(msgType) == 0 {
+				return nil, fmt.Errorf("Complex config list not named with form {TypeName}List: %s", k)
+			}
+			// captialize first character since our type will be as such
+			msgType = strings.ToUpper(string(msgType[0])) + msgType[1:]
+			for idx, itm := range v {
+				itmMap, ok := itm.(map[string]interface{})
+				if !ok {
+					return nil, fmt.Errorf("Complex config not an object, %s idx %d", k, idx)
+				}
+				idI, ok := itmMap["id"]
+				if !ok {
+					return nil, fmt.Errorf("No 'id' provided in complex config, %s idx %d", k, idx)
+				}
+				id, ok := idI.(string)
+				if !ok {
+					return nil, fmt.Errorf("'id' not a string in complex config, %s idx %d", k, idx)
+				}
+				translateFromAbbreviatedDecimalsObj(itmMap)
+				itmJsonBytes, err := json.Marshal(itmMap)
+				if err != nil {
+					return nil, fmt.Errorf("Error re-marshalling complex config to json, %s idx %d, err: '%s'", k, idx, err.Error())
+				}
+				itmMsg, err := ComplexConfigUnmarshalJson(msgType, itmJsonBytes)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to unmarshal complex config json, %s idx %d, err: '%s'", k, idx, err.Error())
+				}
+				itmBytes, err := proto.Marshal(itmMsg)
+				if err != nil {
+					return nil, fmt.Errorf("Unable to marshal complex config msg, %s idx %d, err: '%s'", k, idx, err.Error())
+				}
+				conf.setComplex(msgType, id, itmBytes)
 			}
 		default:
 			return nil, fmt.Errorf("Failed to parse config value: %+v", i)
@@ -347,6 +593,31 @@ func config2json(conf *Config) (string, error) {
 		jmap[k] = decMap
 	}
 
+	for msgType, cmplxConf := range conf.ComplexVals {
+		list := make([]interface{}, 0, len(cmplxConf.MessageVals))
+		for _, msgBytes := range cmplxConf.MessageVals {
+			msg, err := ComplexConfigUnmarshal(msgType, msgBytes)
+			if err != nil {
+				return "", err
+			}
+			pjOpts := protojson.MarshalOptions{EmitUnpopulated: true}
+			msgJsonBytes, err := pjOpts.Marshal(msg)
+			if err != nil {
+				return "", err
+			}
+			var msgObj map[string]interface{}
+			err = json.Unmarshal(msgJsonBytes, &msgObj)
+			if err != nil {
+				return "", err
+			}
+			list = append(list, msgObj)
+		}
+		// captialize first character since our type will be as such
+		keyName := strings.ToLower(string(msgType[0])) + msgType[1:] + "List"
+		jmap[keyName] = list
+	}
+
+	translateToAbbreviatedDecimalsObj(jmap)
 	jbytes, err := json.Marshal(jmap)
 	if err != nil {
 		return "", err

@@ -16,10 +16,12 @@ func DecimalFromString(s string) (Decimal, error) {
 		if len(parts) >= 1 && len(parts) <= 2 {
 			var d Decimal
 			var err error
-			d.L, err = strconv.ParseInt(parts[0], 10, 64)
+			if len(parts[0]) > 0 { // handle cases like "d.1234" with no left side value
+				d.L, err = strconv.ParseInt(parts[0], 10, 64)
+			}
 			if err == nil {
 				if len(parts) == 1 || len(parts[1]) == 0 {
-					// no fractional part
+					// no fractional part, like "d1234."
 					return d, nil
 				}
 				d.R, err = strconv.ParseInt(parts[1], 10, 64)
