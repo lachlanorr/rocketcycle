@@ -5,3 +5,8 @@ bin/kafka-consumer-groups.sh --bootstrap-server kafka-0.clusa.perfa.local.rkcy.n
 bin/kafka-consumer-groups.sh --bootstrap-server kafka-0.clusa.perfa.local.rkcy.net:9092 --describe --all-groups
 ** get partition offsets
 bin/kafka-get-offsets.sh --bootstrap-server kafka-2.clusa.perfa.local.rkcy.net:9092
+* rpg enhancements
+** Guilds associate with Characters through GuildMember table indicating membership priveleges
+** GuildEvent table records which Characters participate in which GuildEvents and to what extent
+** GuildLoyalty gets calculated daily by examining build event participation of all Characters
+** Items have item types and get fleshed out
