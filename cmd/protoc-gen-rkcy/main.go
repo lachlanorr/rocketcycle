@@ -13,7 +13,7 @@ import (
 	"text/template"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
-	//"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
@@ -23,36 +23,42 @@ import (
 //go:embed templates
 var templates embed.FS
 
-type parseResult struct {
+type templateData struct {
 	Package         string
-	PbPackage       string
 	LeadingComments string
 	ShouldGenerate  bool
 
-	MessageMap map[string]*messageInfo
-	Messages   []*messageInfo
-	Configs    []*configInfo
-	Concerns   []*concernInfo
+	Configs  []*config
+	Concerns []*concern
 }
 
-type messageInfo struct {
-	Name    string
-	Message *descriptorpb.DescriptorProto
+type catalog struct {
+	MessageMap map[string]*message
+	Configs    []*config
+	Concerns   []*concern
 }
 
-type configInfo struct {
-	Name    string
-	Message *descriptorpb.DescriptorProto
+type message struct {
+	Name   string
+	FilePb *descriptorpb.FileDescriptorProto
+	MsgPb  *descriptorpb.DescriptorProto
 }
 
-type concernInfo struct {
-	Name     string
-	Message  *descriptorpb.DescriptorProto
-	Service  *descriptorpb.ServiceDescriptorProto
-	Commands []*commandInfo
+type config struct {
+	Name string
+	Msg  *message
 }
 
-type commandInfo struct {
+type concern struct {
+	Name      string
+	Msg       *message
+	Rel       *message
+	SvcPb     *descriptorpb.ServiceDescriptorProto
+	SvcFilePb *descriptorpb.FileDescriptorProto
+	Commands  []*command
+}
+
+type command struct {
 	Name       string
 	HasInput   bool
 	InputType  string
@@ -60,114 +66,132 @@ type commandInfo struct {
 	OutputType string
 }
 
-func extractMessages(pbMsg *descriptorpb.DescriptorProto, parent string) []*messageInfo {
-	var name string
-	if parent != "" {
-		name = fmt.Sprintf("%s_%s", parent, *pbMsg.Name)
-	} else {
-		name = *pbMsg.Name
+func printError(format string, a ...interface{}) {
+	if len(format) == 0 || format[len(format)-1] != '\n' {
+		format = format + "\n"
 	}
-
-	msg := &messageInfo{
-		Name:    name,
-		Message: pbMsg,
-	}
-	msgs := []*messageInfo{msg}
-
-	for _, nested := range pbMsg.NestedType {
-		msgs = append(msgs, extractMessages(nested, name)...)
-	}
-
-	return msgs
+	os.Stderr.Write([]byte(fmt.Sprintf(format, a...)))
 }
 
-func parseDescriptor(fdp *descriptorpb.FileDescriptorProto, rkcyPackage string) (*parseResult, error) {
-	parseRes := &parseResult{
-		MessageMap: make(map[string]*messageInfo),
+func debugPrintMessage(msg proto.Message) {
+	reqJson := protojson.Format(msg)
+	printError(reqJson)
+}
+
+func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error) {
+	cat := &catalog{MessageMap: make(map[string]*message)}
+
+	for _, pbFile := range pbFiles {
+		for _, pbMsg := range pbFile.MessageType {
+			msg := &message{
+				Name:   *pbMsg.Name,
+				FilePb: pbFile,
+				MsgPb:  pbMsg,
+			}
+			cat.MessageMap[msg.Name] = msg
+
+			is_config := proto.GetExtension(pbMsg.Options, rkcy.E_IsConfig).(bool)
+			if is_config {
+				conf := &config{
+					Name: *pbMsg.Name,
+					Msg:  msg,
+				}
+				cat.Configs = append(cat.Configs, conf)
+			}
+		}
 	}
 
-	typePrefix := *fdp.Package + "."
-	packageParts := strings.Split(*fdp.Package, ".")
+	// Second pass through files to find Concerns messages which can
+	// reference other messages by naming convention
+	for _, pbFile := range pbFiles {
+		typePrefix := *pbFile.Package + "."
+		for _, pbSvc := range pbFile.Service {
+			if strings.HasSuffix(*pbSvc.Name, "Commands") {
+				cncName := strings.TrimSuffix(*pbSvc.Name, "Commands")
 
+				if len(cncName) > 0 {
+					msg, ok := cat.MessageMap[cncName]
+					if !ok {
+						return nil, fmt.Errorf("No matching message for concern commands: %s", *pbSvc.Name)
+					}
+					cnc := &concern{
+						Name:      cncName,
+						Msg:       msg,
+						SvcPb:     pbSvc,
+						SvcFilePb: pbFile,
+					}
+
+					relName := cncName + "Related"
+					rel, ok := cat.MessageMap[relName]
+					if ok {
+						cnc.Rel = rel
+					}
+
+					for _, method := range cnc.SvcPb.Method {
+						cmd := &command{}
+
+						cmd.Name = *method.Name
+
+						if *method.InputType != ".rkcy.Void" {
+							cmd.HasInput = true
+							cmd.InputType = strings.TrimPrefix(*method.InputType, ".")
+							cmd.InputType = strings.TrimPrefix(cmd.InputType, typePrefix)
+						} else {
+							cmd.HasInput = false
+						}
+
+						if *method.OutputType != ".rkcy.Void" {
+							cmd.HasOutput = true
+							cmd.OutputType = strings.TrimPrefix(*method.OutputType, ".")
+							cmd.OutputType = strings.TrimPrefix(cmd.OutputType, typePrefix)
+						} else {
+							cmd.HasOutput = false
+						}
+
+						cnc.Commands = append(cnc.Commands, cmd)
+					}
+
+					cat.Concerns = append(cat.Concerns, cnc)
+				}
+			}
+		}
+	}
+	return cat, nil
+}
+
+func buildTemplateData(pbFile *descriptorpb.FileDescriptorProto, cat *catalog, rkcyPackage string) *templateData {
+	tmplData := &templateData{}
+
+	packageParts := strings.Split(*pbFile.Package, ".")
 	if rkcyPackage != "" {
-		parseRes.Package = rkcyPackage
+		tmplData.Package = rkcyPackage
 	} else {
-		parseRes.Package = packageParts[len(packageParts)-1]
+		tmplData.Package = packageParts[len(packageParts)-1]
 	}
-	parseRes.PbPackage = *fdp.Options.GoPackage
 
-	for _, loc := range fdp.SourceCodeInfo.Location {
+	for _, loc := range pbFile.SourceCodeInfo.Location {
 		if len(loc.LeadingDetachedComments) > 0 {
 			for _, cmt := range loc.LeadingDetachedComments {
-				parseRes.LeadingComments += "//" + strings.Replace(strings.TrimRight(cmt, "\n"), "\n", "\n//", -1)
+				tmplData.LeadingComments += "//" + strings.Replace(strings.TrimRight(cmt, "\n"), "\n", "\n//", -1)
 			}
 		}
 	}
 
-	// find and cleanup messages
-	for _, pbMsg := range fdp.MessageType {
-		parseRes.Messages = append(parseRes.Messages, extractMessages(pbMsg, "")...)
-
-		is_config := proto.GetExtension(pbMsg.Options, rkcy.E_Config).(bool)
-		if is_config {
-			conf := &configInfo{
-				Name:    *pbMsg.Name,
-				Message: pbMsg,
-			}
-			parseRes.Configs = append(parseRes.Configs, conf)
-			parseRes.ShouldGenerate = true
+	for _, cnf := range cat.Configs {
+		if cnf.Msg.FilePb == pbFile {
+			tmplData.Configs = append(tmplData.Configs, cnf)
 		}
 	}
 
-	for _, msg := range parseRes.Messages {
-		parseRes.MessageMap[msg.Name] = msg
-	}
-
-	// find and cleanup concerns
-	for _, pbSvc := range fdp.Service {
-		if strings.HasSuffix(*pbSvc.Name, "Commands") {
-			cncName := strings.TrimSuffix(*pbSvc.Name, "Commands")
-
-			msg, ok := parseRes.MessageMap[cncName]
-			if !ok {
-				return nil, fmt.Errorf("No matching message for concern commands: %s", *pbSvc.Name)
-			}
-			cnc := &concernInfo{
-				Name:    cncName,
-				Message: msg.Message,
-				Service: pbSvc,
-			}
-
-			for _, method := range cnc.Service.Method {
-				cmd := &commandInfo{}
-
-				cmd.Name = *method.Name
-
-				if *method.InputType != ".rkcy.Void" {
-					cmd.HasInput = true
-					cmd.InputType = strings.TrimPrefix(*method.InputType, ".")
-					cmd.InputType = strings.TrimPrefix(cmd.InputType, typePrefix)
-				} else {
-					cmd.HasInput = false
-				}
-
-				if *method.OutputType != ".rkcy.Void" {
-					cmd.HasOutput = true
-					cmd.OutputType = strings.TrimPrefix(*method.OutputType, ".")
-					cmd.OutputType = strings.TrimPrefix(cmd.OutputType, typePrefix)
-				} else {
-					cmd.HasOutput = false
-				}
-
-				cnc.Commands = append(cnc.Commands, cmd)
-			}
-
-			parseRes.Concerns = append(parseRes.Concerns, cnc)
-			parseRes.ShouldGenerate = true
+	for _, cnc := range cat.Concerns {
+		if cnc.Msg.FilePb == pbFile {
+			tmplData.Concerns = append(tmplData.Concerns, cnc)
 		}
 	}
 
-	return parseRes, nil
+	tmplData.ShouldGenerate = len(tmplData.Configs) > 0 || len(tmplData.Concerns) > 0
+
+	return tmplData
 }
 
 func parseParameters(params *string) map[string]string {
@@ -183,6 +207,15 @@ func parseParameters(params *string) map[string]string {
 		}
 	}
 	return paramMap
+}
+
+func findFileDescriptor(name string, pbFiles []*descriptorpb.FileDescriptorProto) *descriptorpb.FileDescriptorProto {
+	for _, pbFile := range pbFiles {
+		if *pbFile.Name == name {
+			return pbFile
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -214,21 +247,48 @@ func main() {
 
 	rsp := &plugin.CodeGeneratorResponse{}
 
-	//reqJson := protojson.Format(req)
-	//os.Stderr.Write([]byte(reqJson))
-
-	for _, fileToGen := range req.ProtoFile {
-		parseRes, err := parseDescriptor(fileToGen, rkcyPackage)
-		if err != nil {
-			panic(err)
+	pbFilesToGen := make([]*descriptorpb.FileDescriptorProto, len(req.FileToGenerate))
+	for i, pbFileName := range req.FileToGenerate {
+		pbFile := findFileDescriptor(pbFileName, req.ProtoFile)
+		if pbFile == nil {
+			printError("FileDescriptor not found: %s", pbFileName)
 		}
-		if parseRes.ShouldGenerate {
+		pbFilesToGen[i] = pbFile
+	}
+
+	cat, err := buildCatalog(pbFilesToGen)
+	if err != nil {
+		printError("Unable to build catalog: %s", err.Error())
+		panic(err)
+	}
+
+	// print some debug info
+	if len(cat.Configs) > 0 {
+		printError("Compiling Configs:")
+		for _, cnf := range cat.Configs {
+			printError("  %s", cnf.Name)
+		}
+	}
+	if len(cat.Concerns) > 0 {
+		printError("Compiling Concerns:")
+		for _, cnc := range cat.Concerns {
+			line := fmt.Sprintf("  %s", cnc.Name)
+			if cnc.Rel != nil {
+				line += fmt.Sprintf(", with %s", cnc.Rel.Name)
+			}
+			printError(line)
+		}
+	}
+
+	for _, pbFile := range pbFilesToGen {
+		tmplData := buildTemplateData(pbFile, cat, rkcyPackage)
+		if tmplData.ShouldGenerate {
 			mdFile := plugin.CodeGeneratorResponse_File{}
-			name := strings.Replace(*fileToGen.Name, ".proto", ".rkcy.go", -1)
+			name := strings.Replace(*pbFile.Name, ".proto", ".rkcy.go", -1)
 			mdFile.Name = &name
 
 			var contentBld strings.Builder
-			err = rkcyTmpl.Execute(&contentBld, parseRes)
+			err = rkcyTmpl.Execute(&contentBld, tmplData)
 			if err != nil {
 				panic(err)
 			}
