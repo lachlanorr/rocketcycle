@@ -34,14 +34,23 @@ type templateData struct {
 
 type catalog struct {
 	MessageMap map[string]*message
+	ServiceMap map[string]*service
 	Configs    []*config
 	Concerns   []*concern
 }
 
 type message struct {
+	Name      string
+	FilePb    *descriptorpb.FileDescriptorProto
+	MsgPb     *descriptorpb.DescriptorProto
+	IsConfig  bool
+	IsConcern bool
+}
+
+type service struct {
 	Name   string
 	FilePb *descriptorpb.FileDescriptorProto
-	MsgPb  *descriptorpb.DescriptorProto
+	SvcPb  *descriptorpb.ServiceDescriptorProto
 }
 
 type config struct {
@@ -50,12 +59,23 @@ type config struct {
 }
 
 type concern struct {
-	Name      string
-	Msg       *message
-	Rel       *message
-	SvcPb     *descriptorpb.ServiceDescriptorProto
-	SvcFilePb *descriptorpb.FileDescriptorProto
-	Commands  []*command
+	Name        string
+	Msg         *message
+	RelConfigs  *related
+	RelConcerns *related
+	Svc         *service
+	Commands    []*command
+}
+
+type related struct {
+	Msg    *message
+	Fields []*messageField
+}
+
+type messageField struct {
+	Name    string
+	Msg     *message
+	FieldPb *descriptorpb.FieldDescriptorProto
 }
 
 type command struct {
@@ -78,8 +98,38 @@ func debugPrintMessage(msg proto.Message) {
 	printError(reqJson)
 }
 
+func buildRelated(cat *catalog, msg *message, pkg string) (*related, error) {
+	rel := &related{
+		Msg: msg,
+	}
+	pkgPrefix := fmt.Sprintf(".%s.", pkg)
+
+	if len(msg.MsgPb.Field) == 0 {
+		return nil, fmt.Errorf("Related message has no fields: %s", msg.Name)
+	}
+	for _, pbField := range msg.MsgPb.Field {
+		if *pbField.Type != descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
+			return nil, fmt.Errorf("Related field is not a message type: %s.%s", msg.Name, *pbField.Name)
+		}
+		fieldType := strings.TrimPrefix(*pbField.TypeName, pkgPrefix)
+		fieldMsg, ok := cat.MessageMap[fieldType]
+		if !ok {
+			return nil, fmt.Errorf("Related field type not found: %s.%s, type: %s", msg.Name, *pbField.Name, fieldType)
+		}
+		rel.Fields = append(rel.Fields, &messageField{
+			Name:    *pbField.Name,
+			Msg:     fieldMsg,
+			FieldPb: pbField,
+		})
+	}
+	return rel, nil
+}
+
 func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error) {
-	cat := &catalog{MessageMap: make(map[string]*message)}
+	cat := &catalog{
+		MessageMap: make(map[string]*message),
+		ServiceMap: make(map[string]*service),
+	}
 
 	for _, pbFile := range pbFiles {
 		for _, pbMsg := range pbFile.MessageType {
@@ -90,69 +140,102 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 			}
 			cat.MessageMap[msg.Name] = msg
 
-			is_config := proto.GetExtension(pbMsg.Options, rkcy.E_IsConfig).(bool)
-			if is_config {
+			msg.IsConfig = proto.GetExtension(pbMsg.Options, rkcy.E_IsConfig).(bool)
+			msg.IsConcern = proto.GetExtension(pbMsg.Options, rkcy.E_IsConcern).(bool)
+			if msg.IsConfig && msg.IsConcern {
+				return nil, fmt.Errorf("Message cannot be both a config and concern: %s", *pbMsg.Name)
+			}
+			if msg.IsConfig {
 				conf := &config{
 					Name: *pbMsg.Name,
 					Msg:  msg,
 				}
 				cat.Configs = append(cat.Configs, conf)
+			} else if msg.IsConcern {
+				cnc := &concern{
+					Name: *pbMsg.Name,
+					Msg:  msg,
+				}
+				cat.Concerns = append(cat.Concerns, cnc)
 			}
+		}
+
+		for _, pbSvc := range pbFile.Service {
+			svc := &service{
+				Name:   *pbSvc.Name,
+				FilePb: pbFile,
+				SvcPb:  pbSvc,
+			}
+			cat.ServiceMap[svc.Name] = svc
 		}
 	}
 
-	// Second pass through files to find Concerns messages which can
-	// reference other messages by naming convention
-	for _, pbFile := range pbFiles {
-		typePrefix := *pbFile.Package + "."
-		for _, pbSvc := range pbFile.Service {
-			if strings.HasSuffix(*pbSvc.Name, "Commands") {
-				cncName := strings.TrimSuffix(*pbSvc.Name, "Commands")
+	// Second pass through concerns to rind associated messages and services
+	for _, cnc := range cat.Concerns {
 
-				if len(cncName) > 0 {
-					msg, ok := cat.MessageMap[cncName]
-					if !ok {
-						return nil, fmt.Errorf("No matching message for concern commands: %s", *pbSvc.Name)
-					}
-					cnc := &concern{
-						Name:      cncName,
-						Msg:       msg,
-						SvcPb:     pbSvc,
-						SvcFilePb: pbFile,
-					}
+		// RelatedConfigs
+		relConfsName := cnc.Name + "RelatedConfigs"
+		relConfs, ok := cat.MessageMap[relConfsName]
+		if ok {
+			var err error
+			cnc.RelConfigs, err = buildRelated(cat, relConfs, *relConfs.FilePb.Package)
+			if err != nil {
+				return nil, err
+			}
 
-					relName := cncName + "Related"
-					rel, ok := cat.MessageMap[relName]
-					if ok {
-						cnc.Rel = rel
-					}
-
-					for _, method := range cnc.SvcPb.Method {
-						cmd := &command{}
-
-						cmd.Name = *method.Name
-
-						if *method.InputType != ".rkcy.Void" {
-							cmd.HasInput = true
-							cmd.InputType = strings.TrimPrefix(*method.InputType, ".")
-							cmd.InputType = strings.TrimPrefix(cmd.InputType, typePrefix)
-						} else {
-							cmd.HasInput = false
-						}
-
-						if *method.OutputType != ".rkcy.Void" {
-							cmd.HasOutput = true
-							cmd.OutputType = strings.TrimPrefix(*method.OutputType, ".")
-							cmd.OutputType = strings.TrimPrefix(cmd.OutputType, typePrefix)
-						} else {
-							cmd.HasOutput = false
-						}
-
-						cnc.Commands = append(cnc.Commands, cmd)
-					}
-
-					cat.Concerns = append(cat.Concerns, cnc)
+			for _, field := range cnc.RelConfigs.Fields {
+				if !field.Msg.IsConfig {
+					return nil, fmt.Errorf("RelatedConfigs field not a config %s.%s", cnc.RelConfigs.Msg.Name, field.Name)
 				}
+			}
+		}
+
+		// RelatedConcerns
+		relCncsName := cnc.Name + "RelatedConcerns"
+		relCncs, ok := cat.MessageMap[relCncsName]
+		if ok {
+			var err error
+			cnc.RelConcerns, err = buildRelated(cat, relCncs, *relCncs.FilePb.Package)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, field := range cnc.RelConcerns.Fields {
+				if !field.Msg.IsConcern {
+					return nil, fmt.Errorf("RelatedConcerns field not a concern %s.%s", cnc.RelConcerns.Msg.Name, field.Name)
+				}
+			}
+		}
+
+		// Commands service methods
+		cmdsName := cnc.Name + "Commands"
+		cmdsSvc, ok := cat.ServiceMap[cmdsName]
+		if ok {
+			cnc.Svc = cmdsSvc
+			for _, method := range cmdsSvc.SvcPb.Method {
+				cmd := &command{}
+
+				cmd.Name = *method.Name
+
+				typePrefix := *cmdsSvc.FilePb.Package + "."
+
+				if *method.InputType != ".rkcy.Void" {
+					cmd.HasInput = true
+					cmd.InputType = strings.TrimPrefix(*method.InputType, ".")
+					cmd.InputType = strings.TrimPrefix(cmd.InputType, typePrefix)
+				} else {
+					cmd.HasInput = false
+				}
+
+				if *method.OutputType != ".rkcy.Void" {
+					cmd.HasOutput = true
+					cmd.OutputType = strings.TrimPrefix(*method.OutputType, ".")
+					cmd.OutputType = strings.TrimPrefix(cmd.OutputType, typePrefix)
+				} else {
+					cmd.HasOutput = false
+				}
+
+				cnc.Commands = append(cnc.Commands, cmd)
 			}
 		}
 	}
@@ -272,11 +355,17 @@ func main() {
 	if len(cat.Concerns) > 0 {
 		printError("Compiling Concerns:")
 		for _, cnc := range cat.Concerns {
-			line := fmt.Sprintf("  %s", cnc.Name)
-			if cnc.Rel != nil {
-				line += fmt.Sprintf(", with %s", cnc.Rel.Name)
+			assoc := make([]string, 0)
+			if cnc.Svc != nil {
+				assoc = append(assoc, cnc.Svc.Name)
 			}
-			printError(line)
+			if cnc.RelConfigs != nil {
+				assoc = append(assoc, cnc.RelConfigs.Msg.Name)
+			}
+			if cnc.RelConcerns != nil {
+				assoc = append(assoc, cnc.RelConcerns.Msg.Name)
+			}
+			printError("  %s with %s", cnc.Name, strings.Join(assoc, ", "))
 		}
 	}
 
@@ -286,6 +375,8 @@ func main() {
 			mdFile := plugin.CodeGeneratorResponse_File{}
 			name := strings.Replace(*pbFile.Name, ".proto", ".rkcy.go", -1)
 			mdFile.Name = &name
+
+			printError("Writing %s", name)
 
 			var contentBld strings.Builder
 			err = rkcyTmpl.Execute(&contentBld, tmplData)

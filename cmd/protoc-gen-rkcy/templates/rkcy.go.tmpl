@@ -38,7 +38,7 @@ import (
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
-func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
+func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) ({{ if $concern.RelConfigs }}related *{{ $concern.RelConfigs.Msg.Name }}, {{ end }}*rkcy.CompoundOffset, error) {
 	// Read {{ $concern.Name }} instance from storage system and set in inst
 	// Return CompoundOffset as well, as was presented on last Create/Update
 
