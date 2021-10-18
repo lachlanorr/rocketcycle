@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	gInstanceCache *InstanceCache = NewInstanceCache()
+	gInstanceStore *InstanceStore = NewInstanceStore()
 )
 
 func produceApecsTxnError(
@@ -184,7 +184,7 @@ func advanceApecsTxn(
 	// Grab current timestamp, which will be used in a couple places below
 	now := timestamppb.Now()
 
-	// Read instance from InstanceCache
+	// Read instance from InstanceStore
 	var inst []byte
 	if step.System == System_PROCESS {
 		step.CmpdOffset = cmpdOffset
@@ -193,7 +193,7 @@ func advanceApecsTxn(
 		// REFRESH command is only ever sent after a READ was executed
 		// against the Storage
 		if step.Command == REFRESH {
-			gInstanceCache.Set(step.Key, step.Payload, cmpdOffset)
+			gInstanceStore.SetInstance(step.Key, step.Payload, cmpdOffset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
@@ -203,7 +203,7 @@ func advanceApecsTxn(
 			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 			return Code_OK
 		} else {
-			inst = gInstanceCache.Get(step.Key)
+			inst = gInstanceStore.GetInstance(step.Key)
 
 			nilOk := step.Command == CREATE || step.Command == VALIDATE_CREATE
 			if inst == nil && !nilOk {
@@ -238,7 +238,7 @@ func advanceApecsTxn(
 				}
 				return Code_OK
 			} else if inst != nil && step.Command == CREATE {
-				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in cache in CREATE command", step.Key)
+				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in store in CREATE command", step.Key)
 				return Code_INTERNAL
 			}
 		}
@@ -316,9 +316,9 @@ func advanceApecsTxn(
 		step.Result.Payload = step.Payload
 	}
 
-	// Update InstanceCache if instance contents have changed
+	// Update InstanceStore if instance contents have changed
 	if tp.System == System_PROCESS && step.Result.Instance != nil {
-		gInstanceCache.Set(step.Key, step.Result.Instance, cmpdOffset)
+		gInstanceStore.SetInstance(step.Key, step.Result.Instance, cmpdOffset)
 	}
 
 	produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)

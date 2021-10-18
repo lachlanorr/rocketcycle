@@ -153,7 +153,7 @@ func handleCommand(
 			if direction == Direction_REVERSE {
 				panic("REVERSE NOT IMPLEMENTED")
 			}
-			gInstanceCache.Remove(args.Key)
+			gInstanceStore.Remove(args.Key)
 			return &ApecsTxn_Step_Result{
 				Code: Code_OK,
 			}
