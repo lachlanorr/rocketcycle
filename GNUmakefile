@@ -32,8 +32,8 @@ clean: ## remove all build artifacts
 	@rm -rf ./pkg/rkcy/pb/*.pb.go ./pkg/rkcy/pb/*_grpc.pb.go ./pkg/rkcy/pb/*.pb.gw.go
 	@rm -rf ./examples/rpg/pb/*.pb.go ./examples/rpg/pb/*_grpc.pb.go ./examples/rpg/pb/*.pb.gw.go
 
-.PHONY: proto protoc-gen-rkcy
-proto: ## generate protocol buffers
+.PHONY: proto
+proto: protoc-gen-rkcy ## generate protocol buffers
 	@echo "==> Building $@..."
 	@go generate pkg/rkcy/gen.go
 	@go generate examples/rpg/concerns/gen.go
@@ -47,11 +47,11 @@ protoc-gen-rkcy: ## compile rkcy mgmt app
 	-o $(BUILD_BIN_DIR)/protoc-gen-rkcy \
 	./cmd/protoc-gen-rkcy
 
-.PHONY: examples proto
+.PHONY: examples
 examples: rpg ## compile rpg example
 
 .PHONY: rpg
-rpg: ## compile rpg example
+rpg: proto ## compile rpg example
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
