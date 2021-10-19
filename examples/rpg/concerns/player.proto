@@ -10,6 +10,8 @@ option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/concerns";
 import "rkcy/extensions.proto";
 
 message Player {
+    option (rkcy.is_concern) = true;
+
     string id = 1;
     string username = 2;
     bool active = 3;
@@ -17,9 +19,7 @@ message Player {
     Limits limits = 4;
 }
 
-service PlayerCommands {}
-
 message Limits {
-    option (rkcy.config) = true;
+    option (rkcy.is_config) = true;
     int32 max_characters_per_player = 1;
 }

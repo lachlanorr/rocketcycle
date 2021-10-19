@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-{{ end }}
+{{- end }}
 )
 {{- if gt (len .Configs) 0 }}
 {{ range $config := .Configs }}
@@ -32,30 +32,46 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 {{ range $concern := .Concerns }}
+{{- $relConfArg := "" }}
+{{- $relConfRet := "" }}
+{{- $relCncArg := "" }}
+{{- $relCncRet := "" }}
+{{- with $concern.RelConfigs }}
+{{- $relConfArg = printf "relatedConfigs *%s, " $concern.RelConfigs.Msg.Name }}
+{{- $relConfRet = printf "*%s, " $concern.RelConfigs.Msg.Name }}
+{{- end }}
+{{- with $concern.RelConcerns }}
+{{- $relCncArg = printf "relatedConcerns *%s, " $concern.RelConcerns.Msg.Name }}
+{{- $relCncRet = printf "*%s, " $concern.RelConcerns.Msg.Name }}
+{{- end }}
 // -----------------------------------------------------------------------------
 // Concern {{ .Name }}
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // STORAGE CRUD Handlers
 // -----------------------------------------------------------------------------
-func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) ({{ if $concern.RelConfigs }}related *{{ $concern.RelConfigs.Msg.Name }}, {{ end }}*rkcy.CompoundOffset, error) {
+func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) ({{ $relCncRet }}*rkcy.CompoundOffset, error) {
 	// Read {{ $concern.Name }} instance from storage system and set in inst
+{{- with $concern.RelConcerns }}
 	// Return CompoundOffset as well, as was presented on last Create/Update
+{{- end }}
+	// If RelatedConcerns are present, those must be returned as well
 
-	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Read")
+	return nil, nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Read")
 }
 
 func (inst *{{ $concern.Name }}) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
-	// Create new {{ $concern.Name }} instance in the storage system, store offset as well.
+	// Create new {{ $concern.Name }} instance in the storage system,
+	// storing offset as well.
 	// If storage offset is less than offset argument, do not create,
 	// as this is indicative of a message duplicate.
 
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Create")
 }
 
-func (inst *{{ $concern.Name }}) Update(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
+func (inst *{{ $concern.Name }}) Update(ctx context.Context, {{ $relCncArg }}cmpdOffset *rkcy.CompoundOffset) error {
 	// Update existsing {{ $concern.Name }} instance in the storage system,
-	// store offset as well.
+	// storing {{ with $concern.RelConcerns }}relatedConcerns, and {{ end }}offset as well.
 	// If storage offset is less than offset argument, do not update,
 	// as this is indicative of a message duplicate.
 
@@ -91,6 +107,7 @@ func (inst *{{ $concern.Name }}) ValidateUpdate(ctx context.Context, payload *{{
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers (END)
 // -----------------------------------------------------------------------------
+{{- with $concern.Commands }}
 
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers
@@ -104,6 +121,7 @@ func (inst *{{ $concern.Name }}) {{ .Name }}(ctx context.Context{{ if .HasInput 
 // -----------------------------------------------------------------------------
 // PROCESS Command Handlers (END)
 // -----------------------------------------------------------------------------
+{{- end }}
 // -----------------------------------------------------------------------------
 // Concern {{ .Name }} (END)
 // -----------------------------------------------------------------------------

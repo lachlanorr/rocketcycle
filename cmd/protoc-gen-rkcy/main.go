@@ -365,7 +365,11 @@ func main() {
 			if cnc.RelConcerns != nil {
 				assoc = append(assoc, cnc.RelConcerns.Msg.Name)
 			}
-			printError("  %s with %s", cnc.Name, strings.Join(assoc, ", "))
+			withClause := ""
+			if len(assoc) > 0 {
+				withClause = fmt.Sprintf(" with %s", strings.Join(assoc, ", "))
+			}
+			printError("  %s%s", cnc.Name, withClause)
 		}
 	}
 

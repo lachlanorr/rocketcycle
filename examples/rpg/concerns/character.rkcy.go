@@ -34,29 +34,30 @@ import (
 // -----------------------------------------------------------------------------
 func (inst *Character) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
 	// Read Character instance from storage system and set in inst
-	// Return CompoundOffset as well, as was presented on last Create/Update
+	// If RelatedConcerns are present, those must be returned as well
 
-	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Read")
+	return nil, nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Read")
 }
 
-func (inst *Character) Create(ctx context.Context, offset *rkcy.CompoundOffset) error {
-	// Create new Character instance in the storage system, store offset as well.
+func (inst *Character) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
+	// Create new Character instance in the storage system,
+	// storing offset as well.
 	// If storage offset is less than offset argument, do not create,
 	// as this is indicative of a message duplicate.
 
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Create")
 }
 
-func (inst *Character) Update(ctx context.Context, offset *rkcy.CompoundOffset) error {
+func (inst *Character) Update(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
 	// Update existsing Character instance in the storage system,
-	// store offset as well.
+	// storing offset as well.
 	// If storage offset is less than offset argument, do not update,
 	// as this is indicative of a message duplicate.
 
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Character.Update")
 }
 
-func (inst *Character) Delete(ctx context.Context, key string, offset *rkcy.CompoundOffset) error {
+func (inst *Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
 	// Delete existsing Character instance in the storage system.
 	// If storage offset is less than offset argument, do not delete,
 	// as this is indicative of a message duplicate.

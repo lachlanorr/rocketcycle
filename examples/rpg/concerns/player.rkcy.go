@@ -36,29 +36,30 @@ import (
 // -----------------------------------------------------------------------------
 func (inst *Player) Read(ctx context.Context, key string) (*rkcy.CompoundOffset, error) {
 	// Read Player instance from storage system and set in inst
-	// Return CompoundOffset as well, as was presented on last Create/Update
+	// If RelatedConcerns are present, those must be returned as well
 
-	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
+	return nil, nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Read")
 }
 
-func (inst *Player) Create(ctx context.Context, offset *rkcy.CompoundOffset) error {
-	// Create new Player instance in the storage system, store offset as well.
+func (inst *Player) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
+	// Create new Player instance in the storage system,
+	// storing offset as well.
 	// If storage offset is less than offset argument, do not create,
 	// as this is indicative of a message duplicate.
 
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Create")
 }
 
-func (inst *Player) Update(ctx context.Context, offset *rkcy.CompoundOffset) error {
+func (inst *Player) Update(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
 	// Update existsing Player instance in the storage system,
-	// store offset as well.
+	// storing offset as well.
 	// If storage offset is less than offset argument, do not update,
 	// as this is indicative of a message duplicate.
 
 	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: Player.Update")
 }
 
-func (inst *Player) Delete(ctx context.Context, key string, offset *rkcy.CompoundOffset) error {
+func (inst *Player) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
 	// Delete existsing Player instance in the storage system.
 	// If storage offset is less than offset argument, do not delete,
 	// as this is indicative of a message duplicate.
@@ -86,13 +87,6 @@ func (inst *Player) ValidateUpdate(ctx context.Context, payload *Player) (*Playe
 }
 // -----------------------------------------------------------------------------
 // PROCESS Standard Handlers (END)
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// PROCESS Command Handlers
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// PROCESS Command Handlers (END)
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // Concern Player (END)

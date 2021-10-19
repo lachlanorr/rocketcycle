@@ -7,7 +7,11 @@ syntax = "proto3";
 package rocketcycle.examples.rpg.concerns;
 option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/concerns";
 
+import "rkcy/extensions.proto";
+
 message Character {
+    option (rkcy.is_concern) = true;
+
     string id = 1;
     string player_id = 2;
     string fullname = 3;
