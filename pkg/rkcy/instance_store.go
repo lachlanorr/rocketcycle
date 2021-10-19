@@ -39,12 +39,18 @@ func (instStore *InstanceStore) Get(key string) *InstanceRecord {
 
 func (instStore *InstanceStore) GetInstance(key string) []byte {
 	rec := instStore.Get(key)
-	return rec.Instance
+	if rec != nil {
+		return rec.Instance
+	}
+	return nil
 }
 
 func (instStore *InstanceStore) GetRelated(key string) []byte {
 	rec := instStore.Get(key)
-	return rec.Related
+	if rec != nil {
+		return rec.Related
+	}
+	return nil
 }
 
 func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOffset *CompoundOffset) {
