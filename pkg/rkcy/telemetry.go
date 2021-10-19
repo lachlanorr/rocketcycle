@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	otel_codes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/metric/global"
@@ -135,6 +136,10 @@ func TraceIdFromTraceParent(traceParent string) string {
 		return ""
 	}
 	return parts[1]
+}
+
+func RecordSpanError(span trace.Span, err error) {
+	span.SetStatus(otel_codes.Error, err.Error())
 }
 
 func ExtractTraceParent(ctx context.Context) string {

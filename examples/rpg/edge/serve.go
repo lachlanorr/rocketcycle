@@ -17,8 +17,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	otel_codes "go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -120,15 +118,11 @@ func processCrudRequest(
 		wg,
 	)
 	if err != nil {
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
 	return result, nil
-}
-
-func recordError(span trace.Span, err error) {
-	span.SetStatus(otel_codes.Error, err.Error())
 }
 
 func processCrudRequestPlayer(
@@ -144,14 +138,14 @@ func processCrudRequestPlayer(
 	if command == rkcy.CREATE {
 		if plyr.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			recordError(span, err)
+			rkcy.RecordSpanError(span, err)
 			return nil, err
 		}
 		plyr.Id = uuid.NewString()
 	} else {
 		if plyr.Id == "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			recordError(span, err)
+			rkcy.RecordSpanError(span, err)
 			return nil, err
 		}
 	}
@@ -162,7 +156,7 @@ func processCrudRequestPlayer(
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to processCrudRequest")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, err
 	}
 
@@ -173,7 +167,7 @@ func processCrudRequestPlayer(
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to Unmarshal Payload")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
@@ -194,14 +188,14 @@ func processCrudRequestCharacter(
 	if command == rkcy.CREATE {
 		if char.Id != "" {
 			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			recordError(span, err)
+			rkcy.RecordSpanError(span, err)
 			return nil, err
 		}
 		char.Id = uuid.NewString()
 	} else {
 		if char.Id == "" {
 			err := status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
-			recordError(span, err)
+			rkcy.RecordSpanError(span, err)
 			return nil, err
 		}
 	}
@@ -212,7 +206,7 @@ func processCrudRequestCharacter(
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to processCrudRequest")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, err
 	}
 
@@ -223,7 +217,7 @@ func processCrudRequestCharacter(
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to Unmarshal Payload")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
@@ -306,7 +300,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest
 		srv.wg,
 	)
 	if err != nil {
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
@@ -317,7 +311,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to Unmarshal Payload")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 	return characterResult, nil
@@ -363,7 +357,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Voi
 	)
 
 	if err != nil {
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
@@ -374,7 +368,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Voi
 			Err(err).
 			Str("TraceId", traceId).
 			Msg("Failed to Unmarshal Payload")
-		recordError(span, err)
+		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 	return &rkcy.Void{}, nil
