@@ -15,7 +15,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -85,7 +85,7 @@ func local_request_RpgService_ReadPlayer_0(ctx context.Context, marshaler runtim
 }
 
 func request_RpgService_CreatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Player
+	var protoReq pb.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -102,7 +102,7 @@ func request_RpgService_CreatePlayer_0(ctx context.Context, marshaler runtime.Ma
 }
 
 func local_request_RpgService_CreatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Player
+	var protoReq pb.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -119,7 +119,7 @@ func local_request_RpgService_CreatePlayer_0(ctx context.Context, marshaler runt
 }
 
 func request_RpgService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Player
+	var protoReq pb.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -136,7 +136,7 @@ func request_RpgService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Ma
 }
 
 func local_request_RpgService_UpdatePlayer_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Player
+	var protoReq pb.Player
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -257,7 +257,7 @@ func local_request_RpgService_ReadCharacter_0(ctx context.Context, marshaler run
 }
 
 func request_RpgService_CreateCharacter_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Character
+	var protoReq pb.Character
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -274,7 +274,7 @@ func request_RpgService_CreateCharacter_0(ctx context.Context, marshaler runtime
 }
 
 func local_request_RpgService_CreateCharacter_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Character
+	var protoReq pb.Character
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -291,7 +291,7 @@ func local_request_RpgService_CreateCharacter_0(ctx context.Context, marshaler r
 }
 
 func request_RpgService_UpdateCharacter_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Character
+	var protoReq pb.Character
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -308,7 +308,7 @@ func request_RpgService_UpdateCharacter_0(ctx context.Context, marshaler runtime
 }
 
 func local_request_RpgService_UpdateCharacter_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.Character
+	var protoReq pb.Character
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -377,7 +377,7 @@ func local_request_RpgService_DeleteCharacter_0(ctx context.Context, marshaler r
 }
 
 func request_RpgService_FundCharacter_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.FundingRequest
+	var protoReq pb.FundingRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -394,7 +394,7 @@ func request_RpgService_FundCharacter_0(ctx context.Context, marshaler runtime.M
 }
 
 func local_request_RpgService_FundCharacter_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq concerns.FundingRequest
+	var protoReq pb.FundingRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)

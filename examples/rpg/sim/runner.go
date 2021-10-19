@@ -17,8 +17,8 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/version"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 type CommandId int
@@ -213,7 +213,7 @@ func compareStorage(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	diffs := make([]*Difference, 0, 10)
 
 	for _, stateDbPlayer := range stateDb.Players {
-		rkcyPlayer := &concerns.Player{}
+		rkcyPlayer := &pb.Player{}
 		_, err := rkcyPlayer.Read(ctx, stateDbPlayer.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
@@ -228,7 +228,7 @@ func compareStorage(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	}
 
 	for _, stateDbCharacter := range stateDb.Characters {
-		rkcyCharacter := &concerns.Character{}
+		rkcyCharacter := &pb.Character{}
 		_, err := rkcyCharacter.Read(ctx, stateDbCharacter.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})

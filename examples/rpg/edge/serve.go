@@ -25,8 +25,8 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 //go:embed static/docs
@@ -129,9 +129,9 @@ func processCrudRequestPlayer(
 	ctx context.Context,
 	traceId string,
 	command string,
-	plyr *concerns.Player,
+	plyr *pb.Player,
 	wg *sync.WaitGroup,
-) (*concerns.Player, error) {
+) (*pb.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
@@ -160,7 +160,7 @@ func processCrudRequestPlayer(
 		return nil, err
 	}
 
-	playerResult := &concerns.Player{}
+	playerResult := &pb.Player{}
 	err = proto.Unmarshal(result.Payload, playerResult)
 	if err != nil {
 		log.Error().
@@ -178,9 +178,9 @@ func processCrudRequestCharacter(
 	ctx context.Context,
 	traceId string,
 	command string,
-	char *concerns.Character,
+	char *pb.Character,
 	wg *sync.WaitGroup,
-) (*concerns.Character, error) {
+) (*pb.Character, error) {
 
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
@@ -210,7 +210,7 @@ func processCrudRequestCharacter(
 		return nil, err
 	}
 
-	characterResult := &concerns.Character{}
+	characterResult := &pb.Character{}
 	err = proto.Unmarshal(result.Payload, characterResult)
 	if err != nil {
 		log.Error().
@@ -224,19 +224,19 @@ func processCrudRequestCharacter(
 	return characterResult, nil
 }
 
-func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*concerns.Player, error) {
+func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &concerns.Player{Id: req.Id}, srv.wg)
+	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &pb.Player{Id: req.Id}, srv.wg)
 }
 
-func (srv server) CreatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
+func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
 	return processCrudRequestPlayer(ctx, traceId, rkcy.CREATE, plyr, srv.wg)
 }
 
-func (srv server) UpdatePlayer(ctx context.Context, plyr *concerns.Player) (*concerns.Player, error) {
+func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
 	return processCrudRequestPlayer(ctx, traceId, rkcy.UPDATE, plyr, srv.wg)
@@ -252,19 +252,19 @@ func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgRespon
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*concerns.Character, error) {
+func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &concerns.Character{Id: req.Id}, srv.wg)
+	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &pb.Character{Id: req.Id}, srv.wg)
 }
 
-func (srv server) CreateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
+func (srv server) CreateCharacter(ctx context.Context, char *pb.Character) (*pb.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
 	return processCrudRequestCharacter(ctx, traceId, rkcy.CREATE, char, srv.wg)
 }
 
-func (srv server) UpdateCharacter(ctx context.Context, char *concerns.Character) (*concerns.Character, error) {
+func (srv server) UpdateCharacter(ctx context.Context, char *pb.Character) (*pb.Character, error) {
 	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
 	defer span.End()
 	return processCrudRequestCharacter(ctx, traceId, rkcy.UPDATE, char, srv.wg)
@@ -280,7 +280,7 @@ func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgRes
 	return &RpgResponse{Id: req.Id}, nil
 }
 
-func (srv server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest) (*concerns.Character, error) {
+func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 	traceId := span.SpanContext().TraceID().String()
@@ -304,7 +304,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *concerns.FundingRequest
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
-	characterResult := &concerns.Character{}
+	characterResult := &pb.Character{}
 	err = proto.Unmarshal(result.Payload, characterResult)
 	if err != nil {
 		log.Error().
@@ -361,7 +361,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Voi
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
 
-	characterResult := &concerns.Character{}
+	characterResult := &pb.Character{}
 	err = proto.Unmarshal(result.Payload, characterResult)
 	if err != nil {
 		log.Error().

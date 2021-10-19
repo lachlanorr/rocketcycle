@@ -8,27 +8,27 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 type StateDb struct {
-	Players    []*concerns.Player
-	Characters []*concerns.Character
+	Players    []*pb.Player
+	Characters []*pb.Character
 
-	PlayerMap    map[string]*concerns.Player
-	CharacterMap map[string]*concerns.Character
+	PlayerMap    map[string]*pb.Player
+	CharacterMap map[string]*pb.Character
 }
 
 func NewStateDb() *StateDb {
 	return &StateDb{
-		Players:      make([]*concerns.Player, 0, 100),
-		Characters:   make([]*concerns.Character, 0, 100),
-		PlayerMap:    make(map[string]*concerns.Player),
-		CharacterMap: make(map[string]*concerns.Character),
+		Players:      make([]*pb.Player, 0, 100),
+		Characters:   make([]*pb.Character, 0, 100),
+		PlayerMap:    make(map[string]*pb.Player),
+		CharacterMap: make(map[string]*pb.Character),
 	}
 }
 
-func (stateDb *StateDb) UpsertPlayer(player *concerns.Player) {
+func (stateDb *StateDb) UpsertPlayer(player *pb.Player) {
 	_, ok := stateDb.PlayerMap[player.Id]
 	if !ok {
 		stateDb.Players = append(stateDb.Players, player)
@@ -36,11 +36,11 @@ func (stateDb *StateDb) UpsertPlayer(player *concerns.Player) {
 	stateDb.PlayerMap[player.Id] = player
 }
 
-func (stateDb *StateDb) RandomPlayer(r *rand.Rand) *concerns.Player {
+func (stateDb *StateDb) RandomPlayer(r *rand.Rand) *pb.Player {
 	return stateDb.Players[r.Intn(len(stateDb.Players))]
 }
 
-func (stateDb *StateDb) UpsertCharacter(character *concerns.Character) {
+func (stateDb *StateDb) UpsertCharacter(character *pb.Character) {
 	_, ok := stateDb.CharacterMap[character.Id]
 	if !ok {
 		stateDb.Characters = append(stateDb.Characters, character)
@@ -49,11 +49,11 @@ func (stateDb *StateDb) UpsertCharacter(character *concerns.Character) {
 	stateDb.CharacterMap[character.Id] = character
 }
 
-func (stateDb *StateDb) RandomCharacter(r *rand.Rand) *concerns.Character {
+func (stateDb *StateDb) RandomCharacter(r *rand.Rand) *pb.Character {
 	return stateDb.Characters[r.Intn(len(stateDb.Characters))]
 }
 
-func (stateDb *StateDb) Credit(charId string, funds *concerns.Character_Currency) error {
+func (stateDb *StateDb) Credit(charId string, funds *pb.Character_Currency) error {
 	char, ok := stateDb.CharacterMap[charId]
 	if !ok {
 		return fmt.Errorf("Credit invalid character %s", charId)
@@ -65,7 +65,7 @@ func (stateDb *StateDb) Credit(charId string, funds *concerns.Character_Currency
 	return nil
 }
 
-func (stateDb *StateDb) Debit(charId string, funds *concerns.Character_Currency) error {
+func (stateDb *StateDb) Debit(charId string, funds *pb.Character_Currency) error {
 	char, ok := stateDb.CharacterMap[charId]
 	if !ok {
 		return fmt.Errorf("Debit invalid character %s", charId)

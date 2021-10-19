@@ -9,14 +9,14 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
 	player, err := client.CreatePlayer(
 		ctx,
-		&concerns.Player{
+		&pb.Player{
 			Username: fmt.Sprintf("User_%d", r.Int31()),
 			Active:   true,
 		})
@@ -25,7 +25,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 	}
 	stateDb.UpsertPlayer(player)
 
-	currency := concerns.Character_Currency{
+	currency := pb.Character_Currency{
 		Gold:      1000 + int32(r.Intn(10000)),
 		Faction_0: 1000 + int32(r.Intn(10000)),
 		Faction_1: 1000 + int32(r.Intn(10000)),
@@ -34,7 +34,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 
 	character, err := client.CreateCharacter(
 		ctx,
-		&concerns.Character{
+		&pb.Character{
 			PlayerId: player.Id,
 			Fullname: fmt.Sprintf("Fullname_%d", r.Int31()),
 			Active:   true,
@@ -59,7 +59,7 @@ func cmdCreateCharacter(ctx context.Context, client edge.RpgServiceClient, r *ra
 
 func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
 	character := stateDb.RandomCharacter(r)
-	funds := &concerns.Character_Currency{
+	funds := &pb.Character_Currency{
 		Gold:      int32(r.Intn(100)),
 		Faction_0: int32(r.Intn(100)),
 		Faction_1: int32(r.Intn(100)),
@@ -67,7 +67,7 @@ func cmdFund(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, st
 	}
 	character, err := client.FundCharacter(
 		ctx,
-		&concerns.FundingRequest{
+		&pb.FundingRequest{
 			CharacterId: character.Id,
 			Currency:    funds,
 		},
@@ -97,7 +97,7 @@ func maxi(x, y int) int {
 
 func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, stateDb *StateDb) (string, error) {
 	charLhs := stateDb.RandomCharacter(r)
-	var charRhs *concerns.Character
+	var charRhs *pb.Character
 	for {
 		charRhs = stateDb.RandomCharacter(r)
 		if charRhs.Id != charLhs.Id {
@@ -105,13 +105,13 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 		}
 	}
 
-	fundsLhs := &concerns.Character_Currency{
+	fundsLhs := &pb.Character_Currency{
 		Gold:      int32(r.Intn(maxi(1, int(charLhs.Currency.Gold)/100))),
 		Faction_0: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_0)/100))),
 		Faction_1: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_1)/100))),
 		Faction_2: int32(r.Intn(maxi(1, int(charLhs.Currency.Faction_2)/100))),
 	}
-	fundsRhs := &concerns.Character_Currency{
+	fundsRhs := &pb.Character_Currency{
 		Gold:      int32(r.Intn(maxi(1, int(charRhs.Currency.Gold)/100))),
 		Faction_0: int32(r.Intn(maxi(1, int(charRhs.Currency.Faction_0)/100))),
 		Faction_1: int32(r.Intn(maxi(1, int(charRhs.Currency.Faction_1)/100))),
@@ -121,11 +121,11 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 	_, err := client.ConductTrade(
 		ctx,
 		&edge.TradeRequest{
-			Lhs: &concerns.FundingRequest{
+			Lhs: &pb.FundingRequest{
 				CharacterId: charLhs.Id,
 				Currency:    fundsLhs,
 			},
-			Rhs: &concerns.FundingRequest{
+			Rhs: &pb.FundingRequest{
 				CharacterId: charRhs.Id,
 				Currency:    fundsRhs,
 			},

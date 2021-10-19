@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/concerns"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 type ResourceType int
@@ -32,9 +32,9 @@ const (
 )
 
 var messageFactory = map[ResourceType]func() proto.Message{
-	ResourceType_PLAYER:          func() proto.Message { return proto.Message(new(concerns.Player)) },
-	ResourceType_CHARACTER:       func() proto.Message { return proto.Message(new(concerns.Character)) },
-	ResourceType_FUNDING_REQUEST: func() proto.Message { return proto.Message(new(concerns.FundingRequest)) },
+	ResourceType_PLAYER:          func() proto.Message { return proto.Message(new(pb.Player)) },
+	ResourceType_CHARACTER:       func() proto.Message { return proto.Message(new(pb.Character)) },
+	ResourceType_FUNDING_REQUEST: func() proto.Message { return proto.Message(new(pb.FundingRequest)) },
 }
 
 var MessageFactory = map[string]func() proto.Message{
@@ -192,9 +192,9 @@ func deleteResource(resourceName string, id string) (int, error) {
 func cobraFundCharacter(cmd *cobra.Command, args []string) {
 	path := "/v1/character/fund?pretty"
 
-	fr := concerns.FundingRequest{
+	fr := pb.FundingRequest{
 		CharacterId: args[0],
-		Currency:    &concerns.Character_Currency{},
+		Currency:    &pb.Character_Currency{},
 	}
 
 	err := reflectKeyValArgs(fr.Currency, args[1:], false)
