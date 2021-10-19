@@ -20,502 +20,414 @@ import (
 {{- end }}
 {{- end }}
 {{- if gt (len .Concerns) 0 }}
-
-/*
-// Implement the following functions to enable this concern:
-
-package {{ .Package }}
-
-import (
-	"context"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-)
-{{ range $concern := .Concerns }}
+{{ range $cnc := .Concerns }}
 {{- $relConfArg := "" }}
 {{- $relConfRet := "" }}
 {{- $relCncArg := "" }}
 {{- $relCncRet := "" }}
-{{- with $concern.RelConfigs }}
-{{- $relConfArg = printf "relatedConfigs *%s, " $concern.RelConfigs.Msg.Name }}
-{{- $relConfRet = printf "*%s, " $concern.RelConfigs.Msg.Name }}
+{{- with $cnc.RelConfigs }}
+{{- $relConfArg = printf "relatedConfigs *%s, " $cnc.RelConfigs.Msg.Name }}
+{{- $relConfRet = printf "*%s, " $cnc.RelConfigs.Msg.Name }}
 {{- end }}
-{{- with $concern.RelConcerns }}
-{{- $relCncArg = printf "relatedConcerns *%s, " $concern.RelConcerns.Msg.Name }}
-{{- $relCncRet = printf "*%s, " $concern.RelConcerns.Msg.Name }}
-{{- end }}
-// -----------------------------------------------------------------------------
-// Concern {{ .Name }}
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-// STORAGE CRUD Handlers
-// -----------------------------------------------------------------------------
-func (inst *{{ $concern.Name }}) Read(ctx context.Context, key string) ({{ $relCncRet }}*rkcy.CompoundOffset, error) {
-	// Read {{ $concern.Name }} instance from storage system and set in inst
-{{- with $concern.RelConcerns }}
-	// Return CompoundOffset as well, as was presented on last Create/Update
-{{- end }}
-	// If RelatedConcerns are present, those must be returned as well
-
-	return nil, nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Read")
-}
-
-func (inst *{{ $concern.Name }}) Create(ctx context.Context, cmpdOffset *rkcy.CompoundOffset) error {
-	// Create new {{ $concern.Name }} instance in the storage system,
-	// storing offset as well.
-	// If storage offset is less than offset argument, do not create,
-	// as this is indicative of a message duplicate.
-
-	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Create")
-}
-
-func (inst *{{ $concern.Name }}) Update(ctx context.Context, {{ $relCncArg }}cmpdOffset *rkcy.CompoundOffset) error {
-	// Update existsing {{ $concern.Name }} instance in the storage system,
-	// storing {{ with $concern.RelConcerns }}relatedConcerns, and {{ end }}offset as well.
-	// If storage offset is less than offset argument, do not update,
-	// as this is indicative of a message duplicate.
-
-	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Update")
-}
-
-func (inst *{{ $concern.Name }}) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
-	// Delete existsing {{ $concern.Name }} instance in the storage system.
-	// If storage offset is less than offset argument, do not delete,
-	// as this is indicative of a message duplicate.
-
-	return rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.Delete")
-}
-// -----------------------------------------------------------------------------
-// STORAGE CRUD Handlers (END)
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// PROCESS Standard Handlers
-// -----------------------------------------------------------------------------
-func (*{{ $concern.Name }}) ValidateCreate(ctx context.Context, payload *{{ $concern.Name }}) (*{{ $concern.Name }}, error) {
-	// Validate contents of {{ $concern.Name }} 'payload', make any changes appropriately, and return it.
-
-	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.ValidateCreate")
-}
-
-func (inst *{{ $concern.Name }}) ValidateUpdate(ctx context.Context, payload *{{ $concern.Name }}) (*{{ $concern.Name }}, error) {
-	// Validate contents of {{ $concern.Name }} 'payload', make any changes, and return it.
-	// 'inst' contains current instance if that is important for validation.
-
-	return nil, rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.ValidateUpdate")
-}
-// -----------------------------------------------------------------------------
-// PROCESS Standard Handlers (END)
-// -----------------------------------------------------------------------------
-{{- with $concern.Commands }}
-
-// -----------------------------------------------------------------------------
-// PROCESS Command Handlers
-// -----------------------------------------------------------------------------
-{{- range $concern.Commands }}
-func (inst *{{ $concern.Name }}) {{ .Name }}(ctx context.Context{{ if .HasInput }}, payload *{{ .InputType }}{{ end }}) {{ if .HasOutput }}(*{{ .OutputType }}, error){{ else }}error{{ end }} {
-	return {{ if .HasInput }}nil, {{ end }}rkcy.NewError(rkcy.Code_NOT_IMPLEMENTED, "Command Not Implemented: {{ $concern.Name }}.{{ .Name }}")
-}
-
+{{- with $cnc.RelConcerns }}
+{{- $relCncArg = printf "relatedConcerns *%s, " $cnc.RelConcerns.Msg.Name }}
+{{- $relCncRet = printf "*%s, " $cnc.RelConcerns.Msg.Name }}
 {{- end }}
 // -----------------------------------------------------------------------------
-// PROCESS Command Handlers (END)
+// Concern {{ $cnc.Name }}
 // -----------------------------------------------------------------------------
-{{- end }}
-// -----------------------------------------------------------------------------
-// Concern {{ .Name }} (END)
-// -----------------------------------------------------------------------------
-*/
-{{- end }}
-{{ range $concern := .Concerns }}
-// -----------------------------------------------------------------------------
-// Concern {{ .Name }}
-// -----------------------------------------------------------------------------
-func (*{{ $concern.Name }}) Concern() string {
-	return "{{ $concern.Name }}"
-}
-
-func (inst *{{ $concern.Name }}) Key() string {
-	return inst.Id
-}
-
-func (inst *{{ $concern.Name }}) SetKey(key string) {
-	inst.Id = key
-}
-
 func init() {
-	decodeInst := func(ctx context.Context, buffer []byte) (string, error) {
-		pb := &{{ $concern.Name }}{}
-		err := proto.Unmarshal(buffer, pb)
-		if err != nil {
-			return "", err
-		}
-		decoded, err := protojson.Marshal(pb)
-		if err != nil {
-			return "", err
-		}
-		return string(decoded), nil
+	rkcy.RegisterConcernHandler({{ $cnc.Name }}ConcernHandler{})
+}
+
+type {{ $cnc.Name }}ConcernHandler struct{}
+
+func ({{ $cnc.Name }}ConcernHandler) ConcernName() string {
+	return "{{ $cnc.Name }}"
+}
+
+func ({{ $cnc.Name }}ConcernHandler) HandleCommand(
+	ctx context.Context,
+	system rkcy.System,
+	command string,
+	direction rkcy.Direction,
+	args *rkcy.StepArgs,
+) *rkcy.ApecsTxn_Step_Result {
+	var err error
+	rslt := &rkcy.ApecsTxn_Step_Result{}
+
+	if direction == rkcy.Direction_REVERSE && args.ForwardResult == nil {
+		rslt.SetResult(fmt.Errorf("Unable to reverse step with nil ForwardResult"))
+		return rslt
 	}
 
-	rkcy.RegisterConcernHandler(
-		"{{ $concern.Name }}",
-		// Handler
-		func(ctx context.Context, system rkcy.System, command string, direction rkcy.Direction, args *rkcy.StepArgs) *rkcy.ApecsTxn_Step_Result {
-			var err error
-			rslt := &rkcy.ApecsTxn_Step_Result{}
+	if system == rkcy.System_STORAGE {
 
-			if direction == rkcy.Direction_REVERSE && args.ForwardResult == nil {
-				rslt.SetResult(fmt.Errorf("Unable to reverse step with nil ForwardResult"))
-				return rslt
-			}
-
-			if system == rkcy.System_STORAGE {
-
-				switch command {
-				// storage handlers
-				case rkcy.CREATE:
-					{
-						if direction == rkcy.Direction_FORWARD {
-							payloadIn := &{{ $concern.Name }}{}
-							err = proto.Unmarshal(args.Payload, payloadIn)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							err = payloadIn.Create(ctx, args.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							rslt.CmpdOffset = args.CmpdOffset // for possible delete in rollback
-							rslt.Payload, err = proto.Marshal(payloadIn)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						} else {
-							del := &{{ $concern.Name }}{}
-							err = del.Delete(ctx, args.Key, args.ForwardResult.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						}
+		switch command {
+		// storage handlers
+		case rkcy.CREATE:
+			{
+				if direction == rkcy.Direction_FORWARD {
+					payloadIn := &{{ $cnc.Name }}{}
+					err = proto.Unmarshal(args.Payload, payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-				case rkcy.READ:
-					{
-						if direction == rkcy.Direction_FORWARD {
-							inst := &{{ $concern.Name }}{}
-							rslt.CmpdOffset, err = inst.Read(ctx, args.Key)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							rslt.Payload, err = proto.Marshal(inst)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						}
+					err = payloadIn.Create(ctx, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-				case rkcy.UPDATE:
-					{
-						if direction == rkcy.Direction_FORWARD {
-							// capture orig so we can roll this back
-							orig := &{{ $concern.Name }}{}
-							_, err := orig.Read(ctx, args.Key)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							payloadIn := &{{ $concern.Name }}{}
-							err = proto.Unmarshal(args.Payload, payloadIn)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							err = payloadIn.Update(ctx, args.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							rslt.Payload, err = proto.Marshal(payloadIn)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							// Set original value into rslt.Instance so we can restore it in the event of a rollback
-							rslt.CmpdOffset = args.CmpdOffset
-							rslt.Instance, err = proto.Marshal(orig)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						} else {
-							orig := &{{ $concern.Name }}{}
-							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							err = orig.Update(ctx, args.ForwardResult.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						}
+					rslt.CmpdOffset = args.CmpdOffset // for possible delete in rollback
+					rslt.Payload, err = proto.Marshal(payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-				case rkcy.DELETE:
-					{
-						if direction == rkcy.Direction_FORWARD {
-							// capture orig so we can roll this back
-							orig := &{{ $concern.Name }}{}
-							_, err := orig.Read(ctx, args.Key)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							del := &{{ $concern.Name }}{}
-							err = del.Delete(ctx, args.Key, args.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							// Set original value into rslt.Instance so we can restore it in the event of a rollback
-							rslt.CmpdOffset = args.CmpdOffset
-							rslt.Instance, err = proto.Marshal(orig)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						} else {
-							orig := &{{ $concern.Name }}{}
-							err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-							err = orig.Create(ctx, args.ForwardResult.CmpdOffset)
-							if err != nil {
-								rslt.SetResult(err)
-								return rslt
-							}
-						}
-					}
-				default:
-					rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
-					return rslt
-				}
-			} else if system == rkcy.System_PROCESS {
-				inst := &{{ $concern.Name }}{}
-				if args.Instance != nil {
-					err = proto.Unmarshal(args.Instance, inst)
+				} else {
+					del := &{{ $cnc.Name }}{}
+					err = del.Delete(ctx, args.Key, args.ForwardResult.CmpdOffset)
 					if err != nil {
 						rslt.SetResult(err)
 						return rslt
 					}
 				}
-
-				if inst.Key() == "" && command != rkcy.VALIDATE_CREATE {
-					rslt.SetResult(fmt.Errorf("No key present during HandleCommand"))
-					return rslt
+			}
+		case rkcy.READ:
+			{
+				if direction == rkcy.Direction_FORWARD {
+					inst := &{{ $cnc.Name }}{}
+					rslt.CmpdOffset, err = inst.Read(ctx, args.Key)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					rslt.Payload, err = proto.Marshal(inst)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
 				}
-
-				switch command {
-				// process handlers
-				case rkcy.VALIDATE_CREATE:
-					{
-						payloadIn := &{{ $concern.Name }}{}
-						err = proto.Unmarshal(args.Payload, payloadIn)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						rslt.Payload, err = proto.Marshal(payloadOut)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
+			}
+		case rkcy.UPDATE:
+			{
+				if direction == rkcy.Direction_FORWARD {
+					// capture orig so we can roll this back
+					orig := &{{ $cnc.Name }}{}
+					_, err := orig.Read(ctx, args.Key)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-				case rkcy.VALIDATE_UPDATE:
-					{
-						payloadIn := &{{ $concern.Name }}{}
-						err = proto.Unmarshal(args.Payload, payloadIn)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						rslt.Payload, err = proto.Marshal(payloadOut)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
+					payloadIn := &{{ $cnc.Name }}{}
+					err = proto.Unmarshal(args.Payload, payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-{{- range $concern.Commands }}
-				case "{{ .Name }}":
-					{
-						{{- if .HasInput }}
-						payloadIn := &{{ .InputType }}{}
-						err = proto.Unmarshal(args.Payload, payloadIn)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						{{- end }}
-						{{ if .HasOutput }}payloadOut, {{ end }}err := inst.{{ .Name }}(ctx{{ if .HasInput }}, payloadIn{{ end }})
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						{{- if .HasOutput }}
-						rslt.Payload, err = proto.Marshal(payloadOut)
-						if err != nil {
-							rslt.SetResult(err)
-							return rslt
-						}
-						{{- end }}
+					err = payloadIn.Update(ctx, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
 					}
-{{- end }}
-				default:
-					rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
-					return rslt
+					rslt.Payload, err = proto.Marshal(payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					// Set original value into rslt.Instance so we can restore it in the event of a rollback
+					rslt.CmpdOffset = args.CmpdOffset
+					rslt.Instance, err = proto.Marshal(orig)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+				} else {
+					orig := &{{ $cnc.Name }}{}
+					err = proto.Unmarshal(args.ForwardResult.Instance, orig)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					err = orig.Update(ctx, args.ForwardResult.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
 				}
+			}
+		case rkcy.DELETE:
+			{
+				if direction == rkcy.Direction_FORWARD {
+					// capture orig so we can roll this back
+					orig := &{{ $cnc.Name }}{}
+					_, err := orig.Read(ctx, args.Key)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					del := &{{ $cnc.Name }}{}
+					err = del.Delete(ctx, args.Key, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					// Set original value into rslt.Instance so we can restore it in the event of a rollback
+					rslt.CmpdOffset = args.CmpdOffset
+					rslt.Instance, err = proto.Marshal(orig)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+				} else {
+					orig := &{{ $cnc.Name }}{}
+					err = proto.Unmarshal(args.ForwardResult.Instance, orig)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					err = orig.Create(ctx, args.ForwardResult.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+				}
+			}
+		default:
+			rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
+			return rslt
+		}
+	} else if system == rkcy.System_PROCESS {
+		inst := &{{ $cnc.Name }}{}
+		if args.Instance != nil {
+			err = proto.Unmarshal(args.Instance, inst)
+			if err != nil {
+				rslt.SetResult(err)
+				return rslt
+			}
+		}
 
-				// compare inst to see if it has changed
-				instSer, err := proto.Marshal(inst)
+		if inst.Id == "" && command != rkcy.VALIDATE_CREATE {
+			rslt.SetResult(fmt.Errorf("No key present during HandleCommand"))
+			return rslt
+		}
+
+		switch command {
+		// process handlers
+		case rkcy.VALIDATE_CREATE:
+			{
+				payloadIn := &{{ $cnc.Name }}{}
+				err = proto.Unmarshal(args.Payload, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
 				}
-				if !bytes.Equal(instSer, args.Instance) {
-					rslt.Instance = instSer
+				payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
 				}
-			} else {
-				rslt.SetResult(fmt.Errorf("Invalid system: %d", system))
-				return rslt
+				rslt.Payload, err = proto.Marshal(payloadOut)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
 			}
-
-			return rslt
-		},
-		// InstanceDecoder
-		func(ctx context.Context, buffer []byte) (string, error) {
-			return decodeInst(ctx, buffer)
-		},
-		// ArgDecoder
-		func(ctx context.Context, system rkcy.System, command string, buffer []byte) (string, error) {
-			switch system {
-			case rkcy.System_STORAGE:
-				switch command {
-				case rkcy.CREATE:
-					fallthrough
-				case rkcy.READ:
-					fallthrough
-				case rkcy.UPDATE:
-					return decodeInst(ctx, buffer)
-				default:
-					return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
+		case rkcy.VALIDATE_UPDATE:
+			{
+				payloadIn := &{{ $cnc.Name }}{}
+				err = proto.Unmarshal(args.Payload, payloadIn)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
 				}
-			case rkcy.System_PROCESS:
-				switch command {
-				case rkcy.REFRESH:
-					fallthrough
-				case rkcy.READ:
-					fallthrough
-				case rkcy.VALIDATE_CREATE:
-					fallthrough
-				case rkcy.VALIDATE_UPDATE:
-					return decodeInst(ctx, buffer)
-{{- range $concern.Commands }}
+				payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				rslt.Payload, err = proto.Marshal(payloadOut)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+			}
+{{- range $cnc.Commands }}
+		case "{{ .Name }}":
+			{
 				{{- if .HasInput }}
-				case "{{ .Name }}":
-					{{- if eq .InputType $concern.Name }}
-					return decodeInst(ctx, buffer)
-					{{ else }}
-					{
-						pb := &{{ .InputType }}{}
-						err := proto.Unmarshal(buffer, pb)
-						if err != nil {
-							return "", err
-						}
-						decoded, err := protojson.Marshal(pb)
-						if err != nil {
-							return "", err
-						}
-						return string(decoded), nil
-					}
-					{{- end }}
+				payloadIn := &{{ .InputType }}{}
+				err = proto.Unmarshal(args.Payload, payloadIn)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
 				{{- end }}
-{{- end }}
-				default:
-					return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
+				{{ if .HasOutput }}payloadOut, {{ end }}err := inst.{{ .Name }}(ctx{{ if .HasInput }}, payloadIn{{ end }})
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
 				}
-			default:
-				return "", fmt.Errorf("ArgDecoder invalid system: %d", system)
-			}
-		},
-		// ResultDecoder
-		func(ctx context.Context, system rkcy.System, command string, buffer []byte) (string, error) {
-			switch system {
-			case rkcy.System_STORAGE:
-				switch command {
-				case rkcy.CREATE:
-					fallthrough
-				case rkcy.READ:
-					fallthrough
-				case rkcy.UPDATE:
-					return decodeInst(ctx, buffer)
-				default:
-					return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
-				}
-			case rkcy.System_PROCESS:
-				switch command {
-				case rkcy.READ:
-					fallthrough
-				case rkcy.REFRESH:
-					fallthrough
-				case rkcy.VALIDATE_CREATE:
-					fallthrough
-				case rkcy.VALIDATE_UPDATE:
-					return decodeInst(ctx, buffer)
-{{- range $concern.Commands }}
 				{{- if .HasOutput }}
-				case "{{ .Name }}":
-					{{- if eq .OutputType $concern.Name }}
-					return decodeInst(ctx, buffer)
-					{{- else }}
-					{
-						pb := &{{ .OutputType }}{}
-						err := proto.Unmarshal(buffer, pb)
-						if err != nil {
-							return "", err
-						}
-						decoded, err := protojson.Marshal(pb)
-						if err != nil {
-							return "", err
-						}
-						return string(decoded), nil
-					}
-					{{- end }}
-				{{- end }}
-{{- end }}
-				default:
-					return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
+				rslt.Payload, err = proto.Marshal(payloadOut)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
 				}
-			default:
-				return "", fmt.Errorf("ResultDecoder invalid system: %d", system)
+				{{- end }}
 			}
-		},
-	)
+{{- end }}
+		default:
+			rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
+			return rslt
+		}
+
+		// compare inst to see if it has changed
+		instSer, err := proto.Marshal(inst)
+		if err != nil {
+			rslt.SetResult(err)
+			return rslt
+		}
+		if !bytes.Equal(instSer, args.Instance) {
+			rslt.Instance = instSer
+		}
+	} else {
+		rslt.SetResult(fmt.Errorf("Invalid system: %d", system))
+		return rslt
+	}
+
+	return rslt
+}
+
+func ({{ $cnc.Name }}ConcernHandler) DecodeInstance(
+	ctx context.Context,
+	buffer []byte,
+) (string, error) {
+	pb := &{{ $cnc.Name }}{}
+	err := proto.Unmarshal(buffer, pb)
+	if err != nil {
+		return "", err
+	}
+	decoded, err := protojson.Marshal(pb)
+	if err != nil {
+		return "", err
+	}
+	return string(decoded), nil
+}
+
+func (cncHandler {{ $cnc.Name }}ConcernHandler) DecodeArg(
+	ctx context.Context,
+	system rkcy.System,
+	command string,
+	buffer []byte,
+) (string, error) {
+	switch system {
+	case rkcy.System_STORAGE:
+		switch command {
+		case rkcy.CREATE:
+			fallthrough
+		case rkcy.READ:
+			fallthrough
+		case rkcy.UPDATE:
+			return cncHandler.DecodeInstance(ctx, buffer)
+		default:
+			return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
+		}
+	case rkcy.System_PROCESS:
+		switch command {
+		case rkcy.REFRESH:
+			fallthrough
+		case rkcy.READ:
+			fallthrough
+		case rkcy.VALIDATE_CREATE:
+			fallthrough
+		case rkcy.VALIDATE_UPDATE:
+			return cncHandler.DecodeInstance(ctx, buffer)
+{{- range $cnc.Commands }}
+		{{- if .HasInput }}
+		case "{{ .Name }}":
+			{{- if eq .InputType $cnc.Name }}
+			return cndHandler.DecodeInstance(ctx, buffer)
+			{{ else }}
+			{
+				pb := &{{ .InputType }}{}
+				err := proto.Unmarshal(buffer, pb)
+				if err != nil {
+					return "", err
+				}
+				decoded, err := protojson.Marshal(pb)
+				if err != nil {
+					return "", err
+				}
+				return string(decoded), nil
+			}
+			{{- end }}
+		{{- end }}
+{{- end }}
+		default:
+			return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
+		}
+	default:
+		return "", fmt.Errorf("ArgDecoder invalid system: %d", system)
+	}
+}
+
+func (cncHandler {{ $cnc.Name }}ConcernHandler) DecodeResult(
+	ctx context.Context,
+	system rkcy.System,
+	command string,
+	buffer []byte,
+) (string, error) {
+	switch system {
+	case rkcy.System_STORAGE:
+		switch command {
+		case rkcy.CREATE:
+			fallthrough
+		case rkcy.READ:
+			fallthrough
+		case rkcy.UPDATE:
+			return cncHandler.DecodeInstance(ctx, buffer)
+		default:
+			return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
+		}
+	case rkcy.System_PROCESS:
+		switch command {
+		case rkcy.READ:
+			fallthrough
+		case rkcy.REFRESH:
+			fallthrough
+		case rkcy.VALIDATE_CREATE:
+			fallthrough
+		case rkcy.VALIDATE_UPDATE:
+			return cncHandler.DecodeInstance(ctx, buffer)
+{{- range $cnc.Commands }}
+		{{- if .HasOutput }}
+		case "{{ .Name }}":
+			{{- if eq .OutputType $cnc.Name }}
+			return cncHandler.DecodeInstance(ctx, buffer)
+			{{- else }}
+			{
+				pb := &{{ .OutputType }}{}
+				err := proto.Unmarshal(buffer, pb)
+				if err != nil {
+					return "", err
+				}
+				decoded, err := protojson.Marshal(pb)
+				if err != nil {
+					return "", err
+				}
+				return string(decoded), nil
+			}
+			{{- end }}
+		{{- end }}
+{{- end }}
+		default:
+			return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
+		}
+	default:
+		return "", fmt.Errorf("ResultDecoder invalid system: %d", system)
+	}
 }
 // -----------------------------------------------------------------------------
 // Concern {{ .Name }} END

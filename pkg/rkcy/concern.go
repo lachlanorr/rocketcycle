@@ -29,34 +29,20 @@ const (
 
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
-type CommandHandler func(context.Context, System, string, Direction, *StepArgs) *ApecsTxn_Step_Result
-type InstanceDecoder func(context.Context, []byte) (string, error)
-type PayloadDecoder func(context.Context, System, string, []byte) (string, error)
-
-type ConcernHandler struct {
-	Handler         CommandHandler
-	InstanceDecoder InstanceDecoder
-	ArgDecoder      PayloadDecoder
-	ResultDecoder   PayloadDecoder
+type ConcernHandler interface {
+	ConcernName() string
+	HandleCommand(context.Context, System, string, Direction, *StepArgs) *ApecsTxn_Step_Result
+	DecodeInstance(context.Context, []byte) (string, error)
+	DecodeArg(context.Context, System, string, []byte) (string, error)
+	DecodeResult(context.Context, System, string, []byte) (string, error)
 }
 
-func RegisterConcernHandler(
-	concern string,
-	handler CommandHandler,
-	instanceDecoder InstanceDecoder,
-	argDecoder PayloadDecoder,
-	resultDecoder PayloadDecoder,
-) {
-	_, ok := gConcernHandlers[concern]
+func RegisterConcernHandler(cncHandler ConcernHandler) {
+	_, ok := gConcernHandlers[cncHandler.ConcernName()]
 	if ok {
-		panic(fmt.Sprintf("%s concern handler already registered", concern))
+		panic(fmt.Sprintf("%s concern handler already registered", cncHandler.ConcernName()))
 	}
-	gConcernHandlers[concern] = ConcernHandler{
-		Handler:         handler,
-		InstanceDecoder: instanceDecoder,
-		ArgDecoder:      argDecoder,
-		ResultDecoder:   resultDecoder,
-	}
+	gConcernHandlers[cncHandler.ConcernName()] = cncHandler
 }
 
 func decodeInstance(ctx context.Context, concern string, instance []byte) (string, error) {
@@ -64,7 +50,7 @@ func decodeInstance(ctx context.Context, concern string, instance []byte) (strin
 	if !ok {
 		return "", fmt.Errorf("decodeInstance invalid concern: %s", concern)
 	}
-	return concernHandler.InstanceDecoder(ctx, instance)
+	return concernHandler.DecodeInstance(ctx, instance)
 }
 
 func decodeInstance64(ctx context.Context, concern string, instance64 string) (string, error) {
@@ -80,7 +66,7 @@ func decodeArgPayload(ctx context.Context, concern string, system System, comman
 	if !ok {
 		return "", fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
-	return concernHandler.ArgDecoder(ctx, system, command, payload)
+	return concernHandler.DecodeArg(ctx, system, command, payload)
 }
 
 func decodeArgPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
@@ -96,7 +82,7 @@ func decodeResultPayload(ctx context.Context, concern string, system System, com
 	if !ok {
 		return "", fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
 	}
-	return concernHandler.ResultDecoder(ctx, system, command, payload)
+	return concernHandler.DecodeResult(ctx, system, command, payload)
 }
 
 func decodeResultPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
@@ -167,7 +153,7 @@ func handleCommand(
 		return rslt
 	}
 
-	return concernHandler.Handler(ctx, system, command, direction, args)
+	return concernHandler.HandleCommand(ctx, system, command, direction, args)
 }
 
 type StepArgs struct {

@@ -348,6 +348,69 @@ func (x *Program) GetTags() map[string]string {
 	return nil
 }
 
+type StorageSystem struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name      string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	IsPrimary bool              `protobuf:"varint,2,opt,name=is_primary,json=isPrimary,proto3" json:"is_primary,omitempty"`
+	Config    map[string]string `protobuf:"bytes,3,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *StorageSystem) Reset() {
+	*x = StorageSystem{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_rkcy_platform_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *StorageSystem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StorageSystem) ProtoMessage() {}
+
+func (x *StorageSystem) ProtoReflect() protoreflect.Message {
+	mi := &file_rkcy_platform_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StorageSystem.ProtoReflect.Descriptor instead.
+func (*StorageSystem) Descriptor() ([]byte, []int) {
+	return file_rkcy_platform_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *StorageSystem) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *StorageSystem) GetIsPrimary() bool {
+	if x != nil {
+		return x.IsPrimary
+	}
+	return false
+}
+
+func (x *StorageSystem) GetConfig() map[string]string {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
 type Platform_Concern struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -362,7 +425,7 @@ type Platform_Concern struct {
 func (x *Platform_Concern) Reset() {
 	*x = Platform_Concern{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_rkcy_platform_proto_msgTypes[2]
+		mi := &file_rkcy_platform_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -375,7 +438,7 @@ func (x *Platform_Concern) String() string {
 func (*Platform_Concern) ProtoMessage() {}
 
 func (x *Platform_Concern) ProtoReflect() protoreflect.Message {
-	mi := &file_rkcy_platform_proto_msgTypes[2]
+	mi := &file_rkcy_platform_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -433,7 +496,7 @@ type Platform_Cluster struct {
 func (x *Platform_Cluster) Reset() {
 	*x = Platform_Cluster{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_rkcy_platform_proto_msgTypes[3]
+		mi := &file_rkcy_platform_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -446,7 +509,7 @@ func (x *Platform_Cluster) String() string {
 func (*Platform_Cluster) ProtoMessage() {}
 
 func (x *Platform_Cluster) ProtoReflect() protoreflect.Message {
-	mi := &file_rkcy_platform_proto_msgTypes[3]
+	mi := &file_rkcy_platform_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -496,7 +559,7 @@ type Platform_Concern_Topics struct {
 func (x *Platform_Concern_Topics) Reset() {
 	*x = Platform_Concern_Topics{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_rkcy_platform_proto_msgTypes[4]
+		mi := &file_rkcy_platform_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -509,7 +572,7 @@ func (x *Platform_Concern_Topics) String() string {
 func (*Platform_Concern_Topics) ProtoMessage() {}
 
 func (x *Platform_Concern_Topics) ProtoReflect() protoreflect.Message {
-	mi := &file_rkcy_platform_proto_msgTypes[4]
+	mi := &file_rkcy_platform_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -577,7 +640,7 @@ type Platform_Concern_Topic struct {
 func (x *Platform_Concern_Topic) Reset() {
 	*x = Platform_Concern_Topic{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_rkcy_platform_proto_msgTypes[5]
+		mi := &file_rkcy_platform_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -590,7 +653,7 @@ func (x *Platform_Concern_Topic) String() string {
 func (*Platform_Concern_Topic) ProtoMessage() {}
 
 func (x *Platform_Concern_Topic) ProtoReflect() protoreflect.Message {
-	mi := &file_rkcy_platform_proto_msgTypes[5]
+	mi := &file_rkcy_platform_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,11 +785,22 @@ var file_rkcy_platform_proto_rawDesc = []byte{
 	0x74, 0x61, 0x67, 0x73, 0x1a, 0x37, 0x0a, 0x09, 0x54, 0x61, 0x67, 0x73, 0x45, 0x6e, 0x74, 0x72,
 	0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03,
 	0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x42, 0x2c, 0x5a,
-	0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6c, 0x61, 0x63, 0x68,
-	0x6c, 0x61, 0x6e, 0x6f, 0x72, 0x72, 0x2f, 0x72, 0x6f, 0x63, 0x6b, 0x65, 0x74, 0x63, 0x79, 0x63,
-	0x6c, 0x65, 0x2f, 0x70, 0x6b, 0x67, 0x2f, 0x72, 0x6b, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xb6, 0x01,
+	0x0a, 0x0d, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67, 0x65, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x12,
+	0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e,
+	0x61, 0x6d, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x69, 0x73, 0x5f, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72,
+	0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x69, 0x73, 0x50, 0x72, 0x69, 0x6d, 0x61,
+	0x72, 0x79, 0x12, 0x37, 0x0a, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x18, 0x03, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x72, 0x6b, 0x63, 0x79, 0x2e, 0x53, 0x74, 0x6f, 0x72, 0x61, 0x67,
+	0x65, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x2e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x45, 0x6e,
+	0x74, 0x72, 0x79, 0x52, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x1a, 0x39, 0x0a, 0x0b, 0x43,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65,
+	0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c,
+	0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x42, 0x2c, 0x5a, 0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
+	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6c, 0x61, 0x63, 0x68, 0x6c, 0x61, 0x6e, 0x6f, 0x72, 0x72, 0x2f,
+	0x72, 0x6f, 0x63, 0x6b, 0x65, 0x74, 0x63, 0x79, 0x63, 0x6c, 0x65, 0x2f, 0x70, 0x6b, 0x67, 0x2f,
+	0x72, 0x6b, 0x63, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -742,39 +816,42 @@ func file_rkcy_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_rkcy_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_rkcy_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_rkcy_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_rkcy_platform_proto_goTypes = []interface{}{
 	(Platform_PartitionStrategy)(0),    // 0: rkcy.Platform.PartitionStrategy
 	(Platform_Concern_Type)(0),         // 1: rkcy.Platform.Concern.Type
 	(Platform_Concern_Topics_State)(0), // 2: rkcy.Platform.Concern.Topics.State
 	(*Platform)(nil),                   // 3: rkcy.Platform
 	(*Program)(nil),                    // 4: rkcy.Program
-	(*Platform_Concern)(nil),           // 5: rkcy.Platform.Concern
-	(*Platform_Cluster)(nil),           // 6: rkcy.Platform.Cluster
-	(*Platform_Concern_Topics)(nil),    // 7: rkcy.Platform.Concern.Topics
-	(*Platform_Concern_Topic)(nil),     // 8: rkcy.Platform.Concern.Topic
-	nil,                                // 9: rkcy.Program.TagsEntry
-	(*timestamppb.Timestamp)(nil),      // 10: google.protobuf.Timestamp
-	(Severity)(0),                      // 11: rkcy.Severity
+	(*StorageSystem)(nil),              // 5: rkcy.StorageSystem
+	(*Platform_Concern)(nil),           // 6: rkcy.Platform.Concern
+	(*Platform_Cluster)(nil),           // 7: rkcy.Platform.Cluster
+	(*Platform_Concern_Topics)(nil),    // 8: rkcy.Platform.Concern.Topics
+	(*Platform_Concern_Topic)(nil),     // 9: rkcy.Platform.Concern.Topic
+	nil,                                // 10: rkcy.Program.TagsEntry
+	nil,                                // 11: rkcy.StorageSystem.ConfigEntry
+	(*timestamppb.Timestamp)(nil),      // 12: google.protobuf.Timestamp
+	(Severity)(0),                      // 13: rkcy.Severity
 }
 var file_rkcy_platform_proto_depIdxs = []int32{
-	5,  // 0: rkcy.Platform.concerns:type_name -> rkcy.Platform.Concern
-	6,  // 1: rkcy.Platform.clusters:type_name -> rkcy.Platform.Cluster
-	10, // 2: rkcy.Platform.update_time:type_name -> google.protobuf.Timestamp
-	9,  // 3: rkcy.Program.tags:type_name -> rkcy.Program.TagsEntry
-	1,  // 4: rkcy.Platform.Concern.type:type_name -> rkcy.Platform.Concern.Type
-	11, // 5: rkcy.Platform.Concern.log_level:type_name -> rkcy.Severity
-	7,  // 6: rkcy.Platform.Concern.topics:type_name -> rkcy.Platform.Concern.Topics
-	2,  // 7: rkcy.Platform.Concern.Topics.state:type_name -> rkcy.Platform.Concern.Topics.State
-	8,  // 8: rkcy.Platform.Concern.Topics.current:type_name -> rkcy.Platform.Concern.Topic
-	8,  // 9: rkcy.Platform.Concern.Topics.future:type_name -> rkcy.Platform.Concern.Topic
-	4,  // 10: rkcy.Platform.Concern.Topics.consumer_program:type_name -> rkcy.Program
-	0,  // 11: rkcy.Platform.Concern.Topic.partition_strat:type_name -> rkcy.Platform.PartitionStrategy
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	6,  // 0: rkcy.Platform.concerns:type_name -> rkcy.Platform.Concern
+	7,  // 1: rkcy.Platform.clusters:type_name -> rkcy.Platform.Cluster
+	12, // 2: rkcy.Platform.update_time:type_name -> google.protobuf.Timestamp
+	10, // 3: rkcy.Program.tags:type_name -> rkcy.Program.TagsEntry
+	11, // 4: rkcy.StorageSystem.config:type_name -> rkcy.StorageSystem.ConfigEntry
+	1,  // 5: rkcy.Platform.Concern.type:type_name -> rkcy.Platform.Concern.Type
+	13, // 6: rkcy.Platform.Concern.log_level:type_name -> rkcy.Severity
+	8,  // 7: rkcy.Platform.Concern.topics:type_name -> rkcy.Platform.Concern.Topics
+	2,  // 8: rkcy.Platform.Concern.Topics.state:type_name -> rkcy.Platform.Concern.Topics.State
+	9,  // 9: rkcy.Platform.Concern.Topics.current:type_name -> rkcy.Platform.Concern.Topic
+	9,  // 10: rkcy.Platform.Concern.Topics.future:type_name -> rkcy.Platform.Concern.Topic
+	4,  // 11: rkcy.Platform.Concern.Topics.consumer_program:type_name -> rkcy.Program
+	0,  // 12: rkcy.Platform.Concern.Topic.partition_strat:type_name -> rkcy.Platform.PartitionStrategy
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_rkcy_platform_proto_init() }
@@ -809,7 +886,7 @@ func file_rkcy_platform_proto_init() {
 			}
 		}
 		file_rkcy_platform_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Platform_Concern); i {
+			switch v := v.(*StorageSystem); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -821,7 +898,7 @@ func file_rkcy_platform_proto_init() {
 			}
 		}
 		file_rkcy_platform_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Platform_Cluster); i {
+			switch v := v.(*Platform_Concern); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -833,7 +910,7 @@ func file_rkcy_platform_proto_init() {
 			}
 		}
 		file_rkcy_platform_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Platform_Concern_Topics); i {
+			switch v := v.(*Platform_Cluster); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -845,6 +922,18 @@ func file_rkcy_platform_proto_init() {
 			}
 		}
 		file_rkcy_platform_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Platform_Concern_Topics); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_rkcy_platform_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Platform_Concern_Topic); i {
 			case 0:
 				return &v.state
@@ -863,7 +952,7 @@ func file_rkcy_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_rkcy_platform_proto_rawDesc,
 			NumEnums:      3,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
