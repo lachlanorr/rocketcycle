@@ -154,7 +154,7 @@ func advanceApecsTxn(
 	wg *sync.WaitGroup,
 ) Code {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
-	ctx, span, step := gPlatformImpl.Telem.StartStep(ctx, rtxn)
+	ctx, span, step := Telem().StartStep(ctx, rtxn)
 	defer span.End()
 
 	log.Debug().

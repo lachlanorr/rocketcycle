@@ -31,10 +31,57 @@ var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
 type ConcernHandler interface {
 	ConcernName() string
-	HandleCommand(context.Context, System, string, Direction, *StepArgs) *ApecsTxn_Step_Result
-	DecodeInstance(context.Context, []byte) (string, error)
-	DecodeArg(context.Context, System, string, []byte) (string, error)
-	DecodeResult(context.Context, System, string, []byte) (string, error)
+	HandleCommand(
+		ctx context.Context,
+		system System,
+		command string,
+		direction Direction,
+		args *StepArgs,
+		instanceStore *InstanceStore,
+		storageSystem string,
+	) *ApecsTxn_Step_Result
+	DecodeInstance(ctx context.Context, buffer []byte) (string, error)
+	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (string, error)
+	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (string, error)
+
+	SetProcessCommands(commands interface{}) error
+	SetStorageCommands(storageSystem string, commands interface{}) error
+	ValidateCommands() bool
+}
+
+func validateConcernHandlers() bool {
+	retval := true
+	for concern, cncHdlr := range gConcernHandlers {
+		if !cncHdlr.ValidateCommands() {
+			log.Error().
+				Str("Concern", concern).
+				Msgf("Invalid commands for ConcernHandler")
+			retval = false
+		}
+	}
+	return retval
+}
+
+func RegisterProcessCommands(concern string, commands interface{}) {
+	cncHdlr, ok := gConcernHandlers[concern]
+	if !ok {
+		panic(fmt.Sprintf("%s concern handler not registered registered", concern))
+	}
+	err := cncHdlr.SetProcessCommands(commands)
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+func RegisterStorageCommands(storageSystem string, concern string, commands interface{}) {
+	cncHdlr, ok := gConcernHandlers[concern]
+	if !ok {
+		panic(fmt.Sprintf("%s concern handler not registered registered", concern))
+	}
+	err := cncHdlr.SetStorageCommands(storageSystem, commands)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func RegisterConcernHandler(cncHandler ConcernHandler) {
@@ -123,9 +170,8 @@ func handleCommand(
 				panic("REVERSE NOT IMPLEMENTED")
 			}
 			return &ApecsTxn_Step_Result{
-				Code:     Code_OK,
-				Payload:  args.Payload,
-				Instance: args.Payload,
+				Code:    Code_OK,
+				Payload: args.Payload,
 			}
 		case READ:
 			if direction == Direction_REVERSE {
@@ -153,7 +199,7 @@ func handleCommand(
 		return rslt
 	}
 
-	return concernHandler.HandleCommand(ctx, system, command, direction, args)
+	return concernHandler.HandleCommand(ctx, system, command, direction, args, gInstanceStore, "postgresql")
 }
 
 type StepArgs struct {

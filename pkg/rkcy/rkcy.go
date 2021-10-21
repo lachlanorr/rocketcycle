@@ -38,8 +38,6 @@ const (
 type PlatformImpl struct {
 	Name          string
 	CobraCommands []*cobra.Command
-
-	Telem *Telemetry
 }
 
 func StartPlatform(impl *PlatformImpl) {

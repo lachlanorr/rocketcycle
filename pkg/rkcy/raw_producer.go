@@ -53,7 +53,7 @@ func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) Prod
 				if ev.TopicPartition.Error != nil {
 					traceId := GetTraceId(ev)
 					if traceId != "" {
-						gPlatformImpl.Telem.RecordProduceError(
+						Telem().RecordProduceError(
 							"Delivery",
 							traceId,
 							*ev.TopicPartition.Topic,
@@ -109,7 +109,7 @@ func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup)
 			if err != nil {
 				traceId := GetTraceId(msg)
 				if traceId != "" {
-					gPlatformImpl.Telem.RecordProduceError(
+					Telem().RecordProduceError(
 						"Produce",
 						traceId,
 						*msg.TopicPartition.Topic,

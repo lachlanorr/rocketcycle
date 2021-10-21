@@ -54,6 +54,12 @@ func prepPlatformImpl(impl *PlatformImpl) {
 	gPlatformImpl = impl
 	initPlatformName(impl.Name)
 	prepLogging(impl.Name)
+
+	// validate all command handlers exist for each concern
+	if !validateConcernHandlers() {
+		log.Fatal().
+			Msg("validateConcernHandlers failed")
+	}
 }
 
 func prerunCobra(cmd *cobra.Command, args []string) {

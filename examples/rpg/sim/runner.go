@@ -18,7 +18,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/version"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
-	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	store_pg "github.com/lachlanorr/rocketcycle/examples/rpg/storage/postgresql"
 )
 
 type CommandId int
@@ -152,7 +152,7 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	diffWait := time.Duration(settings.DiffWaitSecs) * time.Second
 	start := time.Now()
 	for {
-		diffsStorage = compareStorage(ctx, stateDb, client)
+		diffsStorage = compareStorage(ctx, stateDb)
 
 		t := time.Now()
 		if t.Sub(start) > diffWait {
@@ -209,12 +209,14 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	return diffs
 }
 
-func compareStorage(ctx context.Context, stateDb *StateDb, client edge.RpgServiceClient) []*Difference {
+func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
 	diffs := make([]*Difference, 0, 10)
 
+	playerPg := store_pg.Player{}
+	characterPg := store_pg.Character{}
+
 	for _, stateDbPlayer := range stateDb.Players {
-		rkcyPlayer := &pb.Player{}
-		_, err := rkcyPlayer.Read(ctx, stateDbPlayer.Id)
+		rkcyPlayer, _, err := playerPg.Read(ctx, stateDbPlayer.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
 		}
@@ -228,8 +230,7 @@ func compareStorage(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	}
 
 	for _, stateDbCharacter := range stateDb.Characters {
-		rkcyCharacter := &pb.Character{}
-		_, err := rkcyCharacter.Read(ctx, stateDbCharacter.Id)
+		rkcyCharacter, _, err := characterPg.Read(ctx, stateDbCharacter.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
 		}

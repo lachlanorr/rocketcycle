@@ -12,6 +12,10 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
+
+	// Make sure we run the inits in these so command handlers get registered
+	_ "github.com/lachlanorr/rocketcycle/examples/rpg/process"
+	_ "github.com/lachlanorr/rocketcycle/examples/rpg/storage/postgresql"
 )
 
 func main() {

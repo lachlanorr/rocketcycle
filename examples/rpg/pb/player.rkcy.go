@@ -21,21 +21,79 @@ import (
 // Concern Player
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterConcernHandler(PlayerConcernHandler{})
+	rkcy.RegisterConcernHandler(&PlayerConcernHandler{})
 }
 
-type PlayerConcernHandler struct{}
+// StorageCommands Interface
+type PlayerStorageCommands interface {
+	Read(ctx context.Context, key string) (*Player, *rkcy.CompoundOffset, error)
+	Create(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) error
+	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
+}
 
-func (PlayerConcernHandler) ConcernName() string {
+// ProcessCommands Interface
+type PlayerProcessCommands interface {
+	ValidateCreate(ctx context.Context, inst *Player) (*Player, error)
+	ValidateUpdate(ctx context.Context, original *Player, updated *Player) (*Player, error)
+}
+
+// Concern Handler
+type PlayerConcernHandler struct{
+     storageCmds map[string]PlayerStorageCommands
+     processCmds PlayerProcessCommands
+}
+
+func (*PlayerConcernHandler) ConcernName() string {
 	return "Player"
 }
 
-func (PlayerConcernHandler) HandleCommand(
+func (cncHdlr *PlayerConcernHandler) SetStorageCommands(storageSystem string, commands interface{}) error {
+	cmds, ok := commands.(PlayerStorageCommands)
+	if !ok {
+	   return fmt.Errorf("Invalid interface for PlayerConcernHandler.SetStorageCommands: %T", commands)
+	}
+	if cncHdlr.storageCmds == nil {
+		cncHdlr.storageCmds = make(map[string]PlayerStorageCommands)
+	}
+	_, ok = cncHdlr.storageCmds[storageSystem]
+	if ok {
+	   return fmt.Errorf("StorageCommands already registered for %s/PlayerConcernHandler", storageSystem)
+	}
+	cncHdlr.storageCmds[storageSystem] = cmds
+	return nil
+}
+
+func (cncHdlr *PlayerConcernHandler) SetProcessCommands(commands interface{}) error {
+	if cncHdlr.processCmds != nil {
+	   return fmt.Errorf("ProcessCommands already registered for PlayerConcernHandler")
+	}
+	var ok bool
+	cncHdlr.processCmds, ok = commands.(PlayerProcessCommands)
+	if !ok {
+	   return fmt.Errorf("Invalid interface for PlayerConcernHandler.SetProcessCommands: %T", commands)
+	}
+	return nil
+}
+
+func (cncHdlr *PlayerConcernHandler) ValidateCommands() bool {
+	if cncHdlr.processCmds == nil {
+    	return false
+    }
+    if cncHdlr.storageCmds == nil || len(cncHdlr.storageCmds) == 0 {
+		return false
+	}
+    return true
+}
+
+func (cncHdlr *PlayerConcernHandler) HandleCommand(
 	ctx context.Context,
 	system rkcy.System,
 	command string,
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
+	instanceStore *rkcy.InstanceStore,
+    storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
 	rslt := &rkcy.ApecsTxn_Step_Result{}
@@ -45,158 +103,7 @@ func (PlayerConcernHandler) HandleCommand(
 		return rslt
 	}
 
-	if system == rkcy.System_STORAGE {
-
-		switch command {
-		// storage handlers
-		case rkcy.CREATE:
-			{
-				if direction == rkcy.Direction_FORWARD {
-					payloadIn := &Player{}
-					err = proto.Unmarshal(args.Payload, payloadIn)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					err = payloadIn.Create(ctx, args.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					rslt.CmpdOffset = args.CmpdOffset // for possible delete in rollback
-					rslt.Payload, err = proto.Marshal(payloadIn)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				} else {
-					del := &Player{}
-					err = del.Delete(ctx, args.Key, args.ForwardResult.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				}
-			}
-		case rkcy.READ:
-			{
-				if direction == rkcy.Direction_FORWARD {
-					inst := &Player{}
-					rslt.CmpdOffset, err = inst.Read(ctx, args.Key)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					rslt.Payload, err = proto.Marshal(inst)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				}
-			}
-		case rkcy.UPDATE:
-			{
-				if direction == rkcy.Direction_FORWARD {
-					// capture orig so we can roll this back
-					orig := &Player{}
-					_, err := orig.Read(ctx, args.Key)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					payloadIn := &Player{}
-					err = proto.Unmarshal(args.Payload, payloadIn)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					err = payloadIn.Update(ctx, args.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					rslt.Payload, err = proto.Marshal(payloadIn)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					// Set original value into rslt.Instance so we can restore it in the event of a rollback
-					rslt.CmpdOffset = args.CmpdOffset
-					rslt.Instance, err = proto.Marshal(orig)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				} else {
-					orig := &Player{}
-					err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					err = orig.Update(ctx, args.ForwardResult.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				}
-			}
-		case rkcy.DELETE:
-			{
-				if direction == rkcy.Direction_FORWARD {
-					// capture orig so we can roll this back
-					orig := &Player{}
-					_, err := orig.Read(ctx, args.Key)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					del := &Player{}
-					err = del.Delete(ctx, args.Key, args.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					// Set original value into rslt.Instance so we can restore it in the event of a rollback
-					rslt.CmpdOffset = args.CmpdOffset
-					rslt.Instance, err = proto.Marshal(orig)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				} else {
-					orig := &Player{}
-					err = proto.Unmarshal(args.ForwardResult.Instance, orig)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-					err = orig.Create(ctx, args.ForwardResult.CmpdOffset)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt
-					}
-				}
-			}
-		default:
-			rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
-			return rslt
-		}
-	} else if system == rkcy.System_PROCESS {
-		inst := &Player{}
-		if args.Instance != nil {
-			err = proto.Unmarshal(args.Instance, inst)
-			if err != nil {
-				rslt.SetResult(err)
-				return rslt
-			}
-		}
-
-		if inst.Id == "" && command != rkcy.VALIDATE_CREATE {
-			rslt.SetResult(fmt.Errorf("No key present during HandleCommand"))
-			return rslt
-		}
-
+	if system == rkcy.System_PROCESS {
 		switch command {
 		// process handlers
 		case rkcy.VALIDATE_CREATE:
@@ -207,7 +114,7 @@ func (PlayerConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				payloadOut, err := inst.ValidateCreate(ctx, payloadIn)
+				payloadOut, err := cncHdlr.processCmds.ValidateCreate(ctx, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -220,13 +127,25 @@ func (PlayerConcernHandler) HandleCommand(
 			}
 		case rkcy.VALIDATE_UPDATE:
 			{
+				instBytes := instanceStore.GetInstance(args.Key)
+            	if instBytes == nil {
+					rslt.SetResult(fmt.Errorf("No instance exists during VALIDATE_UPDATE"))
+					return rslt
+				}
+				inst := &Player{}
+				err = proto.Unmarshal(instBytes, inst)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+
 				payloadIn := &Player{}
 				err = proto.Unmarshal(args.Payload, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
 				}
-				payloadOut, err := inst.ValidateUpdate(ctx, payloadIn)
+				payloadOut, err := cncHdlr.processCmds.ValidateUpdate(ctx, inst, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -236,20 +155,103 @@ func (PlayerConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
+
+				// compare inst to see if it has changed
+				instSer, err := proto.Marshal(inst)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				if !bytes.Equal(instSer, args.Instance) {
+					rslt.Instance = instSer
+				}
 			}
 		default:
 			rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
 			return rslt
 		}
-
-		// compare inst to see if it has changed
-		instSer, err := proto.Marshal(inst)
-		if err != nil {
-			rslt.SetResult(err)
-			return rslt
+    } else if system == rkcy.System_STORAGE {
+		// Quick out for REVERSE mode on non CREATE commands, this should never happen
+		if direction == rkcy.Direction_REVERSE && command != rkcy.CREATE {
+			rslt.SetResult(fmt.Errorf("Unable to reverse non CREATE storage commands"))
+            return rslt
 		}
-		if !bytes.Equal(instSer, args.Instance) {
-			rslt.Instance = instSer
+
+        cmds, ok := cncHdlr.storageCmds[storageSystem]
+        if !ok {
+	       rslt.SetResult(fmt.Errorf("No storage commands for %s", storageSystem))
+           return rslt
+	    }
+
+		switch command {
+		// storage handlers
+		case rkcy.CREATE:
+			{
+				if direction == rkcy.Direction_FORWARD {
+					payloadIn := &Player{}
+					err = proto.Unmarshal(args.Payload, payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					err = cmds.Create(ctx, payloadIn, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+					rslt.CmpdOffset = args.CmpdOffset // for possible delete in rollback
+					rslt.Payload, err = proto.Marshal(payloadIn)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+				} else { // Direction_REVERSE
+					err = cmds.Delete(ctx, args.Key, args.ForwardResult.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt
+					}
+				}
+			}
+		case rkcy.READ:
+			{
+                inst := &Player{}
+				inst, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				rslt.Payload, err = proto.Marshal(inst)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+			}
+		case rkcy.UPDATE:
+			{
+				payloadIn := &Player{}
+				err = proto.Unmarshal(args.Payload, payloadIn)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				err = cmds.Update(ctx, payloadIn, args.CmpdOffset)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+			}
+		case rkcy.DELETE:
+			{
+				err = cmds.Delete(ctx, args.Key, args.CmpdOffset)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+			}
+		default:
+			rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
+			return rslt
 		}
 	} else {
 		rslt.SetResult(fmt.Errorf("Invalid system: %d", system))
@@ -259,7 +261,7 @@ func (PlayerConcernHandler) HandleCommand(
 	return rslt
 }
 
-func (PlayerConcernHandler) DecodeInstance(
+func (*PlayerConcernHandler) DecodeInstance(
 	ctx context.Context,
 	buffer []byte,
 ) (string, error) {
@@ -275,7 +277,7 @@ func (PlayerConcernHandler) DecodeInstance(
 	return string(decoded), nil
 }
 
-func (cncHandler PlayerConcernHandler) DecodeArg(
+func (cncHdlr *PlayerConcernHandler) DecodeArg(
 	ctx context.Context,
 	system rkcy.System,
 	command string,
@@ -289,7 +291,7 @@ func (cncHandler PlayerConcernHandler) DecodeArg(
 		case rkcy.READ:
 			fallthrough
 		case rkcy.UPDATE:
-			return cncHandler.DecodeInstance(ctx, buffer)
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 		}
@@ -302,7 +304,7 @@ func (cncHandler PlayerConcernHandler) DecodeArg(
 		case rkcy.VALIDATE_CREATE:
 			fallthrough
 		case rkcy.VALIDATE_UPDATE:
-			return cncHandler.DecodeInstance(ctx, buffer)
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return "", fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 		}
@@ -311,7 +313,7 @@ func (cncHandler PlayerConcernHandler) DecodeArg(
 	}
 }
 
-func (cncHandler PlayerConcernHandler) DecodeResult(
+func (cncHdlr *PlayerConcernHandler) DecodeResult(
 	ctx context.Context,
 	system rkcy.System,
 	command string,
@@ -325,7 +327,7 @@ func (cncHandler PlayerConcernHandler) DecodeResult(
 		case rkcy.READ:
 			fallthrough
 		case rkcy.UPDATE:
-			return cncHandler.DecodeInstance(ctx, buffer)
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 		}
@@ -338,7 +340,7 @@ func (cncHandler PlayerConcernHandler) DecodeResult(
 		case rkcy.VALIDATE_CREATE:
 			fallthrough
 		case rkcy.VALIDATE_UPDATE:
-			return cncHandler.DecodeInstance(ctx, buffer)
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return "", fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 		}
