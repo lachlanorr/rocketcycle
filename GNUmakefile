@@ -33,14 +33,12 @@ clean: ## remove all build artifacts
 	@rm -rf ./examples/rpg/pb/*.pb.go ./examples/rpg/pb/*_grpc.pb.go ./examples/rpg/pb/*.pb.gw.go
 
 .PHONY: proto
-proto: protoc-gen-rkcy ## generate protocol buffers
+proto: ## generate protocol buffers
 	@echo "==> Building $@..."
 	@go generate pkg/rkcy/gen.go
-	@go generate examples/rpg/pb/gen.go
-	@go generate examples/rpg/edge/gen.go
 
 .PHONY: protoc-gen-rkcy
-protoc-gen-rkcy: ## compile rkcy mgmt app
+protoc-gen-rkcy: proto ## compile rkcy mgmt app
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
@@ -51,7 +49,7 @@ protoc-gen-rkcy: ## compile rkcy mgmt app
 examples: rpg ## compile rpg example
 
 .PHONY: rpg
-rpg: proto ## compile rpg example
+rpg: rpg-proto ## compile rpg example
 	@echo "==> Building $@..."
 	@go build \
 	-ldflags $(GO_LDFLAGS) \
@@ -63,6 +61,12 @@ rpg: proto ## compile rpg example
 	@cp ./examples/rpg/run_perfa.sh $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/perfa_env.sh $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/platform_perfa.json $(BUILD_BIN_DIR)
+
+.PHONY: rpg-proto
+rpg-proto: proto ## generate rpg protocol buffers
+	@echo "==> Building $@..."
+	@go generate examples/rpg/pb/gen.go
+	@go generate examples/rpg/edge/gen.go
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help
