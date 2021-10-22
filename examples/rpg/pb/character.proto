@@ -12,7 +12,7 @@ import "rkcy/extensions.proto";
 message Character {
     option (rkcy.is_concern) = true;
 
-    string id = 1;
+    string id = 1 [(rkcy.is_key) = true];
     string player_id = 2;
     string fullname = 3;
     bool active = 4;
@@ -39,8 +39,14 @@ message FundingRequest {
     Character.Currency currency = 2;
 }
 
+message TradeRequest {
+    FundingRequest lhs = 1;
+    FundingRequest rhs = 2;
+}
+
 service CharacterCommands {
     rpc Fund(FundingRequest) returns (Character);
     rpc DebitFunds(FundingRequest) returns (Character);
     rpc CreditFunds(FundingRequest) returns (Character);
 }
+

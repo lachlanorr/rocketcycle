@@ -7,6 +7,7 @@ package postgresql
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -71,8 +72,13 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *rkcy.
 	return inst, &cmpdOffset, nil
 }
 
-func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) error {
-	return c.upsert(ctx, inst, cmpdOffset)
+func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) (*pb.Character, error) {
+	inst.Id = uuid.NewString()
+	err := c.upsert(ctx, inst, cmpdOffset)
+	if err != nil {
+		return nil, err
+	}
+	return inst, nil
 }
 
 func (c *Character) Update(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) error {
@@ -180,6 +186,7 @@ func (c *Character) upsert(ctx context.Context, inst *pb.Character, cmpdOffset *
 			}
 		}
 	}
+
 	for _, item := range inst.Items {
 		_, err = pool().Exec(
 			ctx,

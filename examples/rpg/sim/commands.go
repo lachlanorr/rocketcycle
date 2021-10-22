@@ -120,7 +120,7 @@ func cmdTrade(ctx context.Context, client edge.RpgServiceClient, r *rand.Rand, s
 
 	_, err := client.ConductTrade(
 		ctx,
-		&edge.TradeRequest{
+		&pb.TradeRequest{
 			Lhs: &pb.FundingRequest{
 				CharacterId: charLhs.Id,
 				Currency:    fundsLhs,

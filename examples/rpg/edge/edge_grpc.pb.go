@@ -22,13 +22,13 @@ type RpgServiceClient interface {
 	ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error)
 	CreatePlayer(ctx context.Context, in *pb.Player, opts ...grpc.CallOption) (*pb.Player, error)
 	UpdatePlayer(ctx context.Context, in *pb.Player, opts ...grpc.CallOption) (*pb.Player, error)
-	DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error)
+	DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error)
 	ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error)
 	CreateCharacter(ctx context.Context, in *pb.Character, opts ...grpc.CallOption) (*pb.Character, error)
 	UpdateCharacter(ctx context.Context, in *pb.Character, opts ...grpc.CallOption) (*pb.Character, error)
-	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error)
+	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error)
 	FundCharacter(ctx context.Context, in *pb.FundingRequest, opts ...grpc.CallOption) (*pb.Character, error)
-	ConductTrade(ctx context.Context, in *TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error)
+	ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error)
 }
 
 type rpgServiceClient struct {
@@ -66,8 +66,8 @@ func (c *rpgServiceClient) UpdatePlayer(ctx context.Context, in *pb.Player, opts
 	return out, nil
 }
 
-func (c *rpgServiceClient) DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error) {
-	out := new(RpgResponse)
+func (c *rpgServiceClient) DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error) {
+	out := new(pb.Player)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/DeletePlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -102,8 +102,8 @@ func (c *rpgServiceClient) UpdateCharacter(ctx context.Context, in *pb.Character
 	return out, nil
 }
 
-func (c *rpgServiceClient) DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*RpgResponse, error) {
-	out := new(RpgResponse)
+func (c *rpgServiceClient) DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error) {
+	out := new(pb.Character)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/DeleteCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *pb.FundingRequ
 	return out, nil
 }
 
-func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error) {
+func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error) {
 	out := new(rkcy.Void)
 	err := c.cc.Invoke(ctx, "/rocketcycle.examples.rpg.edge.RpgService/ConductTrade", in, out, opts...)
 	if err != nil {
@@ -136,13 +136,13 @@ type RpgServiceServer interface {
 	ReadPlayer(context.Context, *RpgRequest) (*pb.Player, error)
 	CreatePlayer(context.Context, *pb.Player) (*pb.Player, error)
 	UpdatePlayer(context.Context, *pb.Player) (*pb.Player, error)
-	DeletePlayer(context.Context, *RpgRequest) (*RpgResponse, error)
+	DeletePlayer(context.Context, *RpgRequest) (*pb.Player, error)
 	ReadCharacter(context.Context, *RpgRequest) (*pb.Character, error)
 	CreateCharacter(context.Context, *pb.Character) (*pb.Character, error)
 	UpdateCharacter(context.Context, *pb.Character) (*pb.Character, error)
-	DeleteCharacter(context.Context, *RpgRequest) (*RpgResponse, error)
+	DeleteCharacter(context.Context, *RpgRequest) (*pb.Character, error)
 	FundCharacter(context.Context, *pb.FundingRequest) (*pb.Character, error)
-	ConductTrade(context.Context, *TradeRequest) (*rkcy.Void, error)
+	ConductTrade(context.Context, *pb.TradeRequest) (*rkcy.Void, error)
 	mustEmbedUnimplementedRpgServiceServer()
 }
 
@@ -159,7 +159,7 @@ func (UnimplementedRpgServiceServer) CreatePlayer(context.Context, *pb.Player) (
 func (UnimplementedRpgServiceServer) UpdatePlayer(context.Context, *pb.Player) (*pb.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdatePlayer not implemented")
 }
-func (UnimplementedRpgServiceServer) DeletePlayer(context.Context, *RpgRequest) (*RpgResponse, error) {
+func (UnimplementedRpgServiceServer) DeletePlayer(context.Context, *RpgRequest) (*pb.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeletePlayer not implemented")
 }
 func (UnimplementedRpgServiceServer) ReadCharacter(context.Context, *RpgRequest) (*pb.Character, error) {
@@ -171,13 +171,13 @@ func (UnimplementedRpgServiceServer) CreateCharacter(context.Context, *pb.Charac
 func (UnimplementedRpgServiceServer) UpdateCharacter(context.Context, *pb.Character) (*pb.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) DeleteCharacter(context.Context, *RpgRequest) (*RpgResponse, error) {
+func (UnimplementedRpgServiceServer) DeleteCharacter(context.Context, *RpgRequest) (*pb.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCharacter not implemented")
 }
 func (UnimplementedRpgServiceServer) FundCharacter(context.Context, *pb.FundingRequest) (*pb.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FundCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) ConductTrade(context.Context, *TradeRequest) (*rkcy.Void, error) {
+func (UnimplementedRpgServiceServer) ConductTrade(context.Context, *pb.TradeRequest) (*rkcy.Void, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConductTrade not implemented")
 }
 func (UnimplementedRpgServiceServer) mustEmbedUnimplementedRpgServiceServer() {}
@@ -356,7 +356,7 @@ func _RpgService_FundCharacter_Handler(srv interface{}, ctx context.Context, dec
 }
 
 func _RpgService_ConductTrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TradeRequest)
+	in := new(pb.TradeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func _RpgService_ConductTrade_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/rocketcycle.examples.rpg.edge.RpgService/ConductTrade",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RpgServiceServer).ConductTrade(ctx, req.(*TradeRequest))
+		return srv.(RpgServiceServer).ConductTrade(ctx, req.(*pb.TradeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -34,7 +34,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.TradeRequest"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.TradeRequest"
             }
           }
         ],
@@ -82,7 +82,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.RpgResponse"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
             }
           },
           "default": {
@@ -238,7 +238,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.edge.RpgResponse"
+              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
             }
           },
           "default": {
@@ -359,27 +359,6 @@
       "type": "object",
       "title": "Convenience empty message for services that return or accept no data"
     },
-    "rocketcycle.examples.rpg.edge.RpgResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}"
-        }
-      }
-    },
-    "rocketcycle.examples.rpg.edge.TradeRequest": {
-      "type": "object",
-      "properties": {
-        "lhs": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
-        },
-        "rhs": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
-        }
-      }
-    },
     "rocketcycle.examples.rpg.pb.Character": {
       "type": "object",
       "properties": {
@@ -452,6 +431,9 @@
     "rocketcycle.examples.rpg.pb.Limits": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "maxCharactersPerPlayer": {
           "type": "integer",
           "format": "int32"
@@ -472,6 +454,17 @@
         },
         "limits": {
           "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Limits"
+        }
+      }
+    },
+    "rocketcycle.examples.rpg.pb.TradeRequest": {
+      "type": "object",
+      "properties": {
+        "lhs": {
+          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
+        },
+        "rhs": {
+          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
         }
       }
     }

@@ -411,7 +411,7 @@ func local_request_RpgService_FundCharacter_0(ctx context.Context, marshaler run
 }
 
 func request_RpgService_ConductTrade_0(ctx context.Context, marshaler runtime.Marshaler, client RpgServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq TradeRequest
+	var protoReq pb.TradeRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -428,7 +428,7 @@ func request_RpgService_ConductTrade_0(ctx context.Context, marshaler runtime.Ma
 }
 
 func local_request_RpgService_ConductTrade_0(ctx context.Context, marshaler runtime.Marshaler, server RpgServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq TradeRequest
+	var protoReq pb.TradeRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)

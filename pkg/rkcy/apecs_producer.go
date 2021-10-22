@@ -6,26 +6,62 @@ package rkcy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
+type Txn struct {
+	Revert RevertType
+	Steps  []Step
+}
+
 type Step struct {
 	Concern string
 	Command string
 	Key     string
 	Payload proto.Message
+}
+
+type RevertType int
+
+const (
+	Revertable    RevertType = 0
+	NonRevertable            = 1
+)
+
+const defaultTimeout time.Duration = time.Minute * 5
+
+func ValidateTxn(txn *Txn) error {
+	if txn == nil {
+		return fmt.Errorf("Nil txn")
+	}
+	if txn.Steps == nil || len(txn.Steps) == 0 {
+		return fmt.Errorf("No steps in txn")
+	}
+
+	for _, s := range txn.Steps {
+		if s.Command == REFRESH ||
+			s.Command == VALIDATE_CREATE ||
+			s.Command == VALIDATE_UPDATE {
+			return fmt.Errorf("Invalid step command: %s", s.Command)
+		}
+	}
+
+	return nil
 }
 
 type ApecsProducer struct {
@@ -345,6 +381,9 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 }
 
 func waitForResponse(ctx context.Context, respCh <-chan *ApecsTxn, timeout time.Duration) (*ApecsTxn, error) {
+	if timeout.Seconds() == 0 {
+		timeout = defaultTimeout
+	}
 	timer := time.NewTimer(timeout)
 
 	select {
@@ -384,15 +423,18 @@ func CodeTranslate(code Code) codes.Code {
 
 func (aprod *ApecsProducer) ExecuteTxnSync(
 	ctx context.Context,
-	canRevert bool,
-	payload proto.Message,
-	steps []Step,
+	txn *Txn,
 	timeout time.Duration,
 	wg *sync.WaitGroup,
-) (*ApecsTxn_Step_Result, error) {
-
+) (proto.Message, error) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
+
+	if err := ValidateTxn(txn); err != nil {
+		RecordSpanError(span, err)
+		return nil, err
+	}
+
 	traceId := span.SpanContext().TraceID().String()
 
 	if aprod.respConsumerClose == nil {
@@ -409,9 +451,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 
 	err := aprod.ExecuteTxnAsync(
 		ctx,
-		canRevert,
-		payload,
-		steps,
+		txn,
 		wg,
 	)
 
@@ -427,7 +467,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, errors.New("nil txn received")
 	}
 
-	success, result := ApecsTxnResult(txnResp)
+	success, msg, result := ApecsTxnResult(ctx, txnResp)
 	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)
@@ -445,18 +485,24 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, errProto
 	}
 
-	return result, nil
+	return msg, nil
 }
 
 func (aprod *ApecsProducer) ExecuteTxnAsync(
 	ctx context.Context,
-	canRevert bool,
-	payload proto.Message,
-	steps []Step,
+	txn *Txn,
 	wg *sync.WaitGroup,
 ) error {
-	stepsPb := make([]*ApecsTxn_Step, len(steps))
-	for i, step := range steps {
+	ctx, span := Telem().StartFunc(ctx)
+	defer span.End()
+
+	if err := ValidateTxn(txn); err != nil {
+		RecordSpanError(span, err)
+		return err
+	}
+
+	stepsPb := make([]*ApecsTxn_Step, len(txn.Steps))
+	for i, step := range txn.Steps {
 		payloadBytes, err := proto.Marshal(step.Payload)
 		if err != nil {
 			return err
@@ -471,14 +517,6 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 		}
 	}
 
-	if payload != nil && len(stepsPb) > 0 {
-		payloadBytes, err := proto.Marshal(payload)
-		if err != nil {
-			return err
-		}
-		stepsPb[0].Payload = payloadBytes
-	}
-
 	traceParent := ExtractTraceParent(ctx)
 	if traceParent == "" {
 		return fmt.Errorf("No SpanContext present in ctx")
@@ -486,7 +524,7 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	traceId := TraceIdFromTraceParent(traceParent)
 
 	var uponError UponError
-	if canRevert {
+	if txn.Revert == Revertable {
 		uponError = UponError_REVERT
 	} else {
 		uponError = UponError_REPORT
@@ -626,7 +664,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	var prd *Producer = nil
 	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsProducer.Process TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
+		return fmt.Errorf("ApecsProducer.produceCurrentStep TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
 	}
 
 	prd, err = aprod.getProducer(step.Concern, topicName, wg)
@@ -639,6 +677,17 @@ func (aprod *ApecsProducer) produceCurrentStep(
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, traceParent, []byte(step.Key), txnSer, nil)
+	var hashKey []byte
+	if !isKeylessStep(step) {
+		hashKey = []byte(step.Key)
+	} else {
+		uid, err := uuid.NewRandom() // use a new randomized string
+		if err != nil {
+			return fmt.Errorf("ApecsProducer.produceCurrentStep TraceId=%s System=%d: uuid.NewRandom error: %s", rtxn.txn.TraceId, step.System, err.Error())
+		}
+		hashKey = uid[:]
+	}
+
+	prd.Produce(Directive_APECS_TXN, traceParent, hashKey, txnSer, nil)
 	return nil
 }

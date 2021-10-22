@@ -5,8 +5,12 @@
 package rkcy
 
 import (
+	"context"
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 )
 
 type rtApecsTxn struct {
@@ -38,12 +42,30 @@ func newApecsTxn(
 	for _, step := range steps {
 		if step.System == System_PROCESS && step.Command == CREATE {
 			// Inject a refresh step so the cache gets updated if storage Create succeeds
-			refreshStep := *step
-			refreshStep.Command = REFRESH
-			refreshStep.System = System_PROCESS
+			validateStep := &ApecsTxn_Step{
+				System:  System_PROCESS,
+				Concern: step.Concern,
+				Command: VALIDATE_CREATE,
+				Payload: step.Payload,
+			}
+			refreshStep := &ApecsTxn_Step{
+				System:  System_PROCESS,
+				Concern: step.Concern,
+				Command: REFRESH,
+			}
 			step.System = System_STORAGE // switch to storage CREATE
+			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
-			txn.ForwardSteps = append(txn.ForwardSteps, &refreshStep)
+			txn.ForwardSteps = append(txn.ForwardSteps, refreshStep)
+		} else if step.System == System_PROCESS && step.Command == UPDATE {
+			validateStep := &ApecsTxn_Step{
+				System:  System_PROCESS,
+				Concern: step.Concern,
+				Command: VALIDATE_UPDATE,
+				Payload: step.Payload,
+			}
+			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
+			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		} else if step.System == System_PROCESS && step.Command == DELETE {
 			storStep := *step
 			storStep.System = System_STORAGE
@@ -74,13 +96,23 @@ func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
 	return &rtxn, nil
 }
 
-func ApecsTxnResult(txn *ApecsTxn) (bool, *ApecsTxn_Step_Result) {
+func ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, proto.Message, *ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
 	success := txn.Direction == Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
 		step.Result != nil &&
 		step.Result.Code == Code_OK
-	return success, step.Result
+	var msg proto.Message
+	if step.Result != nil && step.Result.Payload != nil {
+		var err error
+		msg, err = decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Msg("Failed to decodeResultPayload")
+		}
+	}
+	return success, msg, step.Result
 }
 
 func (rtxn *rtApecsTxn) firstForwardStep() *ApecsTxn_Step {

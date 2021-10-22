@@ -12,7 +12,7 @@ import "rkcy/extensions.proto";
 message Player {
     option (rkcy.is_concern) = true;
 
-    string id = 1;
+    string id = 1 [(rkcy.is_key) = true];
     string username = 2;
     bool active = 3;
 
@@ -21,5 +21,7 @@ message Player {
 
 message Limits {
     option (rkcy.is_config) = true;
-    int32 max_characters_per_player = 1;
+
+    string id = 1 [(rkcy.is_key) = true];
+    int32 max_characters_per_player = 2;
 }

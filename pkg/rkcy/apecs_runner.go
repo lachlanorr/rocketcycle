@@ -145,6 +145,11 @@ func produceNextStep(
 	}
 }
 
+func isKeylessStep(step *ApecsTxn_Step) bool {
+	return (step.System == System_STORAGE && step.Command == CREATE) ||
+		(step.System == System_PROCESS && step.Command == VALIDATE_CREATE)
+}
+
 func advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
@@ -176,9 +181,15 @@ func advanceApecsTxn(
 		return Code_INTERNAL
 	}
 
-	if step.Key == "" {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step")
-		return Code_INTERNAL
+	// Special case, only storage CREATE and process VALIDATE_CREATE can have empty key
+	if step.Key == "" && !isKeylessStep(step) {
+		prevStep := rtxn.previousStep()
+		if prevStep != nil && prevStep.Result != nil && prevStep.Result.Key != "" {
+			step.Key = prevStep.Result.Key
+		} else {
+			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step")
+			return Code_INTERNAL
+		}
 	}
 
 	// Grab current timestamp, which will be used in a couple places below
@@ -203,10 +214,11 @@ func advanceApecsTxn(
 			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 			return Code_OK
 		} else {
-			inst = gInstanceStore.GetInstance(step.Key)
+			if !isKeylessStep(step) {
+				inst = gInstanceStore.GetInstance(step.Key)
+			}
 
-			nilOk := step.Command == CREATE || step.Command == VALIDATE_CREATE
-			if inst == nil && !nilOk {
+			if inst == nil && !isKeylessStep(step) {
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
 				// one and sending things through again

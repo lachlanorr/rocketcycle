@@ -353,7 +353,7 @@ func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, 
 }
 
 func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
-	dec, err := decodeInstance64(ctx, args.Concern, args.Payload64)
+	dec, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs)
 }
 
 func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	dec, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	dec, err := decodeArgPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs
 }
 
 func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	dec, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	dec, err := decodeResultPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}

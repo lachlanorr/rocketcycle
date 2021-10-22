@@ -7,6 +7,7 @@ package postgresql
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -43,8 +44,13 @@ func (*Player) Read(ctx context.Context, key string) (*pb.Player, *rkcy.Compound
 	return inst, offset, nil
 }
 
-func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) error {
-	return p.upsert(ctx, inst, cmpdOffset)
+func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) (*pb.Player, error) {
+	inst.Id = uuid.NewString()
+	err := p.upsert(ctx, inst, cmpdOffset)
+	if err != nil {
+		return nil, err
+	}
+	return inst, nil
 }
 
 func (p *Player) Update(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) error {

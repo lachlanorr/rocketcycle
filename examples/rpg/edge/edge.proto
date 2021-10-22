@@ -22,11 +22,6 @@ message RpgResponse {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
 }
 
-message TradeRequest {
-    rocketcycle.examples.rpg.pb.FundingRequest lhs = 1;
-    rocketcycle.examples.rpg.pb.FundingRequest rhs = 2;
-}
-
 service RpgService {
     rpc ReadPlayer(RpgRequest) returns (rocketcycle.examples.rpg.pb.Player) {
         option (google.api.http) = {
@@ -45,7 +40,7 @@ service RpgService {
             body: "*"
         };
     }
-    rpc DeletePlayer(RpgRequest) returns (RpgResponse) {
+    rpc DeletePlayer(RpgRequest) returns (rocketcycle.examples.rpg.pb.Player) {
         option (google.api.http) = {
             post: "/v1/player/delete/{id}"
         };
@@ -69,7 +64,7 @@ service RpgService {
             body: "*"
         };
     }
-    rpc DeleteCharacter(RpgRequest) returns (RpgResponse) {
+    rpc DeleteCharacter(RpgRequest) returns (rocketcycle.examples.rpg.pb.Character) {
         option (google.api.http) = {
             post: "/v1/character/delete/{id}"
         };
@@ -82,7 +77,7 @@ service RpgService {
         };
     }
 
-    rpc ConductTrade(TradeRequest) returns (rkcy.Void) {
+    rpc ConductTrade(rocketcycle.examples.rpg.pb.TradeRequest) returns (rkcy.Void) {
         option (google.api.http) = {
             post: "/v1/character/conductTrade"
             body: "*"

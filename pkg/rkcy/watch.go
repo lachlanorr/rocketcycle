@@ -87,7 +87,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				txn := ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, &txn)
 				if err == nil {
-					txnJson := protojson.Format(proto.Message(&txn))
+					pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
+					txnJson := pjOpts.Format(proto.Message(&txn))
 					if gSettings.WatchDecode {
 						txnJsonDec, err := decodeOpaques(ctx, []byte(txnJson))
 						if err == nil {
@@ -184,7 +185,7 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 					if ok {
 						b64, ok := iB64.(string)
 						if ok {
-							dec, err := decodeArgPayload64(ctx, concern, system, command, b64)
+							dec, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
 							if err == nil {
 								// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 								var dataUnser interface{}
@@ -206,7 +207,7 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 							if ok {
 								b64, ok := iB64.(string)
 								if ok {
-									dec, err := decodeResultPayload64(ctx, concern, system, command, b64)
+									dec, err := decodeResultPayload64Json(ctx, concern, system, command, b64)
 									if err == nil {
 										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 										var dataUnser interface{}
@@ -224,7 +225,7 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 							if ok {
 								b64, ok := iB64.(string)
 								if ok {
-									dec, err := decodeInstance64(ctx, concern, b64)
+									dec, err := decodeInstance64Json(ctx, concern, b64)
 									if err == nil {
 										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 										var dataUnser interface{}

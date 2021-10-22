@@ -11,6 +11,8 @@ import (
 	"runtime/debug"
 
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 )
@@ -27,6 +29,24 @@ const (
 	REFRESH = "Refresh"
 )
 
+var gReservedCommandNames map[string]bool
+
+func IsReservedCommandName(s string) bool {
+	if gReservedCommandNames == nil {
+		gReservedCommandNames = make(map[string]bool)
+		gReservedCommandNames[CREATE] = true
+		gReservedCommandNames[READ] = true
+		gReservedCommandNames[UPDATE] = true
+		gReservedCommandNames[DELETE] = true
+
+		gReservedCommandNames[VALIDATE_CREATE] = true
+		gReservedCommandNames[VALIDATE_UPDATE] = true
+
+		gReservedCommandNames[REFRESH] = true
+	}
+	return gReservedCommandNames[s]
+}
+
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
 type ConcernHandler interface {
@@ -40,9 +60,9 @@ type ConcernHandler interface {
 		instanceStore *InstanceStore,
 		storageSystem string,
 	) *ApecsTxn_Step_Result
-	DecodeInstance(ctx context.Context, buffer []byte) (string, error)
-	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (string, error)
-	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (string, error)
+	DecodeInstance(ctx context.Context, buffer []byte) (proto.Message, error)
+	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (proto.Message, error)
+	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (proto.Message, error)
 
 	SetProcessCommands(commands interface{}) error
 	SetStorageCommands(storageSystem string, commands interface{}) error
@@ -92,52 +112,112 @@ func RegisterConcernHandler(cncHandler ConcernHandler) {
 	gConcernHandlers[cncHandler.ConcernName()] = cncHandler
 }
 
-func decodeInstance(ctx context.Context, concern string, instance []byte) (string, error) {
+func decodeInstance(ctx context.Context, concern string, instance []byte) (proto.Message, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
-		return "", fmt.Errorf("decodeInstance invalid concern: %s", concern)
+		return nil, fmt.Errorf("decodeInstance invalid concern: %s", concern)
 	}
 	return concernHandler.DecodeInstance(ctx, instance)
 }
 
-func decodeInstance64(ctx context.Context, concern string, instance64 string) (string, error) {
+func decodeInstance64(ctx context.Context, concern string, instance64 string) (proto.Message, error) {
 	instance, err := base64.StdEncoding.DecodeString(instance64)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	return decodeInstance(ctx, concern, instance)
 }
 
-func decodeArgPayload(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
+func decodeInstanceJson(ctx context.Context, concern string, instance []byte) (string, error) {
+	msg, err := decodeInstance(ctx, concern, instance)
+	if err != nil {
+		return "", err
+	}
+	msgJson, err := protojson.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return string(msgJson), nil
+}
+
+func decodeInstance64Json(ctx context.Context, concern string, instance64 string) (string, error) {
+	instance, err := base64.StdEncoding.DecodeString(instance64)
+	if err != nil {
+		return "", err
+	}
+	return decodeInstanceJson(ctx, concern, instance)
+}
+
+func decodeArgPayload(ctx context.Context, concern string, system System, command string, payload []byte) (proto.Message, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
-		return "", fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
+		return nil, fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
 	return concernHandler.DecodeArg(ctx, system, command, payload)
 }
 
-func decodeArgPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
+func decodeArgPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (proto.Message, error) {
 	payload, err := base64.StdEncoding.DecodeString(payload64)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	return decodeArgPayload(ctx, concern, system, command, payload)
 }
 
-func decodeResultPayload(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
-	concernHandler, ok := gConcernHandlers[concern]
-	if !ok {
-		return "", fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
+func decodeArgPayloadJson(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
+	msg, err := decodeArgPayload(ctx, concern, system, command, payload)
+	if err != nil {
+		return "", err
 	}
-	return concernHandler.DecodeResult(ctx, system, command, payload)
+	msgJson, err := protojson.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return string(msgJson), nil
 }
 
-func decodeResultPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
+func decodeArgPayload64Json(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
 	payload, err := base64.StdEncoding.DecodeString(payload64)
 	if err != nil {
 		return "", err
 	}
+	return decodeArgPayloadJson(ctx, concern, system, command, payload)
+}
+
+func decodeResultPayload(ctx context.Context, concern string, system System, command string, payload []byte) (proto.Message, error) {
+	concernHandler, ok := gConcernHandlers[concern]
+	if !ok {
+		return nil, fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
+	}
+	return concernHandler.DecodeResult(ctx, system, command, payload)
+}
+
+func decodeResultPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (proto.Message, error) {
+	payload, err := base64.StdEncoding.DecodeString(payload64)
+	if err != nil {
+		return nil, err
+	}
 	return decodeResultPayload(ctx, concern, system, command, payload)
+}
+
+func decodeResultPayloadJson(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
+	msg, err := decodeResultPayload(ctx, concern, system, command, payload)
+	if err != nil {
+		return "", err
+	}
+	msgJson, err := protojson.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return string(msgJson), nil
+}
+
+func decodeResultPayload64Json(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
+	payload, err := base64.StdEncoding.DecodeString(payload64)
+	if err != nil {
+		return "", err
+	}
+	return decodeResultPayloadJson(ctx, concern, system, command, payload)
 }
 
 func handleCommand(

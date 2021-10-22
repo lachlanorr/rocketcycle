@@ -43,6 +43,7 @@ type message struct {
 	Name      string
 	FilePb    *descriptorpb.FileDescriptorProto
 	MsgPb     *descriptorpb.DescriptorProto
+	KeyField  string
 	IsConfig  bool
 	IsConcern bool
 }
@@ -125,6 +126,27 @@ func buildRelated(cat *catalog, msg *message, pkg string) (*related, error) {
 	return rel, nil
 }
 
+func findKeyField(pbMsg *descriptorpb.DescriptorProto) (string, error) {
+	keyField := ""
+	for _, pbField := range pbMsg.Field {
+		if proto.GetExtension(pbField.Options, rkcy.E_IsKey).(bool) {
+			if *pbField.Type != descriptorpb.FieldDescriptorProto_TYPE_STRING {
+				return "", fmt.Errorf("Non string field with is_key=true: %s.s", *pbMsg.Name, *pbField.Name)
+			}
+			if keyField == "" {
+				jsonName := *pbField.JsonName
+				keyField = strings.ToUpper(string(jsonName[0])) + jsonName[1:]
+			} else {
+				return "", fmt.Errorf("Multiple fields with is_key=true: %s.s and %s.s", *pbMsg.Name, keyField, *pbField.Name)
+			}
+		}
+	}
+	if keyField == "" {
+		return "", fmt.Errorf("No field found with is_key=true: %s", *pbMsg.Name)
+	}
+	return keyField, nil
+}
+
 func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error) {
 	cat := &catalog{
 		MessageMap: make(map[string]*message),
@@ -144,6 +166,13 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 			msg.IsConcern = proto.GetExtension(pbMsg.Options, rkcy.E_IsConcern).(bool)
 			if msg.IsConfig && msg.IsConcern {
 				return nil, fmt.Errorf("Message cannot be both a config and concern: %s", *pbMsg.Name)
+			}
+			if msg.IsConfig || msg.IsConcern {
+				var err error
+				msg.KeyField, err = findKeyField(pbMsg)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if msg.IsConfig {
 				conf := &config{
@@ -213,6 +242,10 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 		if ok {
 			cnc.Svc = cmdsSvc
 			for _, method := range cmdsSvc.SvcPb.Method {
+				if rkcy.IsReservedCommandName(*method.Name) {
+					return nil, fmt.Errorf("Reserved name used as Command: %s.%s", cmdsSvc.Name, *method.Name)
+				}
+
 				cmd := &command{}
 
 				cmd.Name = *method.Name

@@ -13,20 +13,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/txn"
 )
 
 //go:embed static/docs
@@ -74,300 +72,174 @@ func (server) RegisterHandlerFromEndpoint(
 	return RegisterRpgServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func processCrudRequest(
-	ctx context.Context,
-	traceId string,
-	concern string,
-	command string,
-	key string,
-	payload proto.Message,
-	wg *sync.WaitGroup,
-) (*rkcy.ApecsTxn_Step_Result, error) {
+func timeout() time.Duration {
+	return time.Duration(settings.TimeoutSecs) * time.Second
+}
 
+func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	var steps []rkcy.Step
-	if command == rkcy.CREATE || command == rkcy.UPDATE {
-		var validateCmd string
-		if command == rkcy.CREATE {
-			validateCmd = rkcy.VALIDATE_CREATE
-		} else {
-			validateCmd = rkcy.VALIDATE_UPDATE
-		}
-
-		// CREATE/UPDATE get a validate step first
-		steps = append(steps, rkcy.Step{
-			Concern: concern,
-			Command: validateCmd,
-			Key:     key,
-		})
-	}
-	steps = append(steps, rkcy.Step{
-		Concern: concern,
-		Command: command,
-		Key:     key,
-	})
-
-	result, err := aprod.ExecuteTxnSync(
+	msg, err := aprod.ExecuteTxnSync(
 		ctx,
-		false,
-		payload,
-		steps,
-		time.Duration(settings.TimeoutSecs)*time.Second,
-		wg,
+		txn.ReadPlayer(req.Id),
+		timeout(),
+		srv.wg,
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-
-	return result, nil
-}
-
-func processCrudRequestPlayer(
-	ctx context.Context,
-	traceId string,
-	command string,
-	plyr *pb.Player,
-	wg *sync.WaitGroup,
-) (*pb.Player, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
-	defer span.End()
-
-	if command == rkcy.CREATE {
-		if plyr.Id != "" {
-			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			rkcy.RecordSpanError(span, err)
-			return nil, err
-		}
-		plyr.Id = uuid.NewString()
-	} else {
-		if plyr.Id == "" {
-			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			rkcy.RecordSpanError(span, err)
-			return nil, err
-		}
-	}
-
-	result, err := processCrudRequest(ctx, traceId, consts.Player, command, plyr.Id, plyr, wg)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to processCrudRequest")
-		rkcy.RecordSpanError(span, err)
-		return nil, err
-	}
-
-	playerResult := &pb.Player{}
-	err = proto.Unmarshal(result.Payload, playerResult)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to Unmarshal Payload")
-		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-
-	return playerResult, nil
-}
-
-func processCrudRequestCharacter(
-	ctx context.Context,
-	traceId string,
-	command string,
-	char *pb.Character,
-	wg *sync.WaitGroup,
-) (*pb.Character, error) {
-
-	ctx, span := rkcy.Telem().StartFunc(ctx)
-	defer span.End()
-
-	if command == rkcy.CREATE {
-		if char.Id != "" {
-			err := status.New(codes.InvalidArgument, "non empty 'id' field in payload").Err()
-			rkcy.RecordSpanError(span, err)
-			return nil, err
-		}
-		char.Id = uuid.NewString()
-	} else {
-		if char.Id == "" {
-			err := status.New(codes.InvalidArgument, "empty 'id' field in payload").Err()
-			rkcy.RecordSpanError(span, err)
-			return nil, err
-		}
-	}
-
-	result, err := processCrudRequest(ctx, traceId, consts.Character, command, char.Id, char, wg)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to processCrudRequest")
-		rkcy.RecordSpanError(span, err)
-		return nil, err
-	}
-
-	characterResult := &pb.Character{}
-	err = proto.Unmarshal(result.Payload, characterResult)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to Unmarshal Payload")
-		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-
-	return characterResult, nil
-}
-
-func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
-	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.READ, &pb.Player{Id: req.Id}, srv.wg)
+	return msg.(*pb.Player), nil
 }
 
 func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
+	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.CREATE, plyr, srv.wg)
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.CreatePlayer(plyr),
+		timeout(),
+		srv.wg,
+	)
+	if err != nil {
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return msg.(*pb.Player), nil
 }
 
 func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
+	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	return processCrudRequestPlayer(ctx, traceId, rkcy.UPDATE, plyr, srv.wg)
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.UpdatePlayer(plyr),
+		timeout(),
+		srv.wg,
+	)
+	if err != nil {
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return msg.(*pb.Player), nil
 }
 
-func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
+func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
+	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Player, rkcy.DELETE, req.Id, nil, srv.wg)
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.DeletePlayer(req.Id),
+		timeout(),
+		srv.wg,
+	)
 	if err != nil {
-		return nil, err
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-	return &RpgResponse{Id: req.Id}, nil
+	return msg.(*pb.Player), nil
 }
 
 func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
+	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.READ, &pb.Character{Id: req.Id}, srv.wg)
-}
 
-func (srv server) CreateCharacter(ctx context.Context, char *pb.Character) (*pb.Character, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
-	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.CREATE, char, srv.wg)
-}
-
-func (srv server) UpdateCharacter(ctx context.Context, char *pb.Character) (*pb.Character, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
-	defer span.End()
-	return processCrudRequestCharacter(ctx, traceId, rkcy.UPDATE, char, srv.wg)
-}
-
-func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*RpgResponse, error) {
-	ctx, traceId, span := rkcy.Telem().StartRequest(ctx)
-	defer span.End()
-	_, err := processCrudRequest(ctx, traceId, consts.Character, rkcy.DELETE, req.Id, nil, srv.wg)
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.ReadCharacter(req.Id),
+		timeout(),
+		srv.wg,
+	)
 	if err != nil {
-		return nil, err
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-	return &RpgResponse{Id: req.Id}, nil
+	return msg.(*pb.Character), nil
+}
+
+func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
+	ctx, span := rkcy.Telem().StartFunc(ctx)
+	defer span.End()
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.CreateCharacter(plyr),
+		timeout(),
+		srv.wg,
+	)
+	if err != nil {
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return msg.(*pb.Character), nil
+}
+
+func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
+	ctx, span := rkcy.Telem().StartFunc(ctx)
+	defer span.End()
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.UpdateCharacter(plyr),
+		timeout(),
+		srv.wg,
+	)
+	if err != nil {
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return msg.(*pb.Character), nil
+}
+
+func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
+	ctx, span := rkcy.Telem().StartFunc(ctx)
+	defer span.End()
+
+	msg, err := aprod.ExecuteTxnSync(
+		ctx,
+		txn.DeleteCharacter(req.Id),
+		timeout(),
+		srv.wg,
+	)
+	if err != nil {
+		rkcy.RecordSpanError(span, err)
+		return nil, status.New(codes.Internal, err.Error()).Err()
+	}
+	return msg.(*pb.Character), nil
 }
 
 func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	traceId := span.SpanContext().TraceID().String()
 
-	result, err := aprod.ExecuteTxnSync(
+	msg, err := aprod.ExecuteTxnSync(
 		ctx,
-		false,
-		fr,
-		[]rkcy.Step{
-			{
-				Concern: consts.Character,
-				Command: "Fund",
-				Key:     fr.CharacterId,
-			},
-		},
-		time.Duration(settings.TimeoutSecs)*time.Second,
+		txn.Fund(fr),
+		timeout(),
 		srv.wg,
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
-
-	characterResult := &pb.Character{}
-	err = proto.Unmarshal(result.Payload, characterResult)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to Unmarshal Payload")
-		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-	return characterResult, nil
+	return msg.(*pb.Character), nil
 }
 
-func (srv server) ConductTrade(ctx context.Context, tr *TradeRequest) (*rkcy.Void, error) {
+func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.Void, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
-	traceId := span.SpanContext().TraceID().String()
 
-	result, err := aprod.ExecuteTxnSync(
+	_, err := aprod.ExecuteTxnSync(
 		ctx,
-		true,
-		nil,
-		[]rkcy.Step{
-			{
-				Concern: "Character",
-				Command: "DebitFunds",
-				Key:     tr.Lhs.CharacterId,
-				Payload: tr.Lhs,
-			},
-			{
-				Concern: "Character",
-				Command: "DebitFunds",
-				Key:     tr.Rhs.CharacterId,
-				Payload: tr.Rhs,
-			},
-			{
-				Concern: "Character",
-				Command: "CreditFunds",
-				Key:     tr.Lhs.CharacterId,
-				Payload: tr.Rhs,
-			},
-			{
-				Concern: "Character",
-				Command: "CreditFunds",
-				Key:     tr.Rhs.CharacterId,
-				Payload: tr.Lhs,
-			},
-		},
-		time.Duration(settings.TimeoutSecs)*time.Second,
+		txn.Trade(tr),
+		timeout(),
 		srv.wg,
 	)
-
 	if err != nil {
-		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
-	}
-
-	characterResult := &pb.Character{}
-	err = proto.Unmarshal(result.Payload, characterResult)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("TraceId", traceId).
-			Msg("Failed to Unmarshal Payload")
 		rkcy.RecordSpanError(span, err)
 		return nil, status.New(codes.Internal, err.Error()).Err()
 	}
