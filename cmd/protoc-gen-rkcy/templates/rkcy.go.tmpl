@@ -7,15 +7,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-{{- end }}
+{{ end }}
 {{- if .HasConfigs }}
 	"google.golang.org/protobuf/encoding/protojson"
 {{- end }}
 {{- if .HasConfigsOrConcerns }}
 	"google.golang.org/protobuf/proto"
 {{- end }}
-
 {{- if .HasConfigsOrConcerns }}
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 {{- end }}
 )
@@ -32,7 +32,7 @@ func (conf *{{ $conf.Name }}) Key() string {
 
 func (*{{ $conf.Name }}ConfigHandler) GetKey(msg proto.Message) string {
 	conf := msg.(*{{ $conf.Name }})
-    return conf.Key()
+	return conf.Key()
 }
 
 func (*{{ $conf.Name }}ConfigHandler) Unmarshal(b []byte) (proto.Message, error) {
@@ -56,6 +56,7 @@ func (*{{ $conf.Name }}ConfigHandler) UnmarshalJson(b []byte) (proto.Message, er
 func init() {
 	rkcy.RegisterComplexConfigHandler("{{ $conf.Name }}", &{{ $conf.Name }}ConfigHandler{})
 }
+
 // -----------------------------------------------------------------------------
 // Config {{ $conf.Name }} END
 // -----------------------------------------------------------------------------
@@ -182,7 +183,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-    confRdr *rkcy.ConfigRdr,
+	confRdr *rkcy.ConfigRdr,
 	storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
@@ -373,9 +374,9 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *{{ $cnc.Name }}
-                {{- with $cnc.RelConcerns }}
-                var relCnc *{{ $cnc.RelConcerns.Msg.Name }}
-                {{- end }}
+				{{- with $cnc.RelConcerns }}
+				var relCnc *{{ $cnc.RelConcerns.Msg.Name }}
+				{{- end }}
 				inst, {{ with $cnc.RelConcerns }}relCnc, {{ end }}rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
@@ -386,13 +387,13 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-                {{- with $cnc.RelConcerns }}
+				{{- with $cnc.RelConcerns }}
 				rslt.Related, err = proto.Marshal(relCnc)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
 				}
-                {{- end }}
+				{{- end }}
 			}
 		case rkcy.UPDATE:
 			{

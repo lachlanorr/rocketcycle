@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	"google.golang.org/protobuf/proto"
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
@@ -118,7 +120,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-    confRdr *rkcy.ConfigRdr,
+	confRdr *rkcy.ConfigRdr,
 	storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
@@ -388,7 +390,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *Character
-                var relCnc *CharacterRelatedConcerns
+				var relCnc *CharacterRelatedConcerns
 				inst, relCnc, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)

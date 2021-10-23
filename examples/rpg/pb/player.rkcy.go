@@ -8,8 +8,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
@@ -24,7 +26,7 @@ func (conf *Limits) Key() string {
 
 func (*LimitsConfigHandler) GetKey(msg proto.Message) string {
 	conf := msg.(*Limits)
-    return conf.Key()
+	return conf.Key()
 }
 
 func (*LimitsConfigHandler) Unmarshal(b []byte) (proto.Message, error) {
@@ -48,6 +50,7 @@ func (*LimitsConfigHandler) UnmarshalJson(b []byte) (proto.Message, error) {
 func init() {
 	rkcy.RegisterComplexConfigHandler("Limits", &LimitsConfigHandler{})
 }
+
 // -----------------------------------------------------------------------------
 // Config Limits END
 // -----------------------------------------------------------------------------
@@ -154,7 +157,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-    confRdr *rkcy.ConfigRdr,
+	confRdr *rkcy.ConfigRdr,
 	storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
@@ -292,7 +295,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *Player
-                var relCnc *PlayerRelatedConcerns
+				var relCnc *PlayerRelatedConcerns
 				inst, relCnc, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
