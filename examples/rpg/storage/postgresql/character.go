@@ -22,7 +22,7 @@ func init() {
 
 type Character struct{}
 
-func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *rkcy.CompoundOffset, error) {
+func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.CharacterRelatedConcerns, *rkcy.CompoundOffset, error) {
 	inst := &pb.Character{
 		Currency: &pb.Character_Currency{},
 	}
@@ -60,29 +60,29 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *rkcy.
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
+			return nil, nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	inst.Items, err = c.readItems(ctx, inst.Id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return inst, &cmpdOffset, nil
+	return inst, nil, &cmpdOffset, nil
 }
 
 func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) (*pb.Character, error) {
 	inst.Id = uuid.NewString()
-	err := c.upsert(ctx, inst, cmpdOffset)
+	err := c.upsert(ctx, inst, nil, cmpdOffset)
 	if err != nil {
 		return nil, err
 	}
 	return inst, nil
 }
 
-func (c *Character) Update(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) error {
-	return c.upsert(ctx, inst, cmpdOffset)
+func (c *Character) Update(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error {
+	return c.upsert(ctx, inst, relCnc, cmpdOffset)
 }
 
 func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
@@ -127,7 +127,7 @@ func (*Character) hasItem(id string, items []*pb.Character_Item) bool {
 	return false
 }
 
-func (c *Character) upsert(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) error {
+func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",

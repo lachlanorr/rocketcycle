@@ -21,7 +21,7 @@ func init() {
 
 type Player struct{}
 
-func (*Player) Read(ctx context.Context, key string) (*pb.Player, *rkcy.CompoundOffset, error) {
+func (*Player) Read(ctx context.Context, key string) (*pb.Player, *pb.PlayerRelatedConcerns, *rkcy.CompoundOffset, error) {
 	inst := &pb.Player{}
 	offset := &rkcy.CompoundOffset{}
 	err := pool().QueryRow(ctx, "SELECT id, username, active, mro_generation, mro_partition, mro_offset FROM rpg.player WHERE id=$1", key).
@@ -36,25 +36,25 @@ func (*Player) Read(ctx context.Context, key string) (*pb.Player, *rkcy.Compound
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
+			return nil, nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
 		}
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return inst, offset, nil
+	return inst, nil, offset, nil
 }
 
 func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) (*pb.Player, error) {
 	inst.Id = uuid.NewString()
-	err := p.upsert(ctx, inst, cmpdOffset)
+	err := p.upsert(ctx, inst, nil, cmpdOffset)
 	if err != nil {
 		return nil, err
 	}
 	return inst, nil
 }
 
-func (p *Player) Update(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) error {
-	return p.upsert(ctx, inst, cmpdOffset)
+func (p *Player) Update(ctx context.Context, inst *pb.Player, relCnc *pb.PlayerRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error {
+	return p.upsert(ctx, inst, relCnc, cmpdOffset)
 }
 
 func (*Player) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
@@ -69,7 +69,7 @@ func (*Player) Delete(ctx context.Context, key string, cmpdOffset *rkcy.Compound
 	return err
 }
 
-func (*Player) upsert(ctx context.Context, inst *pb.Player, offset *rkcy.CompoundOffset) error {
+func (*Player) upsert(ctx context.Context, inst *pb.Player, relCnc *pb.PlayerRelatedConcerns, offset *rkcy.CompoundOffset) error {
 	_, err := pool().Exec(
 		ctx,
 		"CALL rpg.sp_upsert_player($1, $2, $3, $4, $5, $6)",

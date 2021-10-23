@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package rocketcycle.examples.rpg.pb;
+package pb;
 option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
 import "rkcy/extensions.proto";

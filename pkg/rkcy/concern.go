@@ -58,6 +58,7 @@ type ConcernHandler interface {
 		direction Direction,
 		args *StepArgs,
 		instanceStore *InstanceStore,
+		confRdr *ConfigRdr,
 		storageSystem string,
 	) *ApecsTxn_Step_Result
 	DecodeInstance(ctx context.Context, buffer []byte) (proto.Message, error)
@@ -227,6 +228,7 @@ func handleCommand(
 	command string,
 	direction Direction,
 	args *StepArgs,
+	confRdr *ConfigRdr,
 ) *ApecsTxn_Step_Result {
 	defer func() {
 		if r := recover(); r != nil {
@@ -279,7 +281,16 @@ func handleCommand(
 		return rslt
 	}
 
-	return concernHandler.HandleCommand(ctx, system, command, direction, args, gInstanceStore, "postgresql")
+	return concernHandler.HandleCommand(
+		ctx,
+		system,
+		command,
+		direction,
+		args,
+		gInstanceStore,
+		confRdr,
+		"postgresql",
+	)
 }
 
 type StepArgs struct {

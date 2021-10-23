@@ -156,6 +156,7 @@ func advanceApecsTxn(
 	tp *TopicParts,
 	cmpdOffset *CompoundOffset,
 	aprod *ApecsProducer,
+	confRdr *ConfigRdr,
 	wg *sync.WaitGroup,
 ) Code {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
@@ -270,7 +271,7 @@ func advanceApecsTxn(
 		CmpdOffset:    step.CmpdOffset,
 	}
 
-	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args)
+	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args, confRdr)
 
 	if (step.Result == nil || step.Result.Code != Code_OK) &&
 		rtxn.txn.UponError == UponError_BAILOUT {
@@ -348,6 +349,9 @@ func consumeApecsTopic(
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+
+	confMgr := NewConfigMgr(ctx, adminBrokers, platformName, wg)
+	confRdr := NewConfigRdr(confMgr)
 
 	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil, wg)
 
@@ -478,7 +482,7 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, wg)
+							code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
 							// Bailout is necessary when a storage step fails.
 							// Those must be retried indefinitely until success.
 							// So... we force commit the offset to current and

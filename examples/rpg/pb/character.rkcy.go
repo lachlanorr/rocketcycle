@@ -8,9 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
 	"google.golang.org/protobuf/proto"
-
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
@@ -21,7 +19,6 @@ func init() {
 	rkcy.RegisterConcernHandler(&CharacterConcernHandler{})
 }
 
-// helper routines on protobuf
 func (inst *Character) Key() string {
 	return inst.Id
 }
@@ -50,9 +47,9 @@ func (inst *Character) PreValidateUpdate(ctx context.Context, updated *Character
 
 // StorageCommands Interface
 type CharacterStorageCommands interface {
-	Read(ctx context.Context, key string) (*Character, *rkcy.CompoundOffset, error)
+	Read(ctx context.Context, key string) (*Character, *CharacterRelatedConcerns, *rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *Character, cmpdOffset *rkcy.CompoundOffset) (*Character, error)
-	Update(ctx context.Context, inst *Character, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -61,9 +58,9 @@ type CharacterProcessCommands interface {
 	ValidateCreate(ctx context.Context, inst *Character) (*Character, error)
 	ValidateUpdate(ctx context.Context, original *Character, updated *Character) (*Character, error)
 
-	Fund(ctx context.Context, inst *Character, payload *FundingRequest) (*Character, error)
-	DebitFunds(ctx context.Context, inst *Character, payload *FundingRequest) (*Character, error)
-	CreditFunds(ctx context.Context, inst *Character, payload *FundingRequest) (*Character, error)
+	Fund(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
+	DebitFunds(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
+	CreditFunds(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
 }
 
 // Concern Handler
@@ -121,6 +118,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
+    confRdr *rkcy.ConfigRdr,
 	storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
@@ -160,13 +158,12 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 			}
 		case rkcy.VALIDATE_UPDATE:
 			{
-				instBytes := instanceStore.GetInstance(args.Key)
-				if instBytes == nil {
+				if args.Instance == nil {
 					rslt.SetResult(fmt.Errorf("No instance exists during VALIDATE_UPDATE"))
 					return rslt
 				}
 				inst := &Character{}
-				err = proto.Unmarshal(instBytes, inst)
+				err = proto.Unmarshal(args.Instance, inst)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -206,16 +203,20 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 			}
 		case "Fund":
 			{
-				instBytes := instanceStore.GetInstance(args.Key)
-				if instBytes == nil {
+				if args.Instance == nil {
 					rslt.SetResult(fmt.Errorf("No instance exists during HandleCommand"))
 					return rslt
 				}
 				inst := &Character{}
-				err = proto.Unmarshal(instBytes, inst)
+				err = proto.Unmarshal(args.Instance, inst)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
+				}
+				var relCnc *CharacterRelatedConcerns
+				relCncBytes := instanceStore.GetRelated(args.Key)
+				if relCncBytes != nil {
+					err = proto.Unmarshal(relCncBytes, relCnc)
 				}
 				payloadIn := &FundingRequest{}
 				err = proto.Unmarshal(args.Payload, payloadIn)
@@ -223,7 +224,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				payloadOut, err := cncHdlr.processCmds.Fund(ctx, inst, payloadIn)
+				payloadOut, err := cncHdlr.processCmds.Fund(ctx, inst, relCnc, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -246,16 +247,20 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 			}
 		case "DebitFunds":
 			{
-				instBytes := instanceStore.GetInstance(args.Key)
-				if instBytes == nil {
+				if args.Instance == nil {
 					rslt.SetResult(fmt.Errorf("No instance exists during HandleCommand"))
 					return rslt
 				}
 				inst := &Character{}
-				err = proto.Unmarshal(instBytes, inst)
+				err = proto.Unmarshal(args.Instance, inst)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
+				}
+				var relCnc *CharacterRelatedConcerns
+				relCncBytes := instanceStore.GetRelated(args.Key)
+				if relCncBytes != nil {
+					err = proto.Unmarshal(relCncBytes, relCnc)
 				}
 				payloadIn := &FundingRequest{}
 				err = proto.Unmarshal(args.Payload, payloadIn)
@@ -263,7 +268,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				payloadOut, err := cncHdlr.processCmds.DebitFunds(ctx, inst, payloadIn)
+				payloadOut, err := cncHdlr.processCmds.DebitFunds(ctx, inst, relCnc, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -286,16 +291,20 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 			}
 		case "CreditFunds":
 			{
-				instBytes := instanceStore.GetInstance(args.Key)
-				if instBytes == nil {
+				if args.Instance == nil {
 					rslt.SetResult(fmt.Errorf("No instance exists during HandleCommand"))
 					return rslt
 				}
 				inst := &Character{}
-				err = proto.Unmarshal(instBytes, inst)
+				err = proto.Unmarshal(args.Instance, inst)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
+				}
+				var relCnc *CharacterRelatedConcerns
+				relCncBytes := instanceStore.GetRelated(args.Key)
+				if relCncBytes != nil {
+					err = proto.Unmarshal(relCncBytes, relCnc)
 				}
 				payloadIn := &FundingRequest{}
 				err = proto.Unmarshal(args.Payload, payloadIn)
@@ -303,7 +312,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				payloadOut, err := cncHdlr.processCmds.CreditFunds(ctx, inst, payloadIn)
+				payloadOut, err := cncHdlr.processCmds.CreditFunds(ctx, inst, relCnc, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -378,13 +387,19 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 			}
 		case rkcy.READ:
 			{
-				inst := &Character{}
-				inst, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
+				var inst *Character
+                var relCnc *CharacterRelatedConcerns
+				inst, relCnc, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
 				}
 				rslt.Payload, err = proto.Marshal(inst)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				rslt.Related, err = proto.Marshal(relCnc)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -398,7 +413,12 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				err = cmds.Update(ctx, payloadIn, args.CmpdOffset)
+				relCncBytes := instanceStore.GetRelated(args.Key)
+				relCnc := &CharacterRelatedConcerns{}
+				if relCncBytes != nil {
+					err = proto.Unmarshal(relCncBytes, relCnc)
+				}
+				err = cmds.Update(ctx, payloadIn, relCnc, args.CmpdOffset)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt

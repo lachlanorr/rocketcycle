@@ -24,9 +24,11 @@ import (
 var templates embed.FS
 
 type templateData struct {
-	Package         string
-	LeadingComments string
-	ShouldGenerate  bool
+	Package              string
+	LeadingComments      string
+	HasConfigs           bool
+	HasConcerns          bool
+	HasConfigsOrConcerns bool
 
 	Configs  []*config
 	Concerns []*concern
@@ -305,7 +307,9 @@ func buildTemplateData(pbFile *descriptorpb.FileDescriptorProto, cat *catalog, r
 		}
 	}
 
-	tmplData.ShouldGenerate = len(tmplData.Configs) > 0 || len(tmplData.Concerns) > 0
+	tmplData.HasConfigs = len(tmplData.Configs) > 0
+	tmplData.HasConcerns = len(tmplData.Concerns) > 0
+	tmplData.HasConfigsOrConcerns = tmplData.HasConfigs || tmplData.HasConcerns
 
 	return tmplData
 }
@@ -408,7 +412,7 @@ func main() {
 
 	for _, pbFile := range pbFilesToGen {
 		tmplData := buildTemplateData(pbFile, cat, rkcyPackage)
-		if tmplData.ShouldGenerate {
+		if tmplData.HasConfigsOrConcerns {
 			mdFile := plugin.CodeGeneratorResponse_File{}
 			name := strings.Replace(*pbFile.Name, ".proto", ".rkcy.go", -1)
 			mdFile.Name = &name

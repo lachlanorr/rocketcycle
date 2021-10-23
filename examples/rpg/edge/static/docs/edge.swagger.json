@@ -34,7 +34,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.TradeRequest"
+              "$ref": "#/definitions/pb.TradeRequest"
             }
           }
         ],
@@ -50,7 +50,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           },
           "default": {
@@ -66,7 +66,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           }
         ],
@@ -82,7 +82,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           },
           "default": {
@@ -112,7 +112,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           },
           "default": {
@@ -128,7 +128,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
+              "$ref": "#/definitions/pb.FundingRequest"
             }
           }
         ],
@@ -144,7 +144,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           },
           "default": {
@@ -174,7 +174,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           },
           "default": {
@@ -190,7 +190,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character"
+              "$ref": "#/definitions/pb.Character"
             }
           }
         ],
@@ -206,7 +206,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           },
           "default": {
@@ -222,7 +222,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           }
         ],
@@ -238,7 +238,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           },
           "default": {
@@ -268,7 +268,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           },
           "default": {
@@ -298,7 +298,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           },
           "default": {
@@ -314,7 +314,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Player"
+              "$ref": "#/definitions/pb.Player"
             }
           }
         ],
@@ -355,11 +355,7 @@
         }
       }
     },
-    "rkcy.Void": {
-      "type": "object",
-      "title": "Convenience empty message for services that return or accept no data"
-    },
-    "rocketcycle.examples.rpg.pb.Character": {
+    "pb.Character": {
       "type": "object",
       "properties": {
         "id": {
@@ -375,17 +371,17 @@
           "type": "boolean"
         },
         "currency": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character.Currency"
+          "$ref": "#/definitions/pb.Character.Currency"
         },
         "items": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character.Item"
+            "$ref": "#/definitions/pb.Character.Item"
           }
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.Character.Currency": {
+    "pb.Character.Currency": {
       "type": "object",
       "properties": {
         "gold": {
@@ -406,7 +402,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.Character.Item": {
+    "pb.Character.Item": {
       "type": "object",
       "properties": {
         "id": {
@@ -417,18 +413,18 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.FundingRequest": {
+    "pb.FundingRequest": {
       "type": "object",
       "properties": {
         "characterId": {
           "type": "string"
         },
         "currency": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Character.Currency"
+          "$ref": "#/definitions/pb.Character.Currency"
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.Limits": {
+    "pb.Limits": {
       "type": "object",
       "properties": {
         "id": {
@@ -440,7 +436,7 @@
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.Player": {
+    "pb.Player": {
       "type": "object",
       "properties": {
         "id": {
@@ -453,20 +449,24 @@
           "type": "boolean"
         },
         "limits": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.Limits"
+          "$ref": "#/definitions/pb.Limits"
         }
       }
     },
-    "rocketcycle.examples.rpg.pb.TradeRequest": {
+    "pb.TradeRequest": {
       "type": "object",
       "properties": {
         "lhs": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
+          "$ref": "#/definitions/pb.FundingRequest"
         },
         "rhs": {
-          "$ref": "#/definitions/rocketcycle.examples.rpg.pb.FundingRequest"
+          "$ref": "#/definitions/pb.FundingRequest"
         }
       }
+    },
+    "rkcy.Void": {
+      "type": "object",
+      "title": "Convenience empty message for services that return or accept no data"
     }
   }
 }

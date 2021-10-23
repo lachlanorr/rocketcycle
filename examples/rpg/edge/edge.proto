@@ -4,7 +4,7 @@
 
 syntax = "proto3";
 
-package rocketcycle.examples.rpg.edge;
+package edge;
 option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/edge";
 
 import "google/api/annotations.proto";
@@ -23,61 +23,61 @@ message RpgResponse {
 }
 
 service RpgService {
-    rpc ReadPlayer(RpgRequest) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc ReadPlayer(RpgRequest) returns (pb.Player) {
         option (google.api.http) = {
             get: "/v1/player/read/{id}"
         };
     }
-    rpc CreatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc CreatePlayer(pb.Player) returns (pb.Player) {
         option (google.api.http) = {
             post: "/v1/player/create"
             body: "*"
         };
     }
-    rpc UpdatePlayer(rocketcycle.examples.rpg.pb.Player) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc UpdatePlayer(pb.Player) returns (pb.Player) {
         option (google.api.http) = {
             post: "/v1/player/update"
             body: "*"
         };
     }
-    rpc DeletePlayer(RpgRequest) returns (rocketcycle.examples.rpg.pb.Player) {
+    rpc DeletePlayer(RpgRequest) returns (pb.Player) {
         option (google.api.http) = {
             post: "/v1/player/delete/{id}"
         };
     }
 
 
-    rpc ReadCharacter(RpgRequest) returns (rocketcycle.examples.rpg.pb.Character) {
+    rpc ReadCharacter(RpgRequest) returns (pb.Character) {
         option (google.api.http) = {
             get: "/v1/character/read/{id}"
         };
     }
-    rpc CreateCharacter(rocketcycle.examples.rpg.pb.Character) returns (rocketcycle.examples.rpg.pb.Character) {
+    rpc CreateCharacter(pb.Character) returns (pb.Character) {
         option (google.api.http) = {
             post: "/v1/character/create"
             body: "*"
         };
     }
-    rpc UpdateCharacter(rocketcycle.examples.rpg.pb.Character) returns (rocketcycle.examples.rpg.pb.Character) {
+    rpc UpdateCharacter(pb.Character) returns (pb.Character) {
         option (google.api.http) = {
             post: "/v1/character/update"
             body: "*"
         };
     }
-    rpc DeleteCharacter(RpgRequest) returns (rocketcycle.examples.rpg.pb.Character) {
+    rpc DeleteCharacter(RpgRequest) returns (pb.Character) {
         option (google.api.http) = {
             post: "/v1/character/delete/{id}"
         };
     }
 
-    rpc FundCharacter(rocketcycle.examples.rpg.pb.FundingRequest) returns (rocketcycle.examples.rpg.pb.Character) {
+    rpc FundCharacter(pb.FundingRequest) returns (pb.Character) {
         option (google.api.http) = {
             post: "/v1/character/fund"
             body: "*"
         };
     }
 
-    rpc ConductTrade(rocketcycle.examples.rpg.pb.TradeRequest) returns (rkcy.Void) {
+    rpc ConductTrade(pb.TradeRequest) returns (rkcy.Void) {
         option (google.api.http) = {
             post: "/v1/character/conductTrade"
             body: "*"

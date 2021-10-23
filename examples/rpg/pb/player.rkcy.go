@@ -8,13 +8,49 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-// TODO: Config stuff for Limits
+// -----------------------------------------------------------------------------
+// Config Limits
+// -----------------------------------------------------------------------------
+type LimitsConfigHandler struct{}
+
+func (conf *Limits) Key() string {
+	return conf.Id
+}
+
+func (*LimitsConfigHandler) GetKey(msg proto.Message) string {
+	conf := msg.(*Limits)
+    return conf.Key()
+}
+
+func (*LimitsConfigHandler) Unmarshal(b []byte) (proto.Message, error) {
+	conf := &Limits{}
+	err := proto.Unmarshal(b, conf)
+	if err != nil {
+		return nil, err
+	}
+	return proto.Message(conf), nil
+}
+
+func (*LimitsConfigHandler) UnmarshalJson(b []byte) (proto.Message, error) {
+	conf := &Limits{}
+	err := protojson.Unmarshal(b, conf)
+	if err != nil {
+		return nil, err
+	}
+	return proto.Message(conf), nil
+}
+
+func init() {
+	rkcy.RegisterComplexConfigHandler("Limits", &LimitsConfigHandler{})
+}
+// -----------------------------------------------------------------------------
+// Config Limits END
+// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 // Concern Player
@@ -23,7 +59,6 @@ func init() {
 	rkcy.RegisterConcernHandler(&PlayerConcernHandler{})
 }
 
-// helper routines on protobuf
 func (inst *Player) Key() string {
 	return inst.Id
 }
@@ -52,9 +87,9 @@ func (inst *Player) PreValidateUpdate(ctx context.Context, updated *Player) erro
 
 // StorageCommands Interface
 type PlayerStorageCommands interface {
-	Read(ctx context.Context, key string) (*Player, *rkcy.CompoundOffset, error)
+	Read(ctx context.Context, key string) (*Player, *PlayerRelatedConcerns, *rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) (*Player, error)
-	Update(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Player, relCnc *PlayerRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -119,6 +154,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
+    confRdr *rkcy.ConfigRdr,
 	storageSystem string,
 ) *rkcy.ApecsTxn_Step_Result {
 	var err error
@@ -158,13 +194,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 			}
 		case rkcy.VALIDATE_UPDATE:
 			{
-				instBytes := instanceStore.GetInstance(args.Key)
-				if instBytes == nil {
+				if args.Instance == nil {
 					rslt.SetResult(fmt.Errorf("No instance exists during VALIDATE_UPDATE"))
 					return rslt
 				}
 				inst := &Player{}
-				err = proto.Unmarshal(instBytes, inst)
+				err = proto.Unmarshal(args.Instance, inst)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -256,13 +291,19 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 			}
 		case rkcy.READ:
 			{
-				inst := &Player{}
-				inst, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
+				var inst *Player
+                var relCnc *PlayerRelatedConcerns
+				inst, relCnc, rslt.CmpdOffset, err = cmds.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
 				}
 				rslt.Payload, err = proto.Marshal(inst)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt
+				}
+				rslt.Related, err = proto.Marshal(relCnc)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt
@@ -276,7 +317,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt
 				}
-				err = cmds.Update(ctx, payloadIn, args.CmpdOffset)
+				relCncBytes := instanceStore.GetRelated(args.Key)
+				relCnc := &PlayerRelatedConcerns{}
+				if relCncBytes != nil {
+					err = proto.Unmarshal(relCncBytes, relCnc)
+				}
+				err = cmds.Update(ctx, payloadIn, relCnc, args.CmpdOffset)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt

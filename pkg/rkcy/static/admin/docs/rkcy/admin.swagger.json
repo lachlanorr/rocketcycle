@@ -271,12 +271,6 @@
             "format": "double"
           }
         },
-        "decimalVals": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/rkcy.Decimal"
-          }
-        },
         "complexVals": {
           "type": "object",
           "additionalProperties": {
@@ -313,19 +307,6 @@
           "format": "date-time"
         },
         "lastChangedOffset": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "rkcy.Decimal": {
-      "type": "object",
-      "properties": {
-        "l": {
-          "type": "string",
-          "format": "int64"
-        },
-        "r": {
           "type": "string",
           "format": "int64"
         }

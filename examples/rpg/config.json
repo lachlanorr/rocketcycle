@@ -1,8 +1,12 @@
 {
-    "testString": "testStringVal",
-    "testBool": true,
-    "testInt": 1234,
-    "testDouble": 1.234,
-    "testDecimal": "d123.456",
-    "testDecimal2": {"l": 987, "r": 654}
+  "testString": "testStringVal",
+  "testBool": true,
+  "testInt": 1234,
+  "testDouble": 1.234,
+  "limitsList": [
+    {
+      "id": "48772bc4-81bf-4273-9e4e-5ac56473ccc0",
+      "maxCharactersPerPlayer": 5
+    }
+  ]
 }

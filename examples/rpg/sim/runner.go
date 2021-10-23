@@ -216,7 +216,7 @@ func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
 	characterPg := store_pg.Character{}
 
 	for _, stateDbPlayer := range stateDb.Players {
-		rkcyPlayer, _, err := playerPg.Read(ctx, stateDbPlayer.Id)
+		rkcyPlayer, _, _, err := playerPg.Read(ctx, stateDbPlayer.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
 		}
@@ -230,7 +230,7 @@ func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
 	}
 
 	for _, stateDbCharacter := range stateDb.Characters {
-		rkcyCharacter, _, err := characterPg.Read(ctx, stateDbCharacter.Id)
+		rkcyCharacter, _, _, err := characterPg.Read(ctx, stateDbCharacter.Id)
 		if err != nil {
 			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
 		}

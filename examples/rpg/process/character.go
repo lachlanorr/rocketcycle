@@ -29,7 +29,7 @@ func (c *Character) ValidateUpdate(ctx context.Context, original *pb.Character, 
 	return c.ValidateCreate(ctx, updated)
 }
 
-func (Character) Fund(ctx context.Context, inst *pb.Character, payload *pb.FundingRequest) (*pb.Character, error) {
+func (Character) Fund(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelatedConcerns, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
 		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot fund with negative currency")
 	}
@@ -46,7 +46,7 @@ func (Character) Fund(ctx context.Context, inst *pb.Character, payload *pb.Fundi
 	return inst, nil
 }
 
-func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, payload *pb.FundingRequest) (*pb.Character, error) {
+func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelatedConcerns, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
 		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot debit with negative currency")
 	}
@@ -67,7 +67,7 @@ func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, payload *p
 	return inst, nil
 }
 
-func (*Character) CreditFunds(ctx context.Context, inst *pb.Character, payload *pb.FundingRequest) (*pb.Character, error) {
+func (*Character) CreditFunds(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelatedConcerns, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
 		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot credit with negative currency")
 	}
