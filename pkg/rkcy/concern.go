@@ -11,12 +11,11 @@ import (
 	"fmt"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 const (
@@ -31,7 +30,7 @@ const (
 	REFRESH_INSTANCE = "RefreshInstance"
 	FLUSH_INSTANCE   = "FlushInstance"
 
-	UPDATE_RELATED  = "UpdateRelated"
+	REQUEST_RELATED = "RequestRelated"
 	REFRESH_RELATED = "RefreshRelated"
 )
 
@@ -52,7 +51,7 @@ func IsReservedCommandName(s string) bool {
 		gReservedCommandNames[REFRESH_INSTANCE] = true
 		gReservedCommandNames[FLUSH_INSTANCE] = true
 
-		gReservedCommandNames[UPDATE_RELATED] = true
+		gReservedCommandNames[REQUEST_RELATED] = true
 		gReservedCommandNames[REFRESH_RELATED] = true
 	}
 	if gReservedCommandNames[s] {
@@ -74,7 +73,7 @@ func IsTxnProhibitedCommandName(s string) bool {
 		gTxnProhibitedCommandNames[REFRESH_INSTANCE] = true
 		gTxnProhibitedCommandNames[FLUSH_INSTANCE] = true
 
-		gTxnProhibitedCommandNames[UPDATE_RELATED] = true
+		gTxnProhibitedCommandNames[REQUEST_RELATED] = true
 		gTxnProhibitedCommandNames[REFRESH_RELATED] = true
 	}
 	if gTxnProhibitedCommandNames[s] {
@@ -89,12 +88,12 @@ func IsTxnProhibitedCommandName(s string) bool {
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
 func IsRelatedCommand(command string) bool {
-	return strings.HasPrefix(command, UPDATE_RELATED) ||
+	return strings.HasPrefix(command, REQUEST_RELATED) ||
 		strings.HasPrefix(command, REFRESH_RELATED)
 }
 
-func BuildUpdateRelatedCommand(srcConcern string, tgtField string) string {
-	return fmt.Sprintf("%s_%s_%s", UPDATE_RELATED, srcConcern, tgtField)
+func BuildRequestRelatedCommand(srcConcern string, tgtField string) string {
+	return fmt.Sprintf("%s_%s_%s", REQUEST_RELATED, srcConcern, tgtField)
 }
 
 func BuildRefreshRelatedCommand(srcConcern string, tgtField string) string {
@@ -387,10 +386,11 @@ func handleCommand(
 
 type StepArgs struct {
 	TxnId         string
-	ProcessedTime *timestamp.Timestamp
 	Key           string
 	Instance      []byte
 	Payload       []byte
+	EffectiveTime time.Time
+
 	CmpdOffset    *CompoundOffset
 	ForwardResult *ApecsTxn_Step_Result
 }

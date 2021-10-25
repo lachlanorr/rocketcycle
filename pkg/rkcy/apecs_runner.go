@@ -214,7 +214,6 @@ func advanceApecsTxn(
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
-				EffectiveTime: now,
 				Payload:       step.Payload,
 			}
 			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
@@ -275,10 +274,10 @@ func advanceApecsTxn(
 
 	args := &StepArgs{
 		TxnId:         rtxn.txn.Id,
-		ProcessedTime: now,
 		Key:           step.Key,
 		Instance:      inst,
 		Payload:       step.Payload,
+		EffectiveTime: step.EffectiveTime.AsTime(),
 		CmpdOffset:    step.CmpdOffset,
 	}
 
@@ -313,9 +312,6 @@ func advanceApecsTxn(
 	}
 
 	step.Result.ProcessedTime = now
-	if step.Result.EffectiveTime == nil {
-		step.Result.EffectiveTime = now
-	}
 
 	if step.Result.LogEvents != nil {
 		for _, logEvt := range step.Result.LogEvents {

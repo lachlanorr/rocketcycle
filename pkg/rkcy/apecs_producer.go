@@ -28,10 +28,11 @@ type Txn struct {
 }
 
 type Step struct {
-	Concern string
-	Command string
-	Key     string
-	Payload proto.Message
+	Concern       string
+	Command       string
+	Key           string
+	Payload       proto.Message
+	EffectiveTime time.Time
 }
 
 type ResultProto struct {
@@ -516,12 +517,17 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 			return err
 		}
 
+		if step.EffectiveTime.IsZero() {
+			step.EffectiveTime = time.Now()
+		}
+
 		stepsPb[i] = &ApecsTxn_Step{
-			System:  System_PROCESS,
-			Concern: step.Concern,
-			Command: step.Command,
-			Key:     step.Key,
-			Payload: payloadBytes,
+			System:        System_PROCESS,
+			Concern:       step.Concern,
+			Command:       step.Command,
+			Key:           step.Key,
+			Payload:       payloadBytes,
+			EffectiveTime: timestamppb.New(step.EffectiveTime),
 		}
 	}
 
@@ -591,7 +597,6 @@ func (aprod *ApecsProducer) produceError(
 		step.Result = &ApecsTxn_Step_Result{
 			Code:          code,
 			ProcessedTime: timestamppb.Now(),
-			EffectiveTime: timestamppb.Now(),
 		}
 	}
 

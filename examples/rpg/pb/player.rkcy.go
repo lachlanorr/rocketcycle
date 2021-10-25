@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
@@ -310,11 +311,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					addSteps = append(
 						addSteps,
 						&rkcy.ApecsTxn_Step{
-							System:	 rkcy.System_PROCESS,
-							Concern: "Player",
-							Command: rkcy.REFRESH_INSTANCE,
-							Key:	 rslt.Key,
-							Payload: rkcy.PackPayloads(rslt.Payload, nil /* should be related */),
+							System:	       rkcy.System_PROCESS,
+							Concern:       "Player",
+							Command:       rkcy.REFRESH_INSTANCE,
+							Key:	       rslt.Key,
+							Payload:       rkcy.PackPayloads(rslt.Payload, nil /* should be related */),
+	                        EffectiveTime: timestamppb.New(args.EffectiveTime),
 						},
 					)
 				} else { // Direction_REVERSE
@@ -349,11 +351,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 				addSteps = append(
 					addSteps,
 					&rkcy.ApecsTxn_Step{
-						System:	 rkcy.System_PROCESS,
-						Concern: "Player",
-						Command: rkcy.REFRESH_INSTANCE,
-						Key:	 inst.Key(),
-						Payload: rslt.Payload,
+						System:	       rkcy.System_PROCESS,
+						Concern:       "Player",
+						Command:       rkcy.REFRESH_INSTANCE,
+						Key:	       inst.Key(),
+						Payload:       rslt.Payload,
+                        EffectiveTime: timestamppb.New(args.EffectiveTime),
 					},
 				)
 			}

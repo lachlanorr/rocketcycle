@@ -47,20 +47,22 @@ func newApecsTxn(
 		if step.System == System_PROCESS && step.Command == CREATE {
 			// Inject a refresh step so the cache gets updated if storage Create succeeds
 			validateStep := &ApecsTxn_Step{
-				System:  System_PROCESS,
-				Concern: step.Concern,
-				Command: VALIDATE_CREATE,
-				Payload: step.Payload,
+				System:        System_PROCESS,
+				Concern:       step.Concern,
+				Command:       VALIDATE_CREATE,
+				Payload:       step.Payload,
+				EffectiveTime: step.EffectiveTime,
 			}
 			step.System = System_STORAGE // switch to storage CREATE
 			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		} else if step.System == System_PROCESS && step.Command == UPDATE {
 			validateStep := &ApecsTxn_Step{
-				System:  System_PROCESS,
-				Concern: step.Concern,
-				Command: VALIDATE_UPDATE,
-				Payload: step.Payload,
+				System:        System_PROCESS,
+				Concern:       step.Concern,
+				Command:       VALIDATE_UPDATE,
+				Payload:       step.Payload,
+				EffectiveTime: step.EffectiveTime,
 			}
 			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
 			txn.ForwardSteps = append(txn.ForwardSteps, step)

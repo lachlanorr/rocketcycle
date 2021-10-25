@@ -14,6 +14,9 @@ import (
 {{- if .HasConfigsOrConcerns }}
 	"google.golang.org/protobuf/proto"
 {{- end }}
+{{- if .HasConcerns }}
+	"google.golang.org/protobuf/types/known/timestamppb"
+{{- end }}
 {{- if .HasConfigsOrConcerns }}
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -389,11 +392,12 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					addSteps = append(
 						addSteps,
 						&rkcy.ApecsTxn_Step{
-							System:	 rkcy.System_PROCESS,
-							Concern: "{{ $cnc.Name }}",
-							Command: rkcy.REFRESH_INSTANCE,
-							Key:	 rslt.Key,
-							Payload: rkcy.PackPayloads(rslt.Payload, nil /* should be related */),
+							System:	       rkcy.System_PROCESS,
+							Concern:       "{{ $cnc.Name }}",
+							Command:       rkcy.REFRESH_INSTANCE,
+							Key:	       rslt.Key,
+							Payload:       rkcy.PackPayloads(rslt.Payload, nil /* should be related */),
+	                        EffectiveTime: timestamppb.New(args.EffectiveTime),
 						},
 					)
 				} else { // Direction_REVERSE
@@ -432,11 +436,12 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 				addSteps = append(
 					addSteps,
 					&rkcy.ApecsTxn_Step{
-						System:	 rkcy.System_PROCESS,
-						Concern: "{{ $cnc.Name }}",
-						Command: rkcy.REFRESH_INSTANCE,
-						Key:	 inst.Key(),
-						Payload: rslt.Payload,
+						System:	       rkcy.System_PROCESS,
+						Concern:       "{{ $cnc.Name }}",
+						Command:       rkcy.REFRESH_INSTANCE,
+						Key:	       inst.Key(),
+						Payload:       rslt.Payload,
+                        EffectiveTime: timestamppb.New(args.EffectiveTime),
 					},
 				)
 			}
