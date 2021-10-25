@@ -81,7 +81,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 			} else if !timedOut && msg != nil {
 				log.WithLevel(wt.logLevel).
 					Str("Directive", fmt.Sprintf("0x%08X", int(GetDirective(msg)))).
-					Str("TraceId", GetTraceId(msg)).
+					Str("TxnId", GetTraceId(msg)).
 					Int("Offset", int(msg.TopicPartition.Offset)).
 					Msg(wt.topicName)
 				txn := ApecsTxn{}
@@ -185,13 +185,19 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 					if ok {
 						b64, ok := iB64.(string)
 						if ok {
-							dec, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
+							resJson, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
 							if err == nil {
 								// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 								var dataUnser interface{}
-								err := json.Unmarshal([]byte(dec), &dataUnser)
+								err := json.Unmarshal([]byte(resJson.Instance), &dataUnser)
 								if err == nil {
 									step["payload_decoded"] = dataUnser
+								}
+								if resJson.Related != nil {
+									err := json.Unmarshal([]byte(resJson.Related), &dataUnser)
+									if err == nil {
+										step["payload_related_decoded"] = dataUnser
+									}
 								}
 							} else {
 								step["payload_decode_err"] = err.Error()
@@ -207,13 +213,19 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 							if ok {
 								b64, ok := iB64.(string)
 								if ok {
-									dec, err := decodeResultPayload64Json(ctx, concern, system, command, b64)
+									resJson, err := decodeResultPayload64Json(ctx, concern, system, command, b64)
 									if err == nil {
 										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
 										var dataUnser interface{}
-										err := json.Unmarshal([]byte(dec), &dataUnser)
+										err := json.Unmarshal([]byte(resJson.Instance), &dataUnser)
 										if err == nil {
 											rslt["payload_decoded"] = dataUnser
+										}
+										if resJson.Related != nil {
+											err := json.Unmarshal([]byte(resJson.Related), &dataUnser)
+											if err == nil {
+												rslt["payload_related_decoded"] = dataUnser
+											}
 										}
 									} else {
 										step["payload_decode_err"] = err.Error()

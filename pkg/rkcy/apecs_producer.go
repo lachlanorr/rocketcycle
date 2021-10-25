@@ -34,6 +34,18 @@ type Step struct {
 	Payload proto.Message
 }
 
+type ResultProto struct {
+	Type     string
+	Instance proto.Message
+	Related  proto.Message
+}
+
+type ResultJson struct {
+	Type     string
+	Instance []byte
+	Related  []byte
+}
+
 type RevertType int
 
 const (
@@ -52,9 +64,7 @@ func ValidateTxn(txn *Txn) error {
 	}
 
 	for _, s := range txn.Steps {
-		if s.Command == REFRESH ||
-			s.Command == VALIDATE_CREATE ||
-			s.Command == VALIDATE_UPDATE {
+		if IsTxnProhibitedCommandName(s.Command) {
 			return fmt.Errorf("Invalid step command: %s", s.Command)
 		}
 	}
@@ -74,7 +84,7 @@ type ApecsProducer struct {
 }
 
 type RespChan struct {
-	TraceId   string
+	TxnId     string
 	RespCh    chan *ApecsTxn
 	StartTime time.Time
 }
@@ -175,11 +185,11 @@ func (aprod *ApecsProducer) produceResponse(
 	return nil
 }
 
-func respondThroughChannel(traceId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
+func respondThroughChannel(txnId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
-				Str("TraceId", traceId).
+				Str("TxnId", txnId).
 				Msgf("recover while sending to respCh '%s'", r)
 		}
 	}()
@@ -253,14 +263,14 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 				Msg("consumeResponseTopic exiting, ctx.Done()")
 			return
 		case <-cleanupTicker.C:
-			for traceId, respCh := range reqMap {
+			for txnId, respCh := range reqMap {
 				now := time.Now()
 				if now.Sub(respCh.StartTime) >= time.Second*60 {
 					log.Warn().
-						Str("TraceId", traceId).
+						Str("TxnId", txnId).
 						Msgf("Deleting request channel info, this is not normal and this transaction may have been lost")
-					respondThroughChannel(traceId, respCh.RespCh, nil)
-					delete(reqMap, traceId)
+					respondThroughChannel(txnId, respCh.RespCh, nil)
+					delete(reqMap, txnId)
 				}
 			}
 		case <-commitTicker.C:
@@ -281,13 +291,13 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 			for moreRegistrations {
 				select {
 				case rch := <-aprod.respRegisterCh:
-					_, ok := reqMap[rch.TraceId]
+					_, ok := reqMap[rch.TxnId]
 					if ok {
 						log.Error().
-							Str("TraceId", rch.TraceId).
-							Msg("TraceId already registered for responses, replacing with new value")
+							Str("TxnId", rch.TxnId).
+							Msg("TxnId already registered for responses, replacing with new value")
 					}
-					reqMap[rch.TraceId] = rch
+					reqMap[rch.TxnId] = rch
 				default:
 					moreRegistrations = false
 				}
@@ -335,23 +345,23 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 
 				directive := GetDirective(msg)
 				if directive == Directive_APECS_TXN {
-					traceId := GetTraceId(msg)
-					respCh, ok := reqMap[traceId]
+					txnId := GetTraceId(msg)
+					respCh, ok := reqMap[txnId]
 					if !ok {
 						log.Error().
-							Str("TraceId", traceId).
-							Msg("TraceId not found in reqMap")
+							Str("TxnId", txnId).
+							Msg("TxnId not found in reqMap")
 					} else {
-						delete(reqMap, traceId)
+						delete(reqMap, txnId)
 						txn := ApecsTxn{}
 						err := proto.Unmarshal(msg.Value, &txn)
 						if err != nil {
 							log.Error().
 								Err(err).
-								Str("TraceId", traceId).
+								Str("TxnId", txnId).
 								Msg("Failed to Unmarshal ApecsTxn")
 						} else {
-							respondThroughChannel(traceId, respCh.RespCh, &txn)
+							respondThroughChannel(txnId, respCh.RespCh, &txn)
 						}
 					}
 				} else {
@@ -424,7 +434,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 	txn *Txn,
 	timeout time.Duration,
 	wg *sync.WaitGroup,
-) (proto.Message, error) {
+) (*ResultProto, error) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 
@@ -433,14 +443,14 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, err
 	}
 
-	traceId := span.SpanContext().TraceID().String()
+	txnId := span.SpanContext().TraceID().String()
 
 	if aprod.respConsumerClose == nil {
 		return nil, errors.New("ExecuteTxnSync failure, no TopicTarget provided")
 	}
 
 	respCh := RespChan{
-		TraceId:   traceId,
+		TxnId:     txnId,
 		RespCh:    make(chan *ApecsTxn),
 		StartTime: time.Now(),
 	}
@@ -465,7 +475,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, errors.New("nil txn received")
 	}
 
-	success, msg, result := ApecsTxnResult(ctx, txnResp)
+	success, resProto, result := ApecsTxnResult(ctx, txnResp)
 	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)
@@ -483,7 +493,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, errProto
 	}
 
-	return msg, nil
+	return resProto, nil
 }
 
 func (aprod *ApecsProducer) ExecuteTxnAsync(
@@ -519,7 +529,7 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	if traceParent == "" {
 		return fmt.Errorf("No SpanContext present in ctx")
 	}
-	traceId := TraceIdFromTraceParent(traceParent)
+	txnId := TraceIdFromTraceParent(traceParent)
 
 	var uponError UponError
 	if txn.Revert == Revertable {
@@ -529,8 +539,8 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	}
 
 	return aprod.executeTxn(
-		traceId,
-		"",
+		txnId,
+		nil,
 		traceParent,
 		uponError,
 		stepsPb,
@@ -539,14 +549,14 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 }
 
 func (aprod *ApecsProducer) executeTxn(
-	traceId string,
-	assocTraceId string,
+	txnId string,
+	assocTxn *AssocTxn,
 	traceParent string,
 	uponError UponError,
 	steps []*ApecsTxn_Step,
 	wg *sync.WaitGroup,
 ) error {
-	txn, err := newApecsTxn(traceId, assocTraceId, aprod.respTarget, uponError, steps)
+	txn, err := newApecsTxn(txnId, assocTxn, aprod.respTarget, uponError, steps)
 	if err != nil {
 		return err
 	}
@@ -571,7 +581,7 @@ func (aprod *ApecsProducer) produceError(
 	if step == nil {
 		step = rtxn.firstForwardStep()
 		if step == nil {
-			return fmt.Errorf("ApecsProducer.error TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
+			return fmt.Errorf("ApecsProducer.error TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
 		}
 		msg = "DEFAULTING TO FIRST FORWARD STEP FOR LOGGING!!! - " + msg
 	}
@@ -624,7 +634,7 @@ func (aprod *ApecsProducer) produceComplete(
 	// first step, which I think makes sense in most cases
 	step := rtxn.firstForwardStep()
 	if step == nil {
-		return fmt.Errorf("ApecsProducer.complete TraceId=%s: failed to get firstForwardStep", rtxn.txn.TraceId)
+		return fmt.Errorf("ApecsProducer.complete TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
 	}
 
 	prd, err := aprod.getProducer(step.Concern, COMPLETE, wg)
@@ -662,7 +672,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	var prd *Producer = nil
 	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsProducer.produceCurrentStep TraceId=%s System=%d: Invalid System", rtxn.txn.TraceId, step.System)
+		return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%d: Invalid System", rtxn.txn.Id, step.System)
 	}
 
 	prd, err = aprod.getProducer(step.Concern, topicName, wg)
@@ -681,7 +691,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	} else {
 		uid, err := uuid.NewRandom() // use a new randomized string
 		if err != nil {
-			return fmt.Errorf("ApecsProducer.produceCurrentStep TraceId=%s System=%d: uuid.NewRandom error: %s", rtxn.txn.TraceId, step.System, err.Error())
+			return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%d: uuid.NewRandom error: %s", rtxn.txn.Id, step.System, err.Error())
 		}
 		hashKey = uid[:]
 	}

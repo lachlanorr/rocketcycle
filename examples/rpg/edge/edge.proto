@@ -11,8 +11,9 @@ import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 
 import "rkcy/apecs.proto";
-import "examples/rpg/pb/player.proto";
-import "examples/rpg/pb/character.proto";
+import "player.proto";
+import "character.proto";
+import "relationships.proto";
 
 message RpgRequest {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
@@ -22,8 +23,18 @@ message RpgResponse {
     string id = 1 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {pattern: "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}", min_length: 1}];
 }
 
+message PlayerResponse {
+    pb.Player player = 1;
+    pb.PlayerRelatedConcerns related = 2;
+}
+
+message CharacterResponse {
+    pb.Character character = 1;
+    pb.CharacterRelatedConcerns related = 2;
+}
+
 service RpgService {
-    rpc ReadPlayer(RpgRequest) returns (pb.Player) {
+    rpc ReadPlayer(RpgRequest) returns (PlayerResponse) {
         option (google.api.http) = {
             get: "/v1/player/read/{id}"
         };
@@ -47,7 +58,7 @@ service RpgService {
     }
 
 
-    rpc ReadCharacter(RpgRequest) returns (pb.Character) {
+    rpc ReadCharacter(RpgRequest) returns (CharacterResponse) {
         option (google.api.http) = {
             get: "/v1/character/read/{id}"
         };

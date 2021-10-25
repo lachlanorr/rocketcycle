@@ -296,7 +296,10 @@ func cobraAdminDecodeInstance(cmd *cobra.Command, args []string) {
 			Msg("Failed to Unmarshal DecodeResponse")
 	}
 
-	fmt.Printf("%s\n", decodeRsp.Json)
+	fmt.Printf("%s\n", decodeRsp.Instance)
+	if decodeRsp.Related != "" {
+		fmt.Printf("\nRelated:\n%s\n", decodeRsp.Related)
+	}
 }
 
 type adminServer struct {
@@ -341,7 +344,7 @@ func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
 	if gCurrentRtPlat != nil {
 		return gCurrentRtPlat.Platform, nil
 	}
-	return nil, status.New(codes.FailedPrecondition, "platform not yet initialized").Err()
+	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
 }
 
 func (srv adminServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
@@ -353,32 +356,37 @@ func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, 
 }
 
 func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
-	dec, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
+	jsonBytes, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodeResponse{
-		Json: dec,
+		Type:     args.Concern,
+		Instance: string(jsonBytes),
 	}, nil
 }
 
 func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	dec, err := decodeArgPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resJson, err := decodeArgPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodeResponse{
-		Json: dec,
+		Type:     resJson.Type,
+		Instance: string(resJson.Instance),
+		Related:  string(resJson.Related),
 	}, nil
 }
 
 func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	dec, err := decodeResultPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resJson, err := decodeResultPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodeResponse{
-		Json: dec,
+		Type:     resJson.Type,
+		Instance: string(resJson.Instance),
+		Related:  string(resJson.Related),
 	}, nil
 }
 

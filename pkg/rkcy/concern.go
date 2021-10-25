@@ -7,8 +7,10 @@ package rkcy
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -26,10 +28,15 @@ const (
 	VALIDATE_CREATE = "ValidateCreate"
 	VALIDATE_UPDATE = "ValidateUpdate"
 
-	REFRESH = "Refresh"
+	REFRESH_INSTANCE = "RefreshInstance"
+	FLUSH_INSTANCE   = "FlushInstance"
+
+	UPDATE_RELATED  = "UpdateRelated"
+	REFRESH_RELATED = "RefreshRelated"
 )
 
 var gReservedCommandNames map[string]bool
+var gTxnProhibitedCommandNames map[string]bool
 
 func IsReservedCommandName(s string) bool {
 	if gReservedCommandNames == nil {
@@ -42,12 +49,68 @@ func IsReservedCommandName(s string) bool {
 		gReservedCommandNames[VALIDATE_CREATE] = true
 		gReservedCommandNames[VALIDATE_UPDATE] = true
 
-		gReservedCommandNames[REFRESH] = true
+		gReservedCommandNames[REFRESH_INSTANCE] = true
+		gReservedCommandNames[FLUSH_INSTANCE] = true
+
+		gReservedCommandNames[UPDATE_RELATED] = true
+		gReservedCommandNames[REFRESH_RELATED] = true
 	}
-	return gReservedCommandNames[s]
+	if gReservedCommandNames[s] {
+		return true
+	}
+	if IsRelatedCommand(s) {
+		return true
+	}
+	return false
+}
+
+func IsTxnProhibitedCommandName(s string) bool {
+	if gTxnProhibitedCommandNames == nil {
+		gTxnProhibitedCommandNames = make(map[string]bool)
+
+		gTxnProhibitedCommandNames[VALIDATE_CREATE] = true
+		gTxnProhibitedCommandNames[VALIDATE_UPDATE] = true
+
+		gTxnProhibitedCommandNames[REFRESH_INSTANCE] = true
+		gTxnProhibitedCommandNames[FLUSH_INSTANCE] = true
+
+		gTxnProhibitedCommandNames[UPDATE_RELATED] = true
+		gTxnProhibitedCommandNames[REFRESH_RELATED] = true
+	}
+	if gTxnProhibitedCommandNames[s] {
+		return true
+	}
+	if IsRelatedCommand(s) {
+		return true
+	}
+	return false
 }
 
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
+
+func IsRelatedCommand(command string) bool {
+	return strings.HasPrefix(command, UPDATE_RELATED) ||
+		strings.HasPrefix(command, REFRESH_RELATED)
+}
+
+func BuildUpdateRelatedCommand(srcConcern string, tgtField string) string {
+	return fmt.Sprintf("%s_%s_%s", UPDATE_RELATED, srcConcern, tgtField)
+}
+
+func BuildRefreshRelatedCommand(srcConcern string, tgtField string) string {
+	return fmt.Sprintf("%s_%s_%s", REFRESH_RELATED, srcConcern, tgtField)
+}
+
+func ParseRelatedCommand(command string) (string, string, string, error) {
+	if !IsRelatedCommand(command) {
+		return "", "", "", fmt.Errorf("Related command with wrong prefix: %s", command)
+	}
+	parts := strings.Split(command, "_")
+	if len(parts) != 3 {
+		return "", "", "", fmt.Errorf("Wrong number of parts of related command: %s", command)
+	}
+	return parts[0], parts[1], parts[2], nil
+}
 
 type ConcernHandler interface {
 	ConcernName() string
@@ -60,10 +123,11 @@ type ConcernHandler interface {
 		instanceStore *InstanceStore,
 		confRdr *ConfigRdr,
 		storageSystem string,
-	) *ApecsTxn_Step_Result
+	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
 	DecodeInstance(ctx context.Context, buffer []byte) (proto.Message, error)
-	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (proto.Message, error)
-	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (proto.Message, error)
+	DecodeRelated(ctx context.Context, buffer []byte) (proto.Message, error)
+	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
+	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 
 	SetProcessCommands(commands interface{}) error
 	SetStorageCommands(storageSystem string, commands interface{}) error
@@ -113,112 +177,171 @@ func RegisterConcernHandler(cncHandler ConcernHandler) {
 	gConcernHandlers[cncHandler.ConcernName()] = cncHandler
 }
 
-func decodeInstance(ctx context.Context, concern string, instance []byte) (proto.Message, error) {
+func decodeInstance(ctx context.Context, concern string, buffer []byte) (proto.Message, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return nil, fmt.Errorf("decodeInstance invalid concern: %s", concern)
 	}
-	return concernHandler.DecodeInstance(ctx, instance)
+	return concernHandler.DecodeInstance(ctx, buffer)
 }
 
-func decodeInstance64(ctx context.Context, concern string, instance64 string) (proto.Message, error) {
-	instance, err := base64.StdEncoding.DecodeString(instance64)
+func decodeInstance64(ctx context.Context, concern string, buffer64 string) (proto.Message, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
 	}
-	return decodeInstance(ctx, concern, instance)
+	return decodeInstance(ctx, concern, buffer)
 }
 
-func decodeInstanceJson(ctx context.Context, concern string, instance []byte) (string, error) {
-	msg, err := decodeInstance(ctx, concern, instance)
+func decodeInstanceJson(ctx context.Context, concern string, buffer []byte) ([]byte, error) {
+	instMsg, err := decodeInstance(ctx, concern, buffer)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	msgJson, err := protojson.Marshal(msg)
+	instJson, err := protojson.Marshal(instMsg)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(msgJson), nil
+	return instJson, nil
 }
 
-func decodeInstance64Json(ctx context.Context, concern string, instance64 string) (string, error) {
-	instance, err := base64.StdEncoding.DecodeString(instance64)
+func decodeInstance64Json(ctx context.Context, concern string, buffer64 string) ([]byte, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return decodeInstanceJson(ctx, concern, instance)
+	return decodeInstanceJson(ctx, concern, buffer)
 }
 
-func decodeArgPayload(ctx context.Context, concern string, system System, command string, payload []byte) (proto.Message, error) {
+func decodeArgPayload(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer []byte,
+) (*ResultProto, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return nil, fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
-	return concernHandler.DecodeArg(ctx, system, command, payload)
+	return concernHandler.DecodeArg(ctx, system, command, buffer)
 }
 
-func decodeArgPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (proto.Message, error) {
-	payload, err := base64.StdEncoding.DecodeString(payload64)
+func decodeArgPayload64(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer64 string,
+) (*ResultProto, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
 	}
-	return decodeArgPayload(ctx, concern, system, command, payload)
+	return decodeArgPayload(ctx, concern, system, command, buffer)
 }
 
-func decodeArgPayloadJson(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
-	msg, err := decodeArgPayload(ctx, concern, system, command, payload)
+func newResultJson(resProto *ResultProto) (*ResultJson, error) {
+	instanceJson, err := protojson.Marshal(resProto.Instance)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	msgJson, err := protojson.Marshal(msg)
-	if err != nil {
-		return "", err
+	var relatedJson []byte
+	if resProto.Related != nil {
+		relatedJson, err = protojson.Marshal(resProto.Related)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return string(msgJson), nil
+	return &ResultJson{
+		Type:     resProto.Type,
+		Instance: instanceJson,
+		Related:  relatedJson,
+	}, nil
 }
 
-func decodeArgPayload64Json(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
-	payload, err := base64.StdEncoding.DecodeString(payload64)
+func decodeArgPayloadJson(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer []byte,
+) (*ResultJson, error) {
+	resProto, err := decodeArgPayload(ctx, concern, system, command, buffer)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return decodeArgPayloadJson(ctx, concern, system, command, payload)
+	return newResultJson(resProto)
 }
 
-func decodeResultPayload(ctx context.Context, concern string, system System, command string, payload []byte) (proto.Message, error) {
+func decodeArgPayload64Json(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer64 string,
+) (*ResultJson, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
+	if err != nil {
+		return nil, err
+	}
+	return decodeArgPayloadJson(ctx, concern, system, command, buffer)
+}
+
+func decodeResultPayload(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer []byte,
+) (*ResultProto, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return nil, fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
 	}
-	return concernHandler.DecodeResult(ctx, system, command, payload)
+	return concernHandler.DecodeResult(ctx, system, command, buffer)
 }
 
-func decodeResultPayload64(ctx context.Context, concern string, system System, command string, payload64 string) (proto.Message, error) {
-	payload, err := base64.StdEncoding.DecodeString(payload64)
+func decodeResultPayload64(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer64 string,
+) (*ResultProto, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
 	}
-	return decodeResultPayload(ctx, concern, system, command, payload)
+	return decodeResultPayload(ctx, concern, system, command, buffer)
 }
 
-func decodeResultPayloadJson(ctx context.Context, concern string, system System, command string, payload []byte) (string, error) {
-	msg, err := decodeResultPayload(ctx, concern, system, command, payload)
+func decodeResultPayloadJson(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer []byte,
+) (*ResultJson, error) {
+	resProto, err := decodeResultPayload(ctx, concern, system, command, buffer)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	msgJson, err := protojson.Marshal(msg)
-	if err != nil {
-		return "", err
-	}
-	return string(msgJson), nil
+	return newResultJson(resProto)
 }
 
-func decodeResultPayload64Json(ctx context.Context, concern string, system System, command string, payload64 string) (string, error) {
-	payload, err := base64.StdEncoding.DecodeString(payload64)
+func decodeResultPayload64Json(
+	ctx context.Context,
+	concern string,
+	system System,
+	command string,
+	buffer64 string,
+) (*ResultJson, error) {
+	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return decodeResultPayloadJson(ctx, concern, system, command, payload)
+	return decodeResultPayloadJson(ctx, concern, system, command, buffer)
 }
 
 func handleCommand(
@@ -229,11 +352,11 @@ func handleCommand(
 	direction Direction,
 	args *StepArgs,
 	confRdr *ConfigRdr,
-) *ApecsTxn_Step_Result {
+) (*ApecsTxn_Step_Result, []*ApecsTxn_Step) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
-				Str("TraceId", args.TraceId).
+				Str("TxnId", args.TxnId).
 				Str("Concern", concern).
 				Str("System", system.String()).
 				Str("Command", command).
@@ -243,42 +366,11 @@ func handleCommand(
 		}
 	}()
 
-	if system == System_PROCESS {
-		switch command {
-		case CREATE:
-			fallthrough
-		case UPDATE:
-			if direction == Direction_REVERSE {
-				panic("REVERSE NOT IMPLEMENTED")
-			}
-			return &ApecsTxn_Step_Result{
-				Code:    Code_OK,
-				Payload: args.Payload,
-			}
-		case READ:
-			if direction == Direction_REVERSE {
-				panic("REVERSE NOT IMPLEMENTED")
-			}
-			return &ApecsTxn_Step_Result{
-				Code:    Code_OK,
-				Payload: args.Instance,
-			}
-		case DELETE:
-			if direction == Direction_REVERSE {
-				panic("REVERSE NOT IMPLEMENTED")
-			}
-			gInstanceStore.Remove(args.Key)
-			return &ApecsTxn_Step_Result{
-				Code: Code_OK,
-			}
-		}
-	}
-
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
-		return rslt
+		return rslt, nil
 	}
 
 	return concernHandler.HandleCommand(
@@ -294,7 +386,7 @@ func handleCommand(
 }
 
 type StepArgs struct {
-	TraceId       string
+	TxnId         string
 	ProcessedTime *timestamp.Timestamp
 	Key           string
 	Instance      []byte
@@ -335,4 +427,40 @@ type ConcernInstance interface {
 	Type() string
 	Key() string
 	SetKey(key string)
+}
+
+func PackPayloads(payload0 []byte, payload1 []byte) []byte {
+	packed := make([]byte, 8+len(payload0)+len(payload1))
+	copy(packed, "rkcy")
+	offset := 8 + len(payload0)
+	binary.LittleEndian.PutUint32(packed[4:8], uint32(offset))
+	copy(packed[8:], payload0)
+	copy(packed[offset:], payload1)
+	return packed
+}
+
+func UnpackPayloads(packed []byte) ([][]byte, error) {
+	if packed == nil || len(packed) < 8 {
+		return nil, fmt.Errorf("Not a packed payload, too small: %s", base64.StdEncoding.EncodeToString(packed))
+	}
+	if string(packed[:4]) != "rkcy" {
+		return nil, fmt.Errorf("Not a packed payload, missing rkcy: %s", base64.StdEncoding.EncodeToString(packed))
+	}
+	offset := binary.LittleEndian.Uint32(packed[4:8])
+	if offset < uint32(8) || offset > uint32(len(packed)) {
+		return nil, fmt.Errorf("Not a packed payload, invalid offset %d: %s", offset, base64.StdEncoding.EncodeToString(packed))
+	}
+	ret := make([][]byte, 2)
+	ret[0] = packed[8:offset]
+	ret[1] = packed[offset:]
+
+	// Return nils if there is no data in slices
+	if len(ret[0]) == 0 {
+		ret[0] = nil
+	}
+	if len(ret[1]) == 0 {
+		ret[1] = nil
+	}
+
+	return ret, nil
 }

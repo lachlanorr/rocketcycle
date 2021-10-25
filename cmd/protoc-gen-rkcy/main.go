@@ -93,7 +93,7 @@ func printError(format string, a ...interface{}) {
 	if len(format) == 0 || format[len(format)-1] != '\n' {
 		format = format + "\n"
 	}
-	os.Stderr.Write([]byte(fmt.Sprintf(format, a...)))
+	os.Stderr.WriteString(fmt.Sprintf(format, a...))
 }
 
 func debugPrintMessage(msg proto.Message) {

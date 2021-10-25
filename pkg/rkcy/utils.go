@@ -16,6 +16,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -244,4 +246,27 @@ func OffsetGreaterThan(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 	} else {
 		return lhs.Generation > rhs.Generation
 	}
+}
+
+func cobraDecodeInstance(cmd *cobra.Command, args []string) {
+	concern := args[0]
+	instance64 := args[1]
+
+	ctx := context.Background()
+
+	msg, err := decodeInstance64(ctx, concern, instance64)
+	if err != nil {
+		fmt.Printf("Failed to decode: %s\n", err.Error())
+		os.Stderr.WriteString(fmt.Sprintf("Failed to decode: %s\n", err.Error()))
+		os.Exit(1)
+	}
+
+	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
+	jsonBytes, err := pjOpts.Marshal(msg)
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("Failed to marshal decoded msg: %s\n", err.Error()))
+		os.Exit(1)
+	}
+
+	fmt.Println(string(jsonBytes))
 }

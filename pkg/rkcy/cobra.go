@@ -120,7 +120,7 @@ func runCobra(impl *PlatformImpl) {
 
 	adminDecodeCmd := &cobra.Command{
 		Use:   "decode",
-		Short: "decode base64 opaque payloads",
+		Short: "decode base64 opaque payloads by calling admin api",
 	}
 	adminCmd.AddCommand(adminDecodeCmd)
 	adminDecodeCmd.PersistentFlags().StringVar(&gSettings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
@@ -168,6 +168,22 @@ func runCobra(impl *PlatformImpl) {
 	configReplaceCmd.PersistentFlags().StringVarP(&gSettings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
 	configCmd.AddCommand(configReplaceCmd)
 
+	// decode sub command
+	decodeCmd := &cobra.Command{
+		Use:   "decode",
+		Short: "decode base64 opaque payloads",
+	}
+	rootCmd.AddCommand(decodeCmd)
+	decodeInstanceCmd := &cobra.Command{
+		Use:       "instance concern base64_payload",
+		Short:     "decode and print base64 payload",
+		Run:       cobraDecodeInstance,
+		Args:      cobra.MinimumNArgs(2),
+		ValidArgs: []string{"concern", "base64_payload"},
+	}
+	decodeCmd.AddCommand(decodeInstanceCmd)
+
+	// process sub command
 	procCmd := &cobra.Command{
 		Use:   "process",
 		Short: "APECS processing mode",
@@ -182,6 +198,7 @@ func runCobra(impl *PlatformImpl) {
 	procCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(procCmd)
 
+	// storage sub command
 	storageCmd := &cobra.Command{
 		Use:   "storage",
 		Short: "APECS storage mode",
@@ -196,6 +213,7 @@ func runCobra(impl *PlatformImpl) {
 	storageCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(storageCmd)
 
+	// watch sub command
 	watchCmd := &cobra.Command{
 		Use:   "watch",
 		Short: "APECS watch mode",
@@ -205,6 +223,7 @@ func runCobra(impl *PlatformImpl) {
 	watchCmd.PersistentFlags().BoolVarP(&gSettings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(watchCmd)
 
+	// run sub command
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run all topic consumer programs",
@@ -214,6 +233,7 @@ func runCobra(impl *PlatformImpl) {
 	runCmd.PersistentFlags().BoolVarP(&gSettings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(runCmd)
 
+	// plaform sub command
 	platCmd := &cobra.Command{
 		Use:   "platform",
 		Short: "Manage platform configuration",

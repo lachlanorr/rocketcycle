@@ -76,11 +76,11 @@ func timeout() time.Duration {
 	return time.Duration(settings.TimeoutSecs) * time.Second
 }
 
-func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
+func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerResponse, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.ReadPlayer(req.Id),
 		timeout(),
@@ -88,16 +88,16 @@ func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*pb.Player, 
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Player), nil
+	return &PlayerResponse{Player: resProto.Instance.(*pb.Player), Related: resProto.Related.(*pb.PlayerRelatedConcerns)}, nil
 }
 
 func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.CreatePlayer(plyr),
 		timeout(),
@@ -105,16 +105,16 @@ func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Player), nil
+	return resProto.Instance.(*pb.Player), nil
 }
 
 func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.UpdatePlayer(plyr),
 		timeout(),
@@ -122,16 +122,16 @@ func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Player), nil
+	return resProto.Instance.(*pb.Player), nil
 }
 
 func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.DeletePlayer(req.Id),
 		timeout(),
@@ -139,16 +139,16 @@ func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Player), nil
+	return resProto.Instance.(*pb.Player), nil
 }
 
-func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
+func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*CharacterResponse, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.ReadCharacter(req.Id),
 		timeout(),
@@ -156,16 +156,16 @@ func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*pb.Chara
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Character), nil
+	return &CharacterResponse{Character: resProto.Instance.(*pb.Character), Related: resProto.Related.(*pb.CharacterRelatedConcerns)}, nil
 }
 
 func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.CreateCharacter(plyr),
 		timeout(),
@@ -173,16 +173,16 @@ func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Character), nil
+	return resProto.Instance.(*pb.Character), nil
 }
 
 func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.UpdateCharacter(plyr),
 		timeout(),
@@ -190,16 +190,16 @@ func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Character), nil
+	return resProto.Instance.(*pb.Character), nil
 }
 
 func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.DeleteCharacter(req.Id),
 		timeout(),
@@ -207,16 +207,16 @@ func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Cha
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Character), nil
+	return resProto.Instance.(*pb.Character), nil
 }
 
 func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb.Character, error) {
 	ctx, span := rkcy.Telem().StartFunc(ctx)
 	defer span.End()
 
-	msg, err := aprod.ExecuteTxnSync(
+	resProto, err := aprod.ExecuteTxnSync(
 		ctx,
 		txn.Fund(fr),
 		timeout(),
@@ -224,9 +224,9 @@ func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return msg.(*pb.Character), nil
+	return resProto.Instance.(*pb.Character), nil
 }
 
 func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.Void, error) {
@@ -241,7 +241,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.
 	)
 	if err != nil {
 		rkcy.RecordSpanError(span, err)
-		return nil, status.New(codes.Internal, err.Error()).Err()
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &rkcy.Void{}, nil
 }

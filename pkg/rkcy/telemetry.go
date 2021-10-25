@@ -231,7 +231,7 @@ func (telem *Telemetry) StartRequest(ctx context.Context) (context.Context, stri
 func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (context.Context, trace.Span, *ApecsTxn_Step) {
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
-		ctx = SpanContext(ctx, rtxn.txn.TraceId)
+		ctx = SpanContext(ctx, rtxn.txn.Id)
 	}
 
 	step := rtxn.currentStep()

@@ -343,7 +343,13 @@
     "rkcy.DecodeResponse": {
       "type": "object",
       "properties": {
-        "json": {
+        "type": {
+          "type": "string"
+        },
+        "instance": {
+          "type": "string"
+        },
+        "related": {
           "type": "string"
         }
       }

@@ -6,6 +6,7 @@ package sim
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"sync"
 	"time"
@@ -71,6 +72,40 @@ type Difference struct {
 	Type    DifferenceType
 	StateDb proto.Message
 	Rkcy    proto.Message
+}
+
+func diff2json(diff *Difference) string {
+	stateDbJson, err := protojson.Marshal(diff.StateDb)
+	if err != nil {
+		panic("diff2json: " + err.Error())
+	}
+	rkcyJson, err := protojson.Marshal(diff.Rkcy)
+	if err != nil {
+		panic("diff2json: " + err.Error())
+	}
+
+	stateDbMap := make(map[string]interface{})
+	err = json.Unmarshal(stateDbJson, &stateDbMap)
+	if err != nil {
+		panic("diff2json: " + err.Error())
+	}
+	rkcyMap := make(map[string]interface{})
+	err = json.Unmarshal(rkcyJson, &rkcyMap)
+	if err != nil {
+		panic("diff2json: " + err.Error())
+	}
+
+	out := make(map[string]interface{})
+	out["message"] = diff.Message
+	out["type"] = diff.Type
+	out["stateDb"] = stateDbMap
+	out["rkcy"] = rkcyMap
+
+	outJson, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		panic("diff2json: " + err.Error())
+	}
+	return string(outJson)
 }
 
 func computeRatios(commands map[CommandId]Command) []float64 {
@@ -145,7 +180,7 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 
 	diffsProcess := compareProcess(ctx, stateDb, client)
 	for _, diff := range diffsProcess {
-		log.Error().Msgf("%d PROCESS DIFF: %+v", args.RunnerIdx, *diff)
+		log.Error().Msgf("%d PROCESS DIFF: \n%s", args.RunnerIdx, diff2json(diff))
 	}
 
 	var diffsStorage []*Difference
@@ -168,7 +203,7 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	}
 
 	for _, diff := range diffsStorage {
-		log.Error().Msgf("%d STORAGE DIFF: %+v", args.RunnerIdx, *diff)
+		log.Error().Msgf("%d STORAGE DIFF: \n%s", args.RunnerIdx, diff2json(diff))
 	}
 
 	log.Info().
@@ -185,7 +220,7 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 		}
 
 		stateDbJson := protojson.Format(stateDbPlayer)
-		rkcyJson := protojson.Format(rkcyPlayer)
+		rkcyJson := protojson.Format(rkcyPlayer.Player)
 
 		if stateDbJson != rkcyJson {
 			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbPlayer, Rkcy: rkcyPlayer})
@@ -199,7 +234,7 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 		}
 
 		stateDbJson := protojson.Format(stateDbCharacter)
-		rkcyJson := protojson.Format(rkcyCharacter)
+		rkcyJson := protojson.Format(rkcyCharacter.Character)
 
 		if stateDbJson != rkcyJson {
 			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})

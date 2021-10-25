@@ -41,7 +41,7 @@ func produceApecsTxnError(
 	logMsg := fmt.Sprintf(format, args...)
 
 	log.Error().
-		Str("TraceId", rtxn.txn.TraceId).
+		Str("TxnId", rtxn.txn.Id).
 		Msg(logMsg)
 
 	span.SetStatus(otel_codes.Error, logMsg)
@@ -53,7 +53,7 @@ func produceApecsTxnError(
 	if err != nil {
 		log.Error().
 			Err(err).
-			Str("TraceId", rtxn.txn.TraceId).
+			Str("TxnId", rtxn.txn.Id).
 			Msg("produceApecsTxnError: Failed to produce error message")
 	}
 }
@@ -114,12 +114,12 @@ func produceNextStep(
 			// UPDATE storage step for every instance modified
 			for _, step := range storageStepsMap {
 				storageSteps := []*ApecsTxn_Step{step}
-				storageTraceId := NewTraceId()
-				rtxn.txn.AssocTraceIds = append(rtxn.txn.AssocTraceIds, storageTraceId)
+				storageTxnId := NewTraceId()
+				rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_UPDATE})
 
 				err := aprod.executeTxn(
-					storageTraceId,
-					rtxn.txn.TraceId,
+					storageTxnId,
+					&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
 					rtxn.traceParent,
 					UponError_BAILOUT,
 					storageSteps,
@@ -164,7 +164,7 @@ func advanceApecsTxn(
 	defer span.End()
 
 	log.Debug().
-		Str("TraceId", rtxn.txn.TraceId).
+		Str("TxnId", rtxn.txn.Id).
 		Msgf("Advancing ApecsTxn: %s %d %+v", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, step)
 
 	if step.Result != nil {
@@ -201,11 +201,16 @@ func advanceApecsTxn(
 	if step.System == System_PROCESS {
 		step.CmpdOffset = cmpdOffset
 
-		// Special case "REFRESH" command
-		// REFRESH command is only ever sent after a READ was executed
-		// against the Storage
-		if step.Command == REFRESH {
-			gInstanceStore.SetInstance(step.Key, step.Payload, cmpdOffset)
+		if step.Command == REFRESH_INSTANCE {
+			// Special case "RefreshInstance" command
+			// RefreshInstance command is only ever sent after a READ was executed
+			// against the Storage
+			unpacked, err := UnpackPayloads(step.Payload)
+			if err != nil {
+				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "UnpackPayloads error: %s", err.Error())
+				return Code_INTERNAL
+			}
+			gInstanceStore.Set(step.Key, unpacked[0], unpacked[1], cmpdOffset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,
@@ -214,6 +219,14 @@ func advanceApecsTxn(
 			}
 			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 			return Code_OK
+		} else if step.Command == FLUSH_INSTANCE {
+			// Special case "FlushInstance" command
+			// All FlushInstance does is flush the key from the instace store
+			// Typically this is only used for debugging
+			log.Warn().
+				Str("Key", step.Key).
+				Msg("Flushing key from instance store")
+			gInstanceStore.Remove(step.Key)
 		} else {
 			if !isKeylessStep(step) {
 				inst = gInstanceStore.GetInstance(step.Key)
@@ -223,6 +236,10 @@ func advanceApecsTxn(
 				// We should attempt to get the value from the DB, and we
 				// do this by inserting a Storage READ step before this
 				// one and sending things through again
+				log.Debug().
+					Str("TxnId", rtxn.txn.Id).
+					Str("Key", step.Key).
+					Msg("Instance not found, generating STORAGE READ")
 				err := rtxn.insertSteps(
 					rtxn.txn.CurrentStepIdx,
 					&ApecsTxn_Step{
@@ -231,12 +248,6 @@ func advanceApecsTxn(
 						Command:    READ,
 						Key:        step.Key,
 						CmpdOffset: cmpdOffset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
-					},
-					&ApecsTxn_Step{
-						System:  System_PROCESS,
-						Concern: step.Concern,
-						Command: REFRESH,
-						Key:     step.Key,
 					},
 				)
 				if err != nil {
@@ -263,7 +274,7 @@ func advanceApecsTxn(
 	}
 
 	args := &StepArgs{
-		TraceId:       rtxn.txn.TraceId,
+		TxnId:         rtxn.txn.Id,
 		ProcessedTime: now,
 		Key:           step.Key,
 		Instance:      inst,
@@ -271,7 +282,8 @@ func advanceApecsTxn(
 		CmpdOffset:    step.CmpdOffset,
 	}
 
-	step.Result = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args, confRdr)
+	var addSteps []*ApecsTxn_Step
+	step.Result, addSteps = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args, confRdr)
 
 	if (step.Result == nil || step.Result.Code != Code_OK) &&
 		rtxn.txn.UponError == UponError_BAILOUT {
@@ -282,7 +294,7 @@ func advanceApecsTxn(
 			code = step.Result.Code
 			for _, logEvt := range step.Result.LogEvents {
 				log.Error().
-					Str("TraceId", args.TraceId).
+					Str("TxnId", args.TxnId).
 					Str("Concern", step.Concern).
 					Str("System", step.System.String()).
 					Str("Command", step.Command).
@@ -332,6 +344,16 @@ func advanceApecsTxn(
 	// Update InstanceStore if instance contents have changed
 	if tp.System == System_PROCESS && step.Result.Instance != nil {
 		gInstanceStore.SetInstance(step.Key, step.Result.Instance, cmpdOffset)
+	}
+
+	// if we have additional steps from handleCommand we should place
+	// them in the transaction
+	if addSteps != nil && len(addSteps) > 0 {
+		err := rtxn.insertSteps(rtxn.txn.CurrentStepIdx+1, addSteps...)
+		if err != nil {
+			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "insertSteps failure: %s", err.Error())
+			return Code_INTERNAL
+		}
 	}
 
 	produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
@@ -507,7 +529,7 @@ func consumeApecsTopic(
 
 								log.Fatal().
 									Int("Code", int(code)).
-									Str("TraceId", rtxn.txn.TraceId).
+									Str("TxnId", rtxn.txn.Id).
 									Str("Txn", protojson.Format(proto.Message(rtxn.txn))).
 									Str("Topic", fullTopic).
 									Int32("Partition", partition).

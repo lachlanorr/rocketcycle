@@ -144,7 +144,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/pb.Character"
+              "$ref": "#/definitions/edge.CharacterResponse"
             }
           },
           "default": {
@@ -268,7 +268,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/pb.Player"
+              "$ref": "#/definitions/edge.PlayerResponse"
             }
           },
           "default": {
@@ -325,6 +325,28 @@
     }
   },
   "definitions": {
+    "edge.CharacterResponse": {
+      "type": "object",
+      "properties": {
+        "character": {
+          "$ref": "#/definitions/pb.Character"
+        },
+        "related": {
+          "$ref": "#/definitions/pb.CharacterRelatedConcerns"
+        }
+      }
+    },
+    "edge.PlayerResponse": {
+      "type": "object",
+      "properties": {
+        "player": {
+          "$ref": "#/definitions/pb.Player"
+        },
+        "related": {
+          "$ref": "#/definitions/pb.PlayerRelatedConcerns"
+        }
+      }
+    },
     "google.protobuf.Any": {
       "type": "object",
       "properties": {
@@ -413,6 +435,14 @@
         }
       }
     },
+    "pb.CharacterRelatedConcerns": {
+      "type": "object",
+      "properties": {
+        "player": {
+          "$ref": "#/definitions/pb.Player"
+        }
+      }
+    },
     "pb.FundingRequest": {
       "type": "object",
       "properties": {
@@ -450,6 +480,17 @@
         },
         "limits": {
           "$ref": "#/definitions/pb.Limits"
+        }
+      }
+    },
+    "pb.PlayerRelatedConcerns": {
+      "type": "object",
+      "properties": {
+        "characters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pb.Character"
+          }
         }
       }
     },

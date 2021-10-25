@@ -19,11 +19,11 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RpgServiceClient interface {
-	ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error)
+	ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*PlayerResponse, error)
 	CreatePlayer(ctx context.Context, in *pb.Player, opts ...grpc.CallOption) (*pb.Player, error)
 	UpdatePlayer(ctx context.Context, in *pb.Player, opts ...grpc.CallOption) (*pb.Player, error)
 	DeletePlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error)
-	ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error)
+	ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*CharacterResponse, error)
 	CreateCharacter(ctx context.Context, in *pb.Character, opts ...grpc.CallOption) (*pb.Character, error)
 	UpdateCharacter(ctx context.Context, in *pb.Character, opts ...grpc.CallOption) (*pb.Character, error)
 	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error)
@@ -39,8 +39,8 @@ func NewRpgServiceClient(cc grpc.ClientConnInterface) RpgServiceClient {
 	return &rpgServiceClient{cc}
 }
 
-func (c *rpgServiceClient) ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Player, error) {
-	out := new(pb.Player)
+func (c *rpgServiceClient) ReadPlayer(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*PlayerResponse, error) {
+	out := new(PlayerResponse)
 	err := c.cc.Invoke(ctx, "/edge.RpgService/ReadPlayer", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -75,8 +75,8 @@ func (c *rpgServiceClient) DeletePlayer(ctx context.Context, in *RpgRequest, opt
 	return out, nil
 }
 
-func (c *rpgServiceClient) ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error) {
-	out := new(pb.Character)
+func (c *rpgServiceClient) ReadCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*CharacterResponse, error) {
+	out := new(CharacterResponse)
 	err := c.cc.Invoke(ctx, "/edge.RpgService/ReadCharacter", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -133,11 +133,11 @@ func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *pb.TradeRequest
 // All implementations must embed UnimplementedRpgServiceServer
 // for forward compatibility
 type RpgServiceServer interface {
-	ReadPlayer(context.Context, *RpgRequest) (*pb.Player, error)
+	ReadPlayer(context.Context, *RpgRequest) (*PlayerResponse, error)
 	CreatePlayer(context.Context, *pb.Player) (*pb.Player, error)
 	UpdatePlayer(context.Context, *pb.Player) (*pb.Player, error)
 	DeletePlayer(context.Context, *RpgRequest) (*pb.Player, error)
-	ReadCharacter(context.Context, *RpgRequest) (*pb.Character, error)
+	ReadCharacter(context.Context, *RpgRequest) (*CharacterResponse, error)
 	CreateCharacter(context.Context, *pb.Character) (*pb.Character, error)
 	UpdateCharacter(context.Context, *pb.Character) (*pb.Character, error)
 	DeleteCharacter(context.Context, *RpgRequest) (*pb.Character, error)
@@ -150,7 +150,7 @@ type RpgServiceServer interface {
 type UnimplementedRpgServiceServer struct {
 }
 
-func (UnimplementedRpgServiceServer) ReadPlayer(context.Context, *RpgRequest) (*pb.Player, error) {
+func (UnimplementedRpgServiceServer) ReadPlayer(context.Context, *RpgRequest) (*PlayerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadPlayer not implemented")
 }
 func (UnimplementedRpgServiceServer) CreatePlayer(context.Context, *pb.Player) (*pb.Player, error) {
@@ -162,7 +162,7 @@ func (UnimplementedRpgServiceServer) UpdatePlayer(context.Context, *pb.Player) (
 func (UnimplementedRpgServiceServer) DeletePlayer(context.Context, *RpgRequest) (*pb.Player, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeletePlayer not implemented")
 }
-func (UnimplementedRpgServiceServer) ReadCharacter(context.Context, *RpgRequest) (*pb.Character, error) {
+func (UnimplementedRpgServiceServer) ReadCharacter(context.Context, *RpgRequest) (*CharacterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadCharacter not implemented")
 }
 func (UnimplementedRpgServiceServer) CreateCharacter(context.Context, *pb.Character) (*pb.Character, error) {
