@@ -7,17 +7,19 @@ syntax = "proto3";
 package pb;
 option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
+import "rkcy/extensions.proto";
+
 import "player.proto";
 import "character.proto";
 
 message PlayerRelatedConcerns {
-    repeated Character characters = 1;
+    repeated Character characters = 1 [(rkcy.rel_concern) = {id_field:"player_id", is_remote:true}];
 }
 
 message PlayerRelatedConfigs {
-    Limits limit = 1;
+    Limits limit = 1 [(rkcy.rel_concern) = {id_field:"limit_id"}];
 }
 
 message CharacterRelatedConcerns {
-    Player player = 1;
+    Player player = 1 [(rkcy.rel_concern) = {id_field:"player_id"}];
 }

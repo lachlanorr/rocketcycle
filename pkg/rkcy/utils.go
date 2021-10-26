@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
@@ -269,4 +270,9 @@ func cobraDecodeInstance(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println(string(jsonBytes))
+}
+
+func LogProto(msg proto.Message) {
+	reqJson := protojson.Format(msg)
+	log.Info().Msg(reqJson)
 }

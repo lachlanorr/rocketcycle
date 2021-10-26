@@ -454,18 +454,6 @@
         }
       }
     },
-    "pb.Limits": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "maxCharactersPerPlayer": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
-    },
     "pb.Player": {
       "type": "object",
       "properties": {
@@ -478,8 +466,8 @@
         "active": {
           "type": "boolean"
         },
-        "limits": {
-          "$ref": "#/definitions/pb.Limits"
+        "limitsId": {
+          "type": "string"
         }
       }
     },

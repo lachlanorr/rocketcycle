@@ -228,7 +228,7 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 											}
 										}
 									} else {
-										step["payload_decode_err"] = err.Error()
+										rslt["payload_decode_err"] = err.Error()
 									}
 								}
 							}
@@ -246,7 +246,7 @@ func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
 											rslt["instance_decoded"] = dataUnser
 										}
 									} else {
-										step["payload_decode_err"] = err.Error()
+										rslt["instance_decode_err"] = err.Error()
 									}
 								}
 							}

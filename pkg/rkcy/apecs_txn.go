@@ -126,9 +126,9 @@ func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 		// put at the end
 		for _, step := range steps {
 			currSteps = append(currSteps, step)
-			rtxn.setSteps(currSteps)
-			return nil
 		}
+		rtxn.setSteps(currSteps)
+		return nil
 	} else if idx > int32(len(currSteps)) {
 		return fmt.Errorf("Index out of range")
 	}

@@ -16,7 +16,7 @@ message Player {
     string username = 2;
     bool active = 3;
 
-    Limits limits = 4;
+    string limits_id = 4;
 }
 
 message Limits {

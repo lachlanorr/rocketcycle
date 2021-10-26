@@ -5,6 +5,7 @@
 package rkcy
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -88,22 +89,24 @@ func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOff
 	}
 }
 
-func (instStore *InstanceStore) SetRelated(key string, related []byte, cmpdOffset *CompoundOffset) {
+func (instStore *InstanceStore) SetRelated(key string, related []byte, cmpdOffset *CompoundOffset) error {
 	rec, ok := instStore.instances[key]
 	if ok {
 		if !OffsetGreaterThan(cmpdOffset, rec.CmpdOffset) {
 			log.Error().
 				Str("Key", key).
 				Msgf("Out of order InstanceStore.Set: new (%+v), old (%+v)", cmpdOffset, rec.CmpdOffset)
-			return
+			return nil
 		}
 		rec.Related = related
 		rec.CmpdOffset = cmpdOffset
 		rec.LastAccess = time.Now()
+		return nil
 	}
 	log.Error().
 		Str("Key", key).
 		Msgf("Unable to set related on missing key")
+	return fmt.Errorf("Unable to set related on missing key: %s", key)
 }
 
 func (instStore *InstanceStore) Remove(key string) {

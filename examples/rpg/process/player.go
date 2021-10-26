@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	rkcy.RegisterProcessCommands("Player", &Player{})
+	rkcy.RegisterLogicHandler("Player", &Player{})
 }
 
 type Player struct{}

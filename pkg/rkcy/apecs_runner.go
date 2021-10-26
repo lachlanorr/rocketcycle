@@ -115,7 +115,7 @@ func produceNextStep(
 			for _, step := range storageStepsMap {
 				storageSteps := []*ApecsTxn_Step{step}
 				storageTxnId := NewTraceId()
-				rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_UPDATE})
+				rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_STORAGE})
 
 				err := aprod.executeTxn(
 					storageTxnId,
@@ -130,7 +130,7 @@ func produceNextStep(
 					// This should be extremely rare, maybe impossible
 					// assuming we can produce at all.  Without proper
 					// storage messages going through, we are better
-					// of failing very loudly.
+					// off failing very loudly.
 					log.Fatal().
 						Msgf("produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 				}

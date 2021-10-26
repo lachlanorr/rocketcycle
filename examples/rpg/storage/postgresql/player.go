@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	rkcy.RegisterStorageCommands("postgresql", "Player", &Player{})
+	rkcy.RegisterCrudHandler("postgresql", "Player", &Player{})
 }
 
 type Player struct{}

@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -57,9 +56,6 @@ func IsReservedCommandName(s string) bool {
 	if gReservedCommandNames[s] {
 		return true
 	}
-	if IsRelatedCommand(s) {
-		return true
-	}
 	return false
 }
 
@@ -79,37 +75,10 @@ func IsTxnProhibitedCommandName(s string) bool {
 	if gTxnProhibitedCommandNames[s] {
 		return true
 	}
-	if IsRelatedCommand(s) {
-		return true
-	}
 	return false
 }
 
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
-
-func IsRelatedCommand(command string) bool {
-	return strings.HasPrefix(command, REQUEST_RELATED) ||
-		strings.HasPrefix(command, REFRESH_RELATED)
-}
-
-func BuildRequestRelatedCommand(srcConcern string, tgtField string) string {
-	return fmt.Sprintf("%s_%s_%s", REQUEST_RELATED, srcConcern, tgtField)
-}
-
-func BuildRefreshRelatedCommand(srcConcern string, tgtField string) string {
-	return fmt.Sprintf("%s_%s_%s", REFRESH_RELATED, srcConcern, tgtField)
-}
-
-func ParseRelatedCommand(command string) (string, string, string, error) {
-	if !IsRelatedCommand(command) {
-		return "", "", "", fmt.Errorf("Related command with wrong prefix: %s", command)
-	}
-	parts := strings.Split(command, "_")
-	if len(parts) != 3 {
-		return "", "", "", fmt.Errorf("Wrong number of parts of related command: %s", command)
-	}
-	return parts[0], parts[1], parts[2], nil
-}
 
 type ConcernHandler interface {
 	ConcernName() string
@@ -121,22 +90,22 @@ type ConcernHandler interface {
 		args *StepArgs,
 		instanceStore *InstanceStore,
 		confRdr *ConfigRdr,
-		storageSystem string,
+		storageType string,
 	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
 	DecodeInstance(ctx context.Context, buffer []byte) (proto.Message, error)
 	DecodeRelated(ctx context.Context, buffer []byte) (proto.Message, error)
 	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 
-	SetProcessCommands(commands interface{}) error
-	SetStorageCommands(storageSystem string, commands interface{}) error
-	ValidateCommands() bool
+	SetLogicHandler(commands interface{}) error
+	SetCrudHandler(storageType string, commands interface{}) error
+	ValidateHandlers() bool
 }
 
 func validateConcernHandlers() bool {
 	retval := true
 	for concern, cncHdlr := range gConcernHandlers {
-		if !cncHdlr.ValidateCommands() {
+		if !cncHdlr.ValidateHandlers() {
 			log.Error().
 				Str("Concern", concern).
 				Msgf("Invalid commands for ConcernHandler")
@@ -146,23 +115,23 @@ func validateConcernHandlers() bool {
 	return retval
 }
 
-func RegisterProcessCommands(concern string, commands interface{}) {
+func RegisterLogicHandler(concern string, handler interface{}) {
 	cncHdlr, ok := gConcernHandlers[concern]
 	if !ok {
-		panic(fmt.Sprintf("%s concern handler not registered registered", concern))
+		panic(fmt.Sprintf("%s concern handler not registered", concern))
 	}
-	err := cncHdlr.SetProcessCommands(commands)
+	err := cncHdlr.SetLogicHandler(handler)
 	if err != nil {
 		panic(err.Error())
 	}
 }
 
-func RegisterStorageCommands(storageSystem string, concern string, commands interface{}) {
+func RegisterCrudHandler(storageType string, concern string, handler interface{}) {
 	cncHdlr, ok := gConcernHandlers[concern]
 	if !ok {
-		panic(fmt.Sprintf("%s concern handler not registered registered", concern))
+		panic(fmt.Sprintf("%s concern handler not registered", concern))
 	}
-	err := cncHdlr.SetStorageCommands(storageSystem, commands)
+	err := cncHdlr.SetCrudHandler(storageType, handler)
 	if err != nil {
 		panic(err.Error())
 	}
