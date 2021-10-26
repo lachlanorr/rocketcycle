@@ -415,7 +415,7 @@ func (rslt *ApecsTxn_Step_Result) SetResult(err error) {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("%d: %s", Code_name[int32(e.Code)], e.Msg)
+	return fmt.Sprintf("%s: %s", Code_name[int32(e.Code)], e.Msg)
 }
 
 func NewError(code Code, msg string) *Error {

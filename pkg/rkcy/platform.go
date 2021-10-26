@@ -160,7 +160,7 @@ func initTopics(topics *Platform_Concern_Topics, defaultCluster string, concernT
 
 func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	if platform.Name != PlatformName() {
-		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName)
+		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName())
 	}
 
 	rtPlat := rtPlatform{

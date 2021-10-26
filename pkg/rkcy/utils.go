@@ -160,7 +160,7 @@ func createPlatformTopics(ctx context.Context, bootstrapServers string, internal
 			}
 			for _, res := range result {
 				if res.Error.Code() != kafka.ErrNoError {
-					return fmt.Errorf("Failed to create platform topic: %s")
+					return fmt.Errorf("Failed to create platform topic: %s", topicName)
 				}
 			}
 			log.Info().
