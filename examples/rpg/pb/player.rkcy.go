@@ -320,12 +320,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
                     rslt.SetResult(err)
                     return rslt, nil
                 }
+   				relBytes, err := proto.Marshal(relCnc)
+				if err != nil {
+					rslt.SetResult(err)
+					return rslt, nil
+				}
                 if changed {
-	   				relBytes, err := proto.Marshal(relCnc)
-					if err != nil {
-						rslt.SetResult(err)
-						return rslt, nil
-					}
                     err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 					if err != nil {
 						rslt.SetResult(err)
@@ -553,25 +553,42 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 func (*PlayerConcernHandler) DecodeInstance(
 	ctx context.Context,
 	buffer []byte,
-) (proto.Message, error) {
-	pb := &Player{}
-	err := proto.Unmarshal(buffer, pb)
-	if err != nil {
-		return nil, err
-	}
-	return pb, nil
-}
+) (*rkcy.ResultProto, error) {
+    resProto := &rkcy.ResultProto{
+        Type: "Player",
+    }
 
-func (*PlayerConcernHandler) DecodeRelated(
-	ctx context.Context,
-	buffer []byte,
-) (proto.Message, error) {
-	pb := &PlayerRelatedConcerns{}
-	err := proto.Unmarshal(buffer, pb)
-	if err != nil {
-		return nil, err
-	}
-	return pb, nil
+    if !rkcy.IsPackedPayload(buffer) {
+		inst := &Player{}
+		err := proto.Unmarshal(buffer, inst)
+		if err != nil {
+			return nil, err
+		}
+        resProto.Instance = inst
+    } else {
+        unpacked, err := rkcy.UnpackPayloads(buffer)
+        if err != nil {
+            return nil, err
+        }
+
+		inst := &Player{}
+		err = proto.Unmarshal(unpacked[0], inst)
+		if err != nil {
+			return nil, err
+		}
+        resProto.Instance = inst
+
+        if unpacked[1] != nil && len(unpacked[1]) > 0 {
+    		rel := &PlayerRelatedConcerns{}
+			err := proto.Unmarshal(unpacked[1], rel)
+			if err != nil {
+				return nil, err
+			}
+	        resProto.Related = rel
+        }
+    }
+
+	return resProto, nil
 }
 
 func (cncHdlr *PlayerConcernHandler) DecodeArg(
@@ -588,34 +605,18 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 		case rkcy.READ:
 			fallthrough
 		case rkcy.UPDATE:
-			{
-				dec, err := cncHdlr.DecodeInstance(ctx, buffer)
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: dec}, nil
-			}
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return nil, fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 		}
 	case rkcy.System_PROCESS:
 		switch command {
+		case rkcy.VALIDATE_CREATE:
+			fallthrough
+		case rkcy.VALIDATE_UPDATE:
+        	fallthrough
 		case rkcy.REFRESH_INSTANCE:
-			{
-				unpacked, err := rkcy.UnpackPayloads(buffer)
-				if err != nil {
-					return nil, err
-				}
-				instMsg, err := cncHdlr.DecodeInstance(ctx, unpacked[0])
-				if err != nil {
-					return nil, err
-				}
-				relatedMsg, err := cncHdlr.DecodeRelated(ctx, unpacked[1])
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: instMsg, Related: relatedMsg}, nil
-			}
+                return cncHdlr.DecodeInstance(ctx, buffer)
         case rkcy.REQUEST_RELATED:
 			{
                 relReq := &rkcy.RelatedRequest{}
@@ -633,18 +634,6 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 					return nil, err
 				}
 				return &rkcy.ResultProto{Type: "RelatedResponse", Instance: relRsp}, nil
-			}
-		case rkcy.READ:
-			return &rkcy.ResultProto{Type: "Player"}, nil
-		case rkcy.VALIDATE_CREATE:
-			fallthrough
-		case rkcy.VALIDATE_UPDATE:
-			{
-				dec, err := cncHdlr.DecodeInstance(ctx, buffer)
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: dec}, nil
 			}
 		default:
 			return nil, fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
@@ -664,31 +653,11 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 	case rkcy.System_STORAGE:
 		switch command {
 		case rkcy.READ:
-			{
-				unpacked, err := rkcy.UnpackPayloads(buffer)
-				if err != nil {
-					return nil, err
-				}
-				instMsg, err := cncHdlr.DecodeInstance(ctx, unpacked[0])
-				if err != nil {
-					return nil, err
-				}
-				relatedMsg, err := cncHdlr.DecodeRelated(ctx, unpacked[1])
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: instMsg, Related: relatedMsg}, nil
-			}
+        	fallthrough
 		case rkcy.CREATE:
 			fallthrough
 		case rkcy.UPDATE:
-			{
-				dec, err := cncHdlr.DecodeInstance(ctx, buffer)
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: dec}, nil
-			}
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return nil, fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 		}
@@ -696,24 +665,14 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 		switch command {
 		case rkcy.READ:
 			fallthrough
+		case rkcy.VALIDATE_CREATE:
+			fallthrough
+		case rkcy.VALIDATE_UPDATE:
+        	fallthrough
 		case rkcy.REFRESH_INSTANCE:
             fallthrough
         case rkcy.REFRESH_RELATED:
-			{
-				unpacked, err := rkcy.UnpackPayloads(buffer)
-				if err != nil {
-					return nil, err
-				}
-				instMsg, err := cncHdlr.DecodeInstance(ctx, unpacked[0])
-				if err != nil {
-					return nil, err
-				}
-				relatedMsg, err := cncHdlr.DecodeRelated(ctx, unpacked[1])
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: instMsg, Related: relatedMsg}, nil
-			}
+			return cncHdlr.DecodeInstance(ctx, buffer)
 		case rkcy.REQUEST_RELATED:
 			{
                 relRsp := &rkcy.RelatedResponse{}
@@ -722,16 +681,6 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 					return nil, err
 				}
 				return &rkcy.ResultProto{Type: "RelatedResponse", Instance: relRsp}, nil
-			}
-		case rkcy.VALIDATE_CREATE:
-			fallthrough
-		case rkcy.VALIDATE_UPDATE:
-			{
-				dec, err := cncHdlr.DecodeInstance(ctx, buffer)
-				if err != nil {
-					return nil, err
-				}
-				return &rkcy.ResultProto{Type: "Player", Instance: dec}, nil
 			}
 		default:
 			return nil, fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)

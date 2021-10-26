@@ -8,13 +8,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"runtime/debug"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -92,8 +92,7 @@ type ConcernHandler interface {
 		confRdr *ConfigRdr,
 		storageType string,
 	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
-	DecodeInstance(ctx context.Context, buffer []byte) (proto.Message, error)
-	DecodeRelated(ctx context.Context, buffer []byte) (proto.Message, error)
+	DecodeInstance(ctx context.Context, buffer []byte) (*ResultProto, error)
 	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 
@@ -145,7 +144,7 @@ func RegisterConcernHandler(cncHandler ConcernHandler) {
 	gConcernHandlers[cncHandler.ConcernName()] = cncHandler
 }
 
-func decodeInstance(ctx context.Context, concern string, buffer []byte) (proto.Message, error) {
+func decodeInstance(ctx context.Context, concern string, buffer []byte) (*ResultProto, error) {
 	concernHandler, ok := gConcernHandlers[concern]
 	if !ok {
 		return nil, fmt.Errorf("decodeInstance invalid concern: %s", concern)
@@ -153,7 +152,7 @@ func decodeInstance(ctx context.Context, concern string, buffer []byte) (proto.M
 	return concernHandler.DecodeInstance(ctx, buffer)
 }
 
-func decodeInstance64(ctx context.Context, concern string, buffer64 string) (proto.Message, error) {
+func decodeInstance64(ctx context.Context, concern string, buffer64 string) (*ResultProto, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
@@ -162,15 +161,46 @@ func decodeInstance64(ctx context.Context, concern string, buffer64 string) (pro
 }
 
 func decodeInstanceJson(ctx context.Context, concern string, buffer []byte) ([]byte, error) {
-	instMsg, err := decodeInstance(ctx, concern, buffer)
+	resProto, err := decodeInstance(ctx, concern, buffer)
 	if err != nil {
 		return nil, err
 	}
-	instJson, err := protojson.Marshal(instMsg)
+
+	jsonMap := make(map[string]interface{})
+	jsonMap["type"] = resProto.Type
+
+	pjOpts := protojson.MarshalOptions{EmitUnpopulated: true}
+
+	instJson, err := pjOpts.Marshal(resProto.Instance)
 	if err != nil {
 		return nil, err
 	}
-	return instJson, nil
+	instMap := make(map[string]interface{})
+	err = json.Unmarshal(instJson, &instMap)
+	if err != nil {
+		return nil, err
+	}
+	jsonMap["instance"] = instMap
+
+	if resProto.Related != nil {
+		relJson, err := pjOpts.Marshal(resProto.Related)
+		if err != nil {
+			return nil, err
+		}
+		relMap := make(map[string]interface{})
+		err = json.Unmarshal(relJson, &relMap)
+		if err != nil {
+			return nil, err
+		}
+		jsonMap["related"] = relMap
+	}
+
+	jsonBytes, err := json.Marshal(jsonMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonBytes, nil
 }
 
 func decodeInstance64Json(ctx context.Context, concern string, buffer64 string) ([]byte, error) {
@@ -398,6 +428,10 @@ type ConcernInstance interface {
 	SetKey(key string)
 }
 
+func IsPackedPayload(payload []byte) bool {
+	return len(payload) > 4 && string(payload[:4]) == "rkcy"
+}
+
 func PackPayloads(payload0 []byte, payload1 []byte) []byte {
 	packed := make([]byte, 8+len(payload0)+len(payload1))
 	copy(packed, "rkcy")
@@ -425,7 +459,7 @@ func UnpackPayloads(packed []byte) ([][]byte, error) {
 
 	// Return nils if there is no data in slices
 	if len(ret[0]) == 0 {
-		ret[0] = nil
+		return nil, fmt.Errorf("No instance contained in packed payload: %s", base64.StdEncoding.EncodeToString(packed))
 	}
 	if len(ret[1]) == 0 {
 		ret[1] = nil

@@ -5,7 +5,9 @@
 package rkcy
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -255,21 +257,21 @@ func cobraDecodeInstance(cmd *cobra.Command, args []string) {
 
 	ctx := context.Background()
 
-	msg, err := decodeInstance64(ctx, concern, instance64)
+	jsonBytes, err := decodeInstance64Json(ctx, concern, instance64)
 	if err != nil {
 		fmt.Printf("Failed to decode: %s\n", err.Error())
 		os.Stderr.WriteString(fmt.Sprintf("Failed to decode: %s\n", err.Error()))
 		os.Exit(1)
 	}
 
-	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
-	jsonBytes, err := pjOpts.Marshal(msg)
+	var indentJson bytes.Buffer
+	err = json.Indent(&indentJson, jsonBytes, "", "  ")
 	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("Failed to marshal decoded msg: %s\n", err.Error()))
+		os.Stderr.WriteString(fmt.Sprintf("Failed to json.Indent: %s\n", err.Error()))
 		os.Exit(1)
 	}
 
-	fmt.Println(string(jsonBytes))
+	fmt.Println(string(indentJson.Bytes()))
 }
 
 func LogProto(msg proto.Message) {
