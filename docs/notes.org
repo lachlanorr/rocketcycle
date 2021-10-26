@@ -11,47 +11,53 @@ bin/kafka-get-offsets.sh --bootstrap-server kafka-2.clusa.perfa.local.rkcy.net:9
 ** GuildLoyalty gets calculated daily by examining build event participation of all Characters
 ** Items have item types and get fleshed out
 * platform enhancements
-** Newer idea, keeping below for context
+** IO System
+In addition to Process and Storage, add an IO system
+It would have it's own dedicated topics and consumers
+Designed for long running IO tasks
+Is it now called APEICS??
+** Datacenter awareness improvements
+*** Newer idea, keeping below for context
 - Runner starts distinct consumers in each DC, duplicating them against partitions
 - Admin controls which ones should actually process messages, the consumers are DC aware
 - Get rid of per consumer admin topic, and send control messages directly to process and storage topics
 - Admin leader election still works with subscribe to "control" topic, partition 0 assigned is leader
-** Sumarry of new topics, details below
+*** Sumarry of new topics, details below
 - No more "admin" topic
 - platform - just platform updates
 - producer - producer status messages
 - control - running process messages
 - watchdog - pings and acks between DC watchdogs
 - applog - all application logs can be sent here instead of stdout
-** Admin should be DC aware
-** Starting jobs should explicitly specify DC
-** New "control" topic needed, no longer use admin topic for start/stop consumer messages
-*** Should have 1 partition per DC
-** "admin" topic should be renamed "platform" and used soley for plaform updates and producer sync
+*** Admin should be DC aware
+*** Starting jobs should explicitly specify DC
+*** New "control" topic needed, no longer use admin topic for start/stop consumer messages
+**** Should have 1 partition per DC
+*** "admin" topic should be renamed "platform" and used soley for plaform updates and producer sync
 - get all run related messages out of here and put in "control" topic
-** A watchdog process should be run in each DC
-*** Has route to get to it over internet to test inbound
-*** Pings periodically with keep alive, admin acks
-*** Acks pings from admin
-** One admin per DC is run
-*** Admins "subscribe" to control topic with consumer group
-*** Admin that gets partition 0 is the leader
+*** A watchdog process should be run in each DC
+**** Has route to get to it over internet to test inbound
+**** Pings periodically with keep alive, admin acks
+**** Acks pings from admin
+*** One admin per DC is run
+**** Admins "subscribe" to control topic with consumer group
+**** Admin that gets partition 0 is the leader
 - Only the leader sends messages on control topic
 - Only the leader manages producers and topic generational migration
 - Only leader services api calls that can mutate system
 - Secondaries can service read only calls, like reading the current platform config
-*** If an admin fails, kafka will reassign with subscribe and a new leader may be in place
-*** Must handle assignment callback, I think that's available with librdkafka
-** Runner changes
-*** One runner is run per DC
-*** runner consumer "assigns" to DC specific partition of control topic, so they only get control messages for their DC
-*** Runner Interface
+**** If an admin fails, kafka will reassign with subscribe and a new leader may be in place
+**** Must handle assignment callback, I think that's available with librdkafka
+*** Runner changes
+**** One runner is run per DC
+**** runner consumer "assigns" to DC specific partition of control topic, so they only get control messages for their DC
+**** Runner Interface
 - Kill
 - Stop
 - Start
 - IsRunning
 - Wait
-** New topic called applog
+*** New topic called applog
 - All logs read from running process are presented here
 - Should be structured json logs in each message
 - Logs should be formatted correctly to go straight into elasticsearch
