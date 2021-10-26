@@ -63,7 +63,7 @@ rpg: rpg-proto ## compile rpg example
 	@cp ./examples/rpg/platform_perfa.json $(BUILD_BIN_DIR)
 
 .PHONY: rpg-proto
-rpg-proto: proto ## generate rpg protocol buffers
+rpg-proto: protoc-gen-rkcy ## generate rpg protocol buffers
 	@echo "==> Building $@..."
 	@go generate examples/rpg/pb/gen.go
 	@go generate examples/rpg/edge/gen.go
