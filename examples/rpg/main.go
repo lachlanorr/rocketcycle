@@ -14,8 +14,8 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
 
 	// Make sure we run the inits in these so command handlers get registered
-	_ "github.com/lachlanorr/rocketcycle/examples/rpg/process"
-	_ "github.com/lachlanorr/rocketcycle/examples/rpg/storage/postgresql"
+	_ "github.com/lachlanorr/rocketcycle/examples/rpg/crud_handlers/postgresql"
+	_ "github.com/lachlanorr/rocketcycle/examples/rpg/logic"
 )
 
 func main() {

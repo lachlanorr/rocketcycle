@@ -18,8 +18,8 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/version"
 
+	store_pg "github.com/lachlanorr/rocketcycle/examples/rpg/crud_handlers/postgresql"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
-	store_pg "github.com/lachlanorr/rocketcycle/examples/rpg/storage/postgresql"
 )
 
 type CommandId int

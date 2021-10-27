@@ -23,8 +23,8 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
+	"github.com/lachlanorr/rocketcycle/examples/rpg/logic/txn"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	"github.com/lachlanorr/rocketcycle/examples/rpg/txn"
 )
 
 //go:embed static/docs
