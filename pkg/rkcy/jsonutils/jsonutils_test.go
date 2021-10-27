@@ -5,11 +5,31 @@
 package jsonutils
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
-	//	"google.golang.org/protobuf/proto"
-	//"google.golang.org/protobuf/encoding/protojson"
 )
+
+func TestMarhsalOrdered(t *testing.T) {
+	bin := []byte(`  {"zkey0": "val0", "wkey1": 123.345   , "key2": [1, 2, 3], "key3": true, "key4": null
+, "0key5"   : {"subkey0": true, "subkey2": -300.82}}   `)
+	bout := []byte(`{"zkey0":"val0","wkey1":123.345,"key2":[1,2,3],"key3":true,"key4":null,"0key5":{"subkey0":true,"subkey2":-300.82}}`)
+
+	omap := NewOrderedMap()
+	err := UnmarshalOrdered(bin, &omap)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	mar, err := MarshalOrdered(omap)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	if !bytes.Equal(mar, bout) {
+		t.Errorf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
+	}
+}
 
 func TestUnmarshalOrdered(t *testing.T) {
 	{

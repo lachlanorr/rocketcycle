@@ -35,8 +35,67 @@ func NewOrderedMap() *OrderedMap {
 	}
 }
 
-//func ParseJsonOrdered(b []byte) (interface{}, int, error) {
-//}
+func marshal(v interface{}, bld *strings.Builder) error {
+	if v == nil {
+		bld.WriteString("null")
+		return nil
+	}
+
+	switch val := v.(type) {
+	case bool:
+		bld.WriteString(strconv.FormatBool(val))
+	case float64:
+		bld.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
+	case string:
+		bld.WriteByte('"')
+		bld.WriteString(val)
+		bld.WriteByte('"')
+	case []interface{}:
+		bld.WriteByte('[')
+		for idx, itm := range val {
+			err := marshal(itm, bld)
+			if err != nil {
+				return err
+			}
+			if idx != len(val)-1 {
+				bld.WriteByte(',')
+			}
+		}
+		bld.WriteByte(']')
+	case *OrderedMap:
+		bld.WriteByte('{')
+		for idx, key := range val.Keys {
+			bld.WriteByte('"')
+			bld.WriteString(key)
+			bld.WriteByte('"')
+			bld.WriteByte(':')
+			itmVal, ok := val.Get(key)
+			if !ok {
+				return fmt.Errorf("Missing key in OrderedMap: %s", key)
+			}
+			err := marshal(itmVal, bld)
+			if err != nil {
+				return err
+			}
+			if idx != len(val.Keys)-1 {
+				bld.WriteByte(',')
+			}
+		}
+		bld.WriteByte('}')
+	default:
+		return fmt.Errorf("Invalid type to marshal")
+	}
+	return nil
+}
+
+func MarshalOrdered(v interface{}) ([]byte, error) {
+	var bld strings.Builder
+	err := marshal(v, &bld)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(bld.String()), nil
+}
 
 type tokenType int
 
