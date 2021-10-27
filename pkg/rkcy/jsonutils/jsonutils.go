@@ -35,7 +35,7 @@ func NewOrderedMap() *OrderedMap {
 	}
 }
 
-func marshal(v interface{}, bld *strings.Builder) error {
+func marshal(v interface{}, bld *strings.Builder, eol string, indent string, currIndent string, colonSpace string) error {
 	if v == nil {
 		bld.WriteString("null")
 		return nil
@@ -52,35 +52,46 @@ func marshal(v interface{}, bld *strings.Builder) error {
 		bld.WriteByte('"')
 	case []interface{}:
 		bld.WriteByte('[')
+		bld.WriteString(eol)
+		newIndent := currIndent + indent
 		for idx, itm := range val {
-			err := marshal(itm, bld)
+			bld.WriteString(newIndent)
+			err := marshal(itm, bld, eol, indent, newIndent+indent, colonSpace)
 			if err != nil {
 				return err
 			}
 			if idx != len(val)-1 {
 				bld.WriteByte(',')
 			}
+			bld.WriteString(eol)
 		}
+		bld.WriteString(currIndent)
 		bld.WriteByte(']')
 	case *OrderedMap:
 		bld.WriteByte('{')
+		bld.WriteString(eol)
+		newIndent := currIndent + indent
 		for idx, key := range val.Keys {
+			bld.WriteString(newIndent)
 			bld.WriteByte('"')
 			bld.WriteString(key)
 			bld.WriteByte('"')
 			bld.WriteByte(':')
+			bld.WriteString(colonSpace)
 			itmVal, ok := val.Get(key)
 			if !ok {
 				return fmt.Errorf("Missing key in OrderedMap: %s", key)
 			}
-			err := marshal(itmVal, bld)
+			err := marshal(itmVal, bld, eol, indent, newIndent, colonSpace)
 			if err != nil {
 				return err
 			}
 			if idx != len(val.Keys)-1 {
 				bld.WriteByte(',')
 			}
+			bld.WriteString(eol)
 		}
+		bld.WriteString(currIndent)
 		bld.WriteByte('}')
 	default:
 		return fmt.Errorf("Invalid type to marshal")
@@ -90,11 +101,22 @@ func marshal(v interface{}, bld *strings.Builder) error {
 
 func MarshalOrdered(v interface{}) ([]byte, error) {
 	var bld strings.Builder
-	err := marshal(v, &bld)
+	err := marshal(v, &bld, "", "", "", "")
 	if err != nil {
 		return nil, err
 	}
 	return []byte(bld.String()), nil
+}
+
+func MarshalOrderedIndent(v interface{}, prefix string, indent string) ([]byte, error) {
+	var bld strings.Builder
+	eol := "\n" + prefix
+	err := marshal(v, &bld, eol, indent, "", " ")
+	if err != nil {
+		return nil, err
+	}
+	mar := bld.String()
+	return []byte(mar), nil
 }
 
 type tokenType int

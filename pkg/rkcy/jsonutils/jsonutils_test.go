@@ -31,6 +31,41 @@ func TestMarhsalOrdered(t *testing.T) {
 	}
 }
 
+func TestMarhsalOrderedIndent(t *testing.T) {
+	bin := []byte(`  {"zkey0": "val0", "wkey1": 123.345   , "key2": [1, 2, 3], "key3": true, "key4": null
+, "0key5"   : {"subkey0": true, "subkey2": -300.82}}   `)
+	bout := []byte(`{
+<prefix><indent>"zkey0": "val0",
+<prefix><indent>"wkey1": 123.345,
+<prefix><indent>"key2": [
+<prefix><indent><indent>1,
+<prefix><indent><indent>2,
+<prefix><indent><indent>3
+<prefix><indent>],
+<prefix><indent>"key3": true,
+<prefix><indent>"key4": null,
+<prefix><indent>"0key5": {
+<prefix><indent><indent>"subkey0": true,
+<prefix><indent><indent>"subkey2": -300.82
+<prefix><indent>}
+<prefix>}`)
+
+	omap := NewOrderedMap()
+	err := UnmarshalOrdered(bin, &omap)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	mar, err := MarshalOrderedIndent(omap, "<prefix>", "<indent>")
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	if !bytes.Equal(mar, bout) {
+		t.Errorf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
+	}
+}
+
 func TestUnmarshalOrdered(t *testing.T) {
 	{
 		b := []byte("true")
