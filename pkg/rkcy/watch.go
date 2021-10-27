@@ -65,6 +65,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	}
 	cons.Assign(topicParts)
 
+	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -84,22 +86,21 @@ func (wt *watchTopic) consume(ctx context.Context) {
 					Str("TxnId", GetTraceId(msg)).
 					Int("Offset", int(msg.TopicPartition.Offset)).
 					Msg(wt.topicName)
-				txn := ApecsTxn{}
-				err := proto.Unmarshal(msg.Value, &txn)
+				txn := &ApecsTxn{}
+				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
-					pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
-					txnJson := pjOpts.Format(proto.Message(&txn))
 					if gSettings.WatchDecode {
-						txnJsonDec, err := decodeOpaques(ctx, []byte(txnJson))
+						txnJsonDec, err := decodeTxnOpaques(ctx, txn, &pjOpts)
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
 						} else {
 							log.Error().
 								Err(err).
-								Msgf("Failed to decodeOpaques: %s", string(txnJson))
+								Msgf("Failed to decodeOpaques: %s", err.Error())
 						}
 					} else {
+						txnJson := pjOpts.Format(txn)
 						log.WithLevel(wt.logLevel).
 							Msg(string(txnJson))
 					}
@@ -136,9 +137,14 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 	return wts
 }
 
-func decodeOpaques(ctx context.Context, txnJson []byte) ([]byte, error) {
+func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.MarshalOptions) ([]byte, error) {
+	txnJson, err := pjOpts.Marshal(txn)
+	if err != nil {
+		return nil, err
+	}
+
 	var txnTopLvl map[string]interface{}
-	err := json.Unmarshal(txnJson, &txnTopLvl)
+	err = json.Unmarshal(txnJson, &txnTopLvl)
 	if err != nil {
 		return nil, err
 	}
