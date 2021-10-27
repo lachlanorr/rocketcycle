@@ -52,21 +52,25 @@ func marshal(v interface{}, bld *strings.Builder, eol string, indent string, cur
 		bld.WriteByte('"')
 	case []interface{}:
 		bld.WriteByte('[')
-		bld.WriteString(eol)
-		newIndent := currIndent + indent
-		for idx, itm := range val {
-			bld.WriteString(newIndent)
-			err := marshal(itm, bld, eol, indent, newIndent+indent, colonSpace)
-			if err != nil {
-				return err
-			}
-			if idx != len(val)-1 {
-				bld.WriteByte(',')
-			}
+		if len(val) == 0 {
+			bld.WriteByte(']')
+		} else {
 			bld.WriteString(eol)
+			newIndent := currIndent + indent
+			for idx, itm := range val {
+				bld.WriteString(newIndent)
+				err := marshal(itm, bld, eol, indent, newIndent, colonSpace)
+				if err != nil {
+					return err
+				}
+				if idx != len(val)-1 {
+					bld.WriteByte(',')
+				}
+				bld.WriteString(eol)
+			}
+			bld.WriteString(currIndent)
+			bld.WriteByte(']')
 		}
-		bld.WriteString(currIndent)
-		bld.WriteByte(']')
 	case *OrderedMap:
 		bld.WriteByte('{')
 		bld.WriteString(eol)
@@ -94,7 +98,7 @@ func marshal(v interface{}, bld *strings.Builder, eol string, indent string, cur
 		bld.WriteString(currIndent)
 		bld.WriteByte('}')
 	default:
-		return fmt.Errorf("Invalid type to marshal")
+		return fmt.Errorf("Invalid type to marshal: %T", v)
 	}
 	return nil
 }
@@ -174,14 +178,20 @@ func parseObject(b []byte) ([]byte, *OrderedMap, error) {
 		// parse key
 		var tokKey *token
 		b, tokKey, err = nextToken(b)
-		if err != nil || tokKey == nil || tokKey.Type != String || len(tokKey.Val.(string)) == 0 {
+		if err != nil {
+			return b, nil, err
+		}
+		if tokKey == nil || tokKey.Type != String || len(tokKey.Val.(string)) == 0 {
 			return b, nil, fmt.Errorf("Failed to parse key: %s", string(b))
 		}
 
 		// colon
 		var tokColon *token
 		b, tokColon, err = nextToken(b)
-		if err != nil || tokColon == nil || tokColon.Type != Colon {
+		if err != nil {
+			return b, nil, err
+		}
+		if tokColon == nil || tokColon.Type != Colon {
 			return b, nil, fmt.Errorf("Failed to parse colon: %s", string(b))
 		}
 
@@ -189,7 +199,10 @@ func parseObject(b []byte) ([]byte, *OrderedMap, error) {
 		var val interface{}
 		b, val, err = parse(b)
 		if err != nil {
-			return b, nil, fmt.Errorf("Failed to parse value: %s", string(b))
+			return b, nil, err
+		}
+		if err != nil {
+			return b, nil, fmt.Errorf("Error parsing value '%s': %s", err.Error(), string(b))
 		}
 
 		obj.Set(tokKey.Val.(string), val)
@@ -197,7 +210,10 @@ func parseObject(b []byte) ([]byte, *OrderedMap, error) {
 		// check for end or next
 		var tokCommaOrEnd *token
 		b, tokCommaOrEnd, err = nextToken(b)
-		if err != nil || tokCommaOrEnd == nil || (tokCommaOrEnd.Type != Comma && tokCommaOrEnd.Type != ObjectEnd) {
+		if err != nil {
+			return b, nil, err
+		}
+		if tokCommaOrEnd == nil || (tokCommaOrEnd.Type != Comma && tokCommaOrEnd.Type != ObjectEnd) {
 			return b, nil, fmt.Errorf("Failed to parse comma or end: %s", string(b))
 		}
 
@@ -213,15 +229,29 @@ func parseArray(b []byte) ([]byte, []interface{}, error) {
 	for {
 		var val interface{}
 		var err error
-		b, val, err = parse(b)
+
+		// peek to see if there's a ]
+		_, tok, err := nextToken(b)
 		if err != nil {
 			return b, nil, err
 		}
-		arr = append(arr, val)
+
+		// if not at end, parse value
+		if tok.Type != ArrayEnd {
+			b, val, err = parse(b)
+			if err != nil {
+				return b, nil, err
+			}
+			arr = append(arr, val)
+		}
+
 		// check for end or next
 		var tokCommaOrEnd *token
 		b, tokCommaOrEnd, err = nextToken(b)
-		if err != nil || tokCommaOrEnd == nil || (tokCommaOrEnd.Type != Comma && tokCommaOrEnd.Type != ArrayEnd) {
+		if err != nil {
+			return b, nil, err
+		}
+		if tokCommaOrEnd == nil || (tokCommaOrEnd.Type != Comma && tokCommaOrEnd.Type != ArrayEnd) {
 			return b, nil, fmt.Errorf("Failed to parse comma or end: %s", string(b))
 		}
 

@@ -10,6 +10,64 @@ import (
 	"testing"
 )
 
+func TestMarshalOrderedIndentTxnParts(t *testing.T) {
+	testJsons := []string{
+		`{
+  "id": "a521d9c32d92af0d5f27104e2b6be121",
+  "assocTxns": [],
+  "responseTarget": {
+    "brokers": "localhost:9092",
+    "topic": "rkcy.rpg.edge.GENERAL.response.0001",
+    "partition": 0
+  }
+}`,
+		`{
+  "forwardSteps": [
+    {
+      "system": "PROCESS",
+      "concern": "Character",
+      "command": "ValidateCreate",
+      "key": "",
+      "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "cmpdOffset": {
+        "generation": 1,
+        "partition": 0,
+        "offset": "0"
+      },
+      "result": {
+        "code": "OK",
+        "processedTime": "2021-10-26T18:16:15.660973Z",
+        "logEvents": [],
+        "key": "",
+        "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+        "instance": "",
+        "cmpdOffset": null
+      }
+    }
+  ]
+}`,
+	}
+
+	for _, tj := range testJsons {
+		b := []byte(tj)
+		omap := NewOrderedMap()
+		err := UnmarshalOrdered(b, &omap)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		mar, err := MarshalOrderedIndent(omap, "", "  ")
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		if !bytes.Equal(mar, b) {
+			t.Fatalf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(b))
+		}
+	}
+}
+
 func TestMarhsalOrdered(t *testing.T) {
 	bin := []byte(`  {"zkey0": "val0", "wkey1": 123.345   , "key2": [1, 2, 3], "key3": true, "key4": null
 , "0key5"   : {"subkey0": true, "subkey2": -300.82}}   `)
@@ -18,16 +76,16 @@ func TestMarhsalOrdered(t *testing.T) {
 	omap := NewOrderedMap()
 	err := UnmarshalOrdered(bin, &omap)
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	mar, err := MarshalOrdered(omap)
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	if !bytes.Equal(mar, bout) {
-		t.Errorf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
+		t.Fatalf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
 	}
 }
 
@@ -53,16 +111,16 @@ func TestMarhsalOrderedIndent(t *testing.T) {
 	omap := NewOrderedMap()
 	err := UnmarshalOrdered(bin, &omap)
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	mar, err := MarshalOrderedIndent(omap, "<prefix>", "<indent>")
 	if err != nil {
-		t.Errorf(err.Error())
+		t.Fatal(err.Error())
 	}
 
 	if !bytes.Equal(mar, bout) {
-		t.Errorf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
+		t.Fatalf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(mar), string(bout))
 	}
 }
 
@@ -72,10 +130,10 @@ func TestUnmarshalOrdered(t *testing.T) {
 		val := false
 		err := UnmarshalOrdered(b, &val)
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Fatal(err.Error())
 		}
 		if val != true {
-			t.Errorf("Wrong value parsed")
+			t.Fatal("Wrong value parsed")
 		}
 	}
 	{
@@ -83,10 +141,10 @@ func TestUnmarshalOrdered(t *testing.T) {
 		val := true
 		err := UnmarshalOrdered(b, &val)
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Fatal(err.Error())
 		}
 		if val != false {
-			t.Errorf("Wrong value parsed")
+			t.Fatal("Wrong value parsed")
 		}
 	}
 	{
@@ -148,17 +206,17 @@ func TestUnmarshalOrdered(t *testing.T) {
 		var val *OrderedMap
 		err := UnmarshalOrdered(b, &val)
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Fatal(err.Error())
 		}
 		if val == nil {
-			t.Errorf("Nil returned")
+			t.Fatal("Nil returned")
 		}
 		if len(val.Keys) != 6 || len(val.KeyVals) != 6 {
-			t.Errorf("Wrong key size: Keys: %d, KeyVals: %d", len(val.Keys), len(val.KeyVals))
+			t.Fatalf("Wrong key size: Keys: %d, KeyVals: %d", len(val.Keys), len(val.KeyVals))
 		}
 		if val.Keys[0] != "zkey0" || val.Keys[1] != "wkey1" || val.Keys[2] != "key2" || val.Keys[3] != "key3" ||
 			val.Keys[4] != "key4" || val.Keys[5] != "0key5" {
-			t.Errorf("Out of order for keys")
+			t.Fatal("Out of order for keys")
 		}
 
 		{

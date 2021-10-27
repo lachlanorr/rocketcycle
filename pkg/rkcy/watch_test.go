@@ -5,23 +5,46 @@
 package rkcy
 
 import (
-	"fmt"
+	"bytes"
 	"testing"
 
-	//	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
 )
 
 func TestDecodeTxnOpaques(t *testing.T) {
-	txn1 := &ApecsTxn{}
-	err := protojson.Unmarshal([]byte(testTxn1Json), txn1)
+	// get a protobuf from our sample json so we have a good start
+	txn := &ApecsTxn{}
+	err := protojson.Unmarshal(testTxnJson, txn)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
+	// serialize to json
+	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
+	jsonBytes, err := pjOpts.Marshal(txn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	omap := jsonutils.NewOrderedMap()
+	err = jsonutils.UnmarshalOrdered(jsonBytes, &omap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	marTxnJson, err := jsonutils.MarshalOrderedIndent(omap, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(marTxnJson, testTxnJson) {
+		t.Errorf("Marshalled bytes do not match expected:\n\t%s\n\t-- vs.\n\t%s", string(marTxnJson), string(testTxnJson))
+	}
 }
 
-var testTxn1Json = `{
+var testTxnJson = []byte(`{
   "id": "a521d9c32d92af0d5f27104e2b6be121",
   "assocTxns": [],
   "responseTarget": {
@@ -149,4 +172,4 @@ var testTxn1Json = `{
     }
   ],
   "reverseSteps": []
-}`
+}`)
