@@ -51,13 +51,23 @@ type Command struct {
 	Ratio   float64
 }
 
-var commands = map[CommandId]Command{
+var commandsHeavyRead = map[CommandId]Command{
 	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 3},
 	CmdFund:            {Handler: cmdFund, Ratio: 3},
 	CmdTrade:           {Handler: cmdTrade, Ratio: 4},
 	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 20},
 	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 70},
 }
+
+var commandsBalanced = map[CommandId]Command{
+	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 20},
+	CmdFund:            {Handler: cmdFund, Ratio: 20},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 20},
+	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 20},
+	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 20},
+}
+
+var commands = commandsBalanced
 
 type DifferenceType string
 
