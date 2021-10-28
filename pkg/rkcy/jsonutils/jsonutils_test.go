@@ -10,6 +10,104 @@ import (
 	"testing"
 )
 
+func TestOrderedMap(t *testing.T) {
+	kvs := [][]string{
+		{"key0", "val0"},
+		{"key1", "val1"},
+		{"key2", "val2"},
+		{"key3", "val3"},
+	}
+
+	// middle
+	{
+		omap := NewOrderedMap()
+		for _, kv := range kvs {
+			omap.Set(kv[0], kv[1])
+		}
+		if len(omap.Keys) != len(kvs) || len(omap.KeyVals) != len(kvs) {
+			t.Fatal("Bad length for omap")
+		}
+		omap.SetAfter("keyNew", "valNew", "key1")
+		if len(omap.Keys) != len(kvs)+1 || len(omap.KeyVals) != len(kvs)+1 {
+			t.Fatal("Bad length for omap")
+		}
+		if omap.Keys[1] != "key1" || omap.Keys[2] != "keyNew" || omap.Keys[3] != "key2" {
+			t.Fatalf("Bad keys: %+v", omap.Keys)
+		}
+		val, ok := omap.Get("keyNew")
+		if !ok || val != "valNew" {
+			t.Fatal("Bad value")
+		}
+	}
+
+	// second to end
+	{
+		omap := NewOrderedMap()
+		for _, kv := range kvs {
+			omap.Set(kv[0], kv[1])
+		}
+		if len(omap.Keys) != len(kvs) || len(omap.KeyVals) != len(kvs) {
+			t.Fatal("Bad length for omap")
+		}
+		omap.SetAfter("keyNew", "valNew", "key2")
+		if len(omap.Keys) != len(kvs)+1 || len(omap.KeyVals) != len(kvs)+1 {
+			t.Fatal("Bad length for omap")
+		}
+		if omap.Keys[2] != "key2" || omap.Keys[3] != "keyNew" || omap.Keys[4] != "key3" {
+			t.Fatalf("Bad keys: %+v", omap.Keys)
+		}
+		val, ok := omap.Get("keyNew")
+		if !ok || val != "valNew" {
+			t.Fatal("Bad value")
+		}
+	}
+
+	// end
+	{
+		omap := NewOrderedMap()
+		for _, kv := range kvs {
+			omap.Set(kv[0], kv[1])
+		}
+		if len(omap.Keys) != len(kvs) || len(omap.KeyVals) != len(kvs) {
+			t.Fatal("Bad length for omap")
+		}
+		omap.SetAfter("keyNew", "valNew", "key3")
+		if len(omap.Keys) != len(kvs)+1 || len(omap.KeyVals) != len(kvs)+1 {
+			t.Fatal("Bad length for omap")
+		}
+		if omap.Keys[2] != "key2" || omap.Keys[3] != "key3" || omap.Keys[4] != "keyNew" {
+			t.Fatalf("Bad keys: %+v", omap.Keys)
+		}
+		val, ok := omap.Get("keyNew")
+		if !ok || val != "valNew" {
+			t.Fatal("Bad value")
+		}
+	}
+
+	// not exists
+	{
+		omap := NewOrderedMap()
+		for _, kv := range kvs {
+			omap.Set(kv[0], kv[1])
+		}
+		if len(omap.Keys) != len(kvs) || len(omap.KeyVals) != len(kvs) {
+			t.Fatal("Bad length for omap")
+		}
+		omap.SetAfter("keyNew", "valNew", "keyNotExists")
+		if len(omap.Keys) != len(kvs)+1 || len(omap.KeyVals) != len(kvs)+1 {
+			t.Fatal("Bad length for omap")
+		}
+		if omap.Keys[2] != "key2" || omap.Keys[3] != "key3" || omap.Keys[4] != "keyNew" {
+			t.Fatalf("Bad keys: %+v", omap.Keys)
+		}
+		val, ok := omap.Get("keyNew")
+		if !ok || val != "valNew" {
+			t.Fatal("Bad value")
+		}
+	}
+
+}
+
 func TestMarshalOrderedIndentTxnParts(t *testing.T) {
 	testJsons := []string{
 		`{
@@ -51,7 +149,7 @@ func TestMarshalOrderedIndentTxnParts(t *testing.T) {
 
 	for _, tj := range testJsons {
 		b := []byte(tj)
-		omap := NewOrderedMap()
+		var omap *OrderedMap
 		err := UnmarshalOrdered(b, &omap)
 		if err != nil {
 			t.Fatal(err.Error())
@@ -73,7 +171,7 @@ func TestMarhsalOrdered(t *testing.T) {
 , "0key5"   : {"subkey0": true, "subkey2": -300.82}}   `)
 	bout := []byte(`{"zkey0":"val0","wkey1":123.345,"key2":[1,2,3],"key3":true,"key4":null,"0key5":{"subkey0":true,"subkey2":-300.82}}`)
 
-	omap := NewOrderedMap()
+	var omap *OrderedMap
 	err := UnmarshalOrdered(bin, &omap)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -108,7 +206,7 @@ func TestMarhsalOrderedIndent(t *testing.T) {
 <prefix><indent>}
 <prefix>}`)
 
-	omap := NewOrderedMap()
+	var omap *OrderedMap
 	err := UnmarshalOrdered(bin, &omap)
 	if err != nil {
 		t.Fatal(err.Error())

@@ -41,12 +41,6 @@ type ResultProto struct {
 	Related  proto.Message
 }
 
-type ResultJson struct {
-	Type     string
-	Instance []byte
-	Related  []byte
-}
-
 type RevertType int
 
 const (

@@ -366,28 +366,42 @@ func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs)
 	}, nil
 }
 
-func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resJson, err := decodeArgPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
+func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) {
+	instJson, err := protojson.Marshal(resProto.Instance)
 	if err != nil {
 		return nil, err
 	}
-	return &DecodeResponse{
-		Type:     resJson.Type,
-		Instance: string(resJson.Instance),
-		Related:  string(resJson.Related),
-	}, nil
+
+	decResp := &DecodeResponse{
+		Type:     resProto.Type,
+		Instance: string(instJson),
+	}
+
+	if resProto.Related != nil {
+		relJson, err := protojson.Marshal(resProto.Related)
+		if err != nil {
+			return nil, err
+		}
+		decResp.Related = string(relJson)
+	}
+
+	return decResp, nil
+}
+
+func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+	resProto, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	if err != nil {
+		return nil, err
+	}
+	return resultProto2DecodeResponse(resProto)
 }
 
 func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resJson, err := decodeResultPayload64Json(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
-	return &DecodeResponse{
-		Type:     resJson.Type,
-		Instance: string(resJson.Instance),
-		Related:  string(resJson.Related),
-	}, nil
+	return resultProto2DecodeResponse(resProto)
 }
 
 func adminServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync.WaitGroup) {

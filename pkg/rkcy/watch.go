@@ -6,7 +6,6 @@ package rkcy
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -20,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -90,7 +90,7 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
 					if gSettings.WatchDecode {
-						txnJsonDec, err := decodeTxnOpaques(ctx, txn, &pjOpts)
+						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, &pjOpts)
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -137,14 +137,14 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 	return wts
 }
 
-func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.MarshalOptions) ([]byte, error) {
+func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.MarshalOptions) ([]byte, error) {
 	txnJson, err := pjOpts.Marshal(txn)
 	if err != nil {
 		return nil, err
 	}
 
-	var txnTopLvl map[string]interface{}
-	err = json.Unmarshal(txnJson, &txnTopLvl)
+	var txnTopLvl *jsonutils.OrderedMap
+	err = jsonutils.UnmarshalOrdered(txnJson, &txnTopLvl)
 	if err != nil {
 		return nil, err
 	}
@@ -153,9 +153,9 @@ func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 		steps, ok := iSteps.([]interface{})
 		if ok {
 			for _, iStep := range steps {
-				step, ok := iStep.(map[string]interface{})
+				step, ok := iStep.(*jsonutils.OrderedMap)
 				if ok {
-					iConcern, ok := step["concern"]
+					iConcern, ok := step.Get("concern")
 					if !ok {
 						continue
 					}
@@ -164,7 +164,7 @@ func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 						continue
 					}
 
-					iSystem, ok := step["system"]
+					iSystem, ok := step.Get("system")
 					if !ok {
 						continue
 					}
@@ -178,7 +178,7 @@ func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 					}
 					system := System(systemInt32)
 
-					iCommand, ok := step["command"]
+					iCommand, ok := step.Get("command")
 					if !ok {
 						continue
 					}
@@ -187,72 +187,51 @@ func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 						continue
 					}
 
-					iB64, ok := step["payload"]
+					iB64, ok := step.Get("payload")
 					if ok {
 						b64, ok := iB64.(string)
-						if ok {
-							resJson, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
+						if ok && b64 != "" {
+							argJson, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
+							var argOmap *jsonutils.OrderedMap
+							err = jsonutils.UnmarshalOrdered(argJson, &argOmap)
 							if err == nil {
-								// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
-								var dataUnser interface{}
-								err := json.Unmarshal([]byte(resJson.Instance), &dataUnser)
-								if err == nil {
-									step["payload_decoded"] = dataUnser
-								}
-								if resJson.Related != nil {
-									err := json.Unmarshal([]byte(resJson.Related), &dataUnser)
-									if err == nil {
-										step["payload_related_decoded"] = dataUnser
-									}
-								}
+								step.SetAfter("payloadDec", argOmap, "payload")
 							} else {
-								step["payload_decode_err"] = err.Error()
+								step.SetAfter("payloadDecErr", err.Error(), "payload")
 							}
 						}
 					}
 
-					iRslt, ok := step["result"]
+					iRslt, ok := step.Get("result")
 					if ok {
-						rslt, ok := iRslt.(map[string]interface{})
+						rslt, ok := iRslt.(*jsonutils.OrderedMap)
 						if ok {
-							iB64, ok := rslt["payload"]
+							iB64, ok := rslt.Get("payload")
 							if ok {
 								b64, ok := iB64.(string)
-								if ok {
+								if ok && b64 != "" {
 									resJson, err := decodeResultPayload64Json(ctx, concern, system, command, b64)
+									var resOmap *jsonutils.OrderedMap
+									err = jsonutils.UnmarshalOrdered(resJson, &resOmap)
 									if err == nil {
-										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
-										var dataUnser interface{}
-										err := json.Unmarshal([]byte(resJson.Instance), &dataUnser)
-										if err == nil {
-											rslt["payload_decoded"] = dataUnser
-										}
-										if resJson.Related != nil {
-											err := json.Unmarshal([]byte(resJson.Related), &dataUnser)
-											if err == nil {
-												rslt["payload_related_decoded"] = dataUnser
-											}
-										}
+										rslt.SetAfter("payloadDec", resOmap, "payload")
 									} else {
-										rslt["payload_decode_err"] = err.Error()
+										rslt.SetAfter("payloadDecErr", err.Error(), "payload")
 									}
 								}
 							}
 
-							iB64, ok = rslt["instance"]
+							iB64, ok = rslt.Get("instance")
 							if ok {
 								b64, ok := iB64.(string)
-								if ok {
-									dec, err := decodeInstance64Json(ctx, concern, b64)
+								if ok && b64 != "" {
+									instJson, err := decodeInstance64Json(ctx, concern, b64)
+									var instOmap *jsonutils.OrderedMap
+									err = jsonutils.UnmarshalOrdered(instJson, &instOmap)
 									if err == nil {
-										// sounds weird, but we now re-decode json so we don't have weird \" string encoding in final result
-										var dataUnser interface{}
-										err := json.Unmarshal([]byte(dec), &dataUnser)
-										if err == nil {
-											rslt["instance_decoded"] = dataUnser
-										}
+										rslt.SetAfter("instanceDec", instOmap, "instance")
 									} else {
-										rslt["instance_decode_err"] = err.Error()
+										rslt.SetAfter("instanceDecErr", err.Error(), "instance")
 									}
 								}
 							}
@@ -263,16 +242,16 @@ func decodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 		}
 	}
 
-	iFwSteps, ok := txnTopLvl["forwardSteps"]
+	iFwSteps, ok := txnTopLvl.Get("forwardSteps")
 	if ok {
 		decSteps(iFwSteps)
 	}
-	iRevSteps, ok := txnTopLvl["reverseSteps"]
+	iRevSteps, ok := txnTopLvl.Get("reverseSteps")
 	if ok {
 		decSteps(iRevSteps)
 	}
 
-	jsonSer, err := json.MarshalIndent(txnTopLvl, "", "  ")
+	jsonSer, err := jsonutils.MarshalOrderedIndent(txnTopLvl, "", "  ")
 	if err != nil {
 		return nil, err
 	}

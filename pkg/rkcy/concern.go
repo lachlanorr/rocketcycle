@@ -15,6 +15,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
 )
 
 const (
@@ -239,23 +241,39 @@ func decodeArgPayload64(
 	return decodeArgPayload(ctx, concern, system, command, buffer)
 }
 
-func newResultJson(resProto *ResultProto) (*ResultJson, error) {
-	instanceJson, err := protojson.Marshal(resProto.Instance)
+func resultProto2Json(resProto *ResultProto) ([]byte, error) {
+	pjOpts := protojson.MarshalOptions{EmitUnpopulated: true}
+
+	instJson, err := pjOpts.Marshal(resProto.Instance)
 	if err != nil {
 		return nil, err
 	}
-	var relatedJson []byte
+	var instOmap *jsonutils.OrderedMap
+	err = jsonutils.UnmarshalOrdered(instJson, &instOmap)
+	if err != nil {
+		return nil, err
+	}
+
+	var relOmap *jsonutils.OrderedMap
 	if resProto.Related != nil {
-		relatedJson, err = protojson.Marshal(resProto.Related)
+		relJson, err := protojson.Marshal(resProto.Related)
+		if err != nil {
+			return nil, err
+		}
+		err = jsonutils.UnmarshalOrdered(relJson, &relOmap)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &ResultJson{
-		Type:     resProto.Type,
-		Instance: instanceJson,
-		Related:  relatedJson,
-	}, nil
+
+	resOmap := jsonutils.NewOrderedMap()
+	resOmap.Set("type", resProto.Type)
+	resOmap.Set("instance", instOmap)
+	if relOmap != nil {
+		resOmap.Set("related", relOmap)
+	}
+
+	return jsonutils.MarshalOrdered(resOmap)
 }
 
 func decodeArgPayloadJson(
@@ -264,12 +282,12 @@ func decodeArgPayloadJson(
 	system System,
 	command string,
 	buffer []byte,
-) (*ResultJson, error) {
+) ([]byte, error) {
 	resProto, err := decodeArgPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return newResultJson(resProto)
+	return resultProto2Json(resProto)
 }
 
 func decodeArgPayload64Json(
@@ -278,7 +296,7 @@ func decodeArgPayload64Json(
 	system System,
 	command string,
 	buffer64 string,
-) (*ResultJson, error) {
+) ([]byte, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
@@ -320,12 +338,12 @@ func decodeResultPayloadJson(
 	system System,
 	command string,
 	buffer []byte,
-) (*ResultJson, error) {
+) ([]byte, error) {
 	resProto, err := decodeResultPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return newResultJson(resProto)
+	return resultProto2Json(resProto)
 }
 
 func decodeResultPayload64Json(
@@ -334,7 +352,7 @@ func decodeResultPayload64Json(
 	system System,
 	command string,
 	buffer64 string,
-) (*ResultJson, error) {
+) ([]byte, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err

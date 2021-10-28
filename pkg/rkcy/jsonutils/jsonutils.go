@@ -28,6 +28,33 @@ func (m *OrderedMap) Set(k string, v interface{}) {
 	m.KeyVals[k] = v
 }
 
+func (m *OrderedMap) SetAfter(k string, v interface{}, kbefore string) {
+	_, ok := m.KeyVals[k]
+	if ok {
+		m.KeyVals[k] = v
+		return
+	}
+
+	// look for our kbefore
+	idx := -1
+	for i, kc := range m.Keys {
+		if kc == kbefore {
+			idx = i + 1
+			break
+		}
+	}
+
+	// check if not found or at end
+	if idx == -1 || idx > len(m.Keys)-1 {
+		m.Keys = append(m.Keys, k)
+	} else {
+		// in the middle
+		m.Keys = append(m.Keys[:idx+1], m.Keys[idx:]...)
+		m.Keys[idx] = k
+	}
+	m.KeyVals[k] = v
+}
+
 func NewOrderedMap() *OrderedMap {
 	return &OrderedMap{
 		Keys:    make([]string, 0),
