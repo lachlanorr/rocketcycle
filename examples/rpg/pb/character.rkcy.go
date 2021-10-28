@@ -839,6 +839,24 @@ func (cncHdlr *CharacterConcernHandler) DecodeResult(
 	}
 }
 
+func (cncHdlr *CharacterConcernHandler) DecodeRelatedRequest(
+	ctx context.Context,
+	relReq *rkcy.RelatedRequest,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "Character Note: need to add this to codegen!!!",
+	}, nil
+}
+
+func (cncHdlr *CharacterConcernHandler) DecodeRelatedResponse(
+	ctx context.Context,
+	relRsp *rkcy.RelatedResponse,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "Character Note: need to add this to codegen!!!",
+	}, nil
+}
+
 // -----------------------------------------------------------------------------
 // Concern Character END
 // -----------------------------------------------------------------------------

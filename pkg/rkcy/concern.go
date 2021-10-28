@@ -97,6 +97,8 @@ type ConcernHandler interface {
 	DecodeInstance(ctx context.Context, buffer []byte) (*ResultProto, error)
 	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
+	DecodeRelatedRequest(ctx context.Context, relReq *RelatedRequest) (*ResultProto, error)
+	DecodeRelatedResponse(ctx context.Context, relRsp *RelatedResponse) (*ResultProto, error)
 
 	SetLogicHandler(commands interface{}) error
 	SetCrudHandler(storageType string, commands interface{}) error
@@ -219,12 +221,13 @@ func decodeArgPayload(
 	system System,
 	command string,
 	buffer []byte,
-) (*ResultProto, error) {
-	concernHandler, ok := gConcernHandlers[concern]
+) (*ResultProto, ConcernHandler, error) {
+	cncHdlr, ok := gConcernHandlers[concern]
 	if !ok {
-		return nil, fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
+		return nil, nil, fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
-	return concernHandler.DecodeArg(ctx, system, command, buffer)
+	resProto, err := cncHdlr.DecodeArg(ctx, system, command, buffer)
+	return resProto, cncHdlr, err
 }
 
 func decodeArgPayload64(
@@ -233,25 +236,54 @@ func decodeArgPayload64(
 	system System,
 	command string,
 	buffer64 string,
-) (*ResultProto, error) {
+) (*ResultProto, ConcernHandler, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return decodeArgPayload(ctx, concern, system, command, buffer)
 }
 
-func resultProto2Json(resProto *ResultProto) ([]byte, error) {
+func resultProto2OrderedMap(
+	ctx context.Context,
+	cncHdlr ConcernHandler,
+	resProto *ResultProto,
+) (*jsonutils.OrderedMap, error) {
 	pjOpts := protojson.MarshalOptions{EmitUnpopulated: true}
 
-	instJson, err := pjOpts.Marshal(resProto.Instance)
-	if err != nil {
-		return nil, err
-	}
 	var instOmap *jsonutils.OrderedMap
-	err = jsonutils.UnmarshalOrdered(instJson, &instOmap)
-	if err != nil {
-		return nil, err
+	if resProto.Instance != nil {
+		instJson, err := pjOpts.Marshal(resProto.Instance)
+		if err != nil {
+			return nil, err
+		}
+		err = jsonutils.UnmarshalOrdered(instJson, &instOmap)
+		if err != nil {
+			return nil, err
+		}
+
+		switch resProto.Type {
+		case "RelatedRequest":
+			relReqDec, err := cncHdlr.DecodeRelatedRequest(ctx, resProto.Instance.(*RelatedRequest))
+			if err != nil {
+				return nil, err
+			}
+			relReqDecOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relReqDec)
+			if err != nil {
+				return nil, err
+			}
+			instOmap.SetAfter("payloadDec", relReqDecOmap, "payload")
+		case "RelatedResponse":
+			relRspDec, err := cncHdlr.DecodeRelatedResponse(ctx, resProto.Instance.(*RelatedResponse))
+			if err != nil {
+				return nil, err
+			}
+			relRspDecOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relRspDec)
+			if err != nil {
+				return nil, err
+			}
+			instOmap.SetAfter("payloadDec", relRspDecOmap, "payload")
+		}
 	}
 
 	var relOmap *jsonutils.OrderedMap
@@ -268,11 +300,20 @@ func resultProto2Json(resProto *ResultProto) ([]byte, error) {
 
 	resOmap := jsonutils.NewOrderedMap()
 	resOmap.Set("type", resProto.Type)
-	resOmap.Set("instance", instOmap)
+	if instOmap != nil {
+		resOmap.Set("instance", instOmap)
+	}
 	if relOmap != nil {
 		resOmap.Set("related", relOmap)
 	}
+	return resOmap, nil
+}
 
+func resultProto2Json(ctx context.Context, cncHdlr ConcernHandler, resProto *ResultProto) ([]byte, error) {
+	resOmap, err := resultProto2OrderedMap(ctx, cncHdlr, resProto)
+	if err != nil {
+		return nil, err
+	}
 	return jsonutils.MarshalOrdered(resOmap)
 }
 
@@ -283,11 +324,11 @@ func decodeArgPayloadJson(
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
-	resProto, err := decodeArgPayload(ctx, concern, system, command, buffer)
+	resProto, cncHdlr, err := decodeArgPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return resultProto2Json(resProto)
+	return resultProto2Json(ctx, cncHdlr, resProto)
 }
 
 func decodeArgPayload64Json(
@@ -310,12 +351,13 @@ func decodeResultPayload(
 	system System,
 	command string,
 	buffer []byte,
-) (*ResultProto, error) {
-	concernHandler, ok := gConcernHandlers[concern]
+) (*ResultProto, ConcernHandler, error) {
+	cncHdlr, ok := gConcernHandlers[concern]
 	if !ok {
-		return nil, fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
+		return nil, nil, fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
 	}
-	return concernHandler.DecodeResult(ctx, system, command, buffer)
+	resProto, err := cncHdlr.DecodeResult(ctx, system, command, buffer)
+	return resProto, cncHdlr, err
 }
 
 func decodeResultPayload64(
@@ -324,10 +366,10 @@ func decodeResultPayload64(
 	system System,
 	command string,
 	buffer64 string,
-) (*ResultProto, error) {
+) (*ResultProto, ConcernHandler, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return decodeResultPayload(ctx, concern, system, command, buffer)
 }
@@ -339,11 +381,11 @@ func decodeResultPayloadJson(
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
-	resProto, err := decodeResultPayload(ctx, concern, system, command, buffer)
+	resProto, cncHdlr, err := decodeResultPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return resultProto2Json(resProto)
+	return resultProto2Json(ctx, cncHdlr, resProto)
 }
 
 func decodeResultPayload64Json(
@@ -382,14 +424,14 @@ func handleCommand(
 		}
 	}()
 
-	concernHandler, ok := gConcernHandlers[concern]
+	cncHdlr, ok := gConcernHandlers[concern]
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
 		return rslt, nil
 	}
 
-	return concernHandler.HandleCommand(
+	return cncHdlr.HandleCommand(
 		ctx,
 		system,
 		command,

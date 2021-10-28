@@ -389,7 +389,7 @@ func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) 
 }
 
 func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +397,7 @@ func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs
 }
 
 func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}

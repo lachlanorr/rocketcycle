@@ -390,7 +390,10 @@ var testTxnJsonDec = []byte(`{
           "concern": "Character",
           "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
           "field": "PlayerId",
-          "payload": "CiQ4YjY1ZWI5Yy0xNDU0LTQ1NDctOGE0Yi1iZGUzY2Q0NTQ4NWMSJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhoTRnVsbG5hbWVfMTM5NzEwNjEzMSABKgwI60YQizgY6j0g8EI="
+          "payload": "CiQ4YjY1ZWI5Yy0xNDU0LTQ1NDctOGE0Yi1iZGUzY2Q0NTQ4NWMSJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhoTRnVsbG5hbWVfMTM5NzEwNjEzMSABKgwI60YQizgY6j0g8EI=",
+          "payloadDec": {
+            "type": "Player Note: need to add this to codegen!!!"
+          }
         }
       },
       "effectiveTime": null,
@@ -410,7 +413,10 @@ var testTxnJsonDec = []byte(`{
           "instance": {
             "concern": "Player",
             "field": "PlayerId",
-            "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE="
+            "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+            "payloadDec": {
+              "type": "Player Note: need to add this to codegen!!!"
+            }
           }
         },
         "instance": "",
@@ -428,7 +434,10 @@ var testTxnJsonDec = []byte(`{
         "instance": {
           "concern": "Player",
           "field": "PlayerId",
-          "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE="
+          "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+          "payloadDec": {
+            "type": "Character Note: need to add this to codegen!!!"
+          }
         }
       },
       "effectiveTime": "2021-10-26T18:16:15.923486Z",

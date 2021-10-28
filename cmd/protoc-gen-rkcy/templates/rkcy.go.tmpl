@@ -813,6 +813,24 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) DecodeResult(
 	}
 }
 
+func (cncHdlr *{{ $cnc.Name }}ConcernHandler) DecodeRelatedRequest(
+	ctx context.Context,
+	relReq *rkcy.RelatedRequest,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "{{ $cnc.Name }} Note: need to add this to codegen!!!",
+	}, nil
+}
+
+func (cncHdlr *{{ $cnc.Name }}ConcernHandler) DecodeRelatedResponse(
+	ctx context.Context,
+	relRsp *rkcy.RelatedResponse,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "{{ $cnc.Name }} Note: need to add this to codegen!!!",
+	}, nil
+}
+
 // -----------------------------------------------------------------------------
 // Concern {{ .Name }} END
 // -----------------------------------------------------------------------------

@@ -690,6 +690,24 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 	}
 }
 
+func (cncHdlr *PlayerConcernHandler) DecodeRelatedRequest(
+	ctx context.Context,
+	relReq *rkcy.RelatedRequest,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "Player Note: need to add this to codegen!!!",
+	}, nil
+}
+
+func (cncHdlr *PlayerConcernHandler) DecodeRelatedResponse(
+	ctx context.Context,
+	relRsp *rkcy.RelatedResponse,
+) (*rkcy.ResultProto, error) {
+	return &rkcy.ResultProto{
+		Type: "Player Note: need to add this to codegen!!!",
+	}, nil
+}
+
 // -----------------------------------------------------------------------------
 // Concern Player END
 // -----------------------------------------------------------------------------

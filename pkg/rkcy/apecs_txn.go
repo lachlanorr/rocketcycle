@@ -105,7 +105,7 @@ func ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, *ResultProto, *Ap
 	var resProto *ResultProto
 	if step.Result != nil && step.Result.Payload != nil {
 		var err error
-		resProto, err = decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
+		resProto, _, err = decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
 		if err != nil {
 			log.Error().
 				Err(err).
