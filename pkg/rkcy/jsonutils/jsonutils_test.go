@@ -145,6 +145,23 @@ func TestMarshalOrderedIndentTxnParts(t *testing.T) {
     }
   ]
 }`,
+		`{
+  "characters": [
+    {
+      "active": true,
+      "currency": {
+        "faction0": 4719,
+        "faction1": 9603,
+        "faction2": 10949,
+        "gold": 2058
+      },
+      "fullname": "Fullname_1290565490",
+      "id": "702fdc36-10d0-4398-80af-7009c7e18b89",
+      "playerId": "7729aa85-67be-4f19-b49b-abf0bb7373af"
+    }
+  ],
+  "charactersRelated": [{}]
+}`,
 	}
 
 	for _, tj := range testJsons {

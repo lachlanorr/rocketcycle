@@ -62,6 +62,41 @@ func NewOrderedMap() *OrderedMap {
 	}
 }
 
+func isTrivialObject(obj *OrderedMap) bool {
+	if len(obj.Keys) == 0 {
+		return true
+	}
+	if len(obj.Keys) == 1 {
+		v, _ := obj.Get(obj.Keys[0])
+		switch val := v.(type) {
+		case []interface{}:
+			return isTrivialArray(val)
+		case *OrderedMap:
+			return isTrivialObject(val)
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+func isTrivialArray(arr []interface{}) bool {
+	if len(arr) == 0 {
+		return true
+	}
+	if len(arr) == 1 {
+		switch val := arr[0].(type) {
+		case []interface{}:
+			return isTrivialArray(val)
+		case *OrderedMap:
+			return isTrivialObject(val)
+		default:
+			return true
+		}
+	}
+	return false
+}
+
 func marshal(v interface{}, bld *strings.Builder, eol string, indent string, currIndent string, colonSpace string) error {
 	if v == nil {
 		bld.WriteString("null")
@@ -78,30 +113,36 @@ func marshal(v interface{}, bld *strings.Builder, eol string, indent string, cur
 		bld.WriteString(val)
 		bld.WriteByte('"')
 	case []interface{}:
-		bld.WriteByte('[')
-		if len(val) == 0 {
-			bld.WriteByte(']')
-		} else {
-			bld.WriteString(eol)
-			newIndent := currIndent + indent
-			for idx, itm := range val {
-				bld.WriteString(newIndent)
-				err := marshal(itm, bld, eol, indent, newIndent, colonSpace)
-				if err != nil {
-					return err
-				}
-				if idx != len(val)-1 {
-					bld.WriteByte(',')
-				}
-				bld.WriteString(eol)
-			}
-			bld.WriteString(currIndent)
-			bld.WriteByte(']')
+		newIndent := currIndent + indent
+		if isTrivialArray(val) {
+			eol = ""
+			currIndent = ""
+			newIndent = ""
 		}
+		bld.WriteByte('[')
+		bld.WriteString(eol)
+		for idx, itm := range val {
+			bld.WriteString(newIndent)
+			err := marshal(itm, bld, eol, indent, newIndent, colonSpace)
+			if err != nil {
+				return err
+			}
+			if idx != len(val)-1 {
+				bld.WriteByte(',')
+			}
+			bld.WriteString(eol)
+		}
+		bld.WriteString(currIndent)
+		bld.WriteByte(']')
 	case *OrderedMap:
+		newIndent := currIndent + indent
+		if isTrivialObject(val) {
+			eol = ""
+			currIndent = ""
+			newIndent = ""
+		}
 		bld.WriteByte('{')
 		bld.WriteString(eol)
-		newIndent := currIndent + indent
 		for idx, key := range val.Keys {
 			bld.WriteString(newIndent)
 			bld.WriteByte('"')
@@ -202,37 +243,48 @@ func parseObject(b []byte) ([]byte, *OrderedMap, error) {
 
 	for {
 		var err error
-		// parse key
-		var tokKey *token
-		b, tokKey, err = nextToken(b)
+
+		// peek to see if there's a }
+		_, tok, err := nextToken(b)
 		if err != nil {
 			return b, nil, err
 		}
-		if tokKey == nil || tokKey.Type != String || len(tokKey.Val.(string)) == 0 {
-			return b, nil, fmt.Errorf("Failed to parse key: %s", string(b))
-		}
 
-		// colon
-		var tokColon *token
-		b, tokColon, err = nextToken(b)
-		if err != nil {
-			return b, nil, err
-		}
-		if tokColon == nil || tokColon.Type != Colon {
-			return b, nil, fmt.Errorf("Failed to parse colon: %s", string(b))
-		}
+		// if not at end, parse value
+		if tok.Type != ObjectEnd {
 
-		// parse value
-		var val interface{}
-		b, val, err = parse(b)
-		if err != nil {
-			return b, nil, err
-		}
-		if err != nil {
-			return b, nil, fmt.Errorf("Error parsing value '%s': %s", err.Error(), string(b))
-		}
+			// parse key
+			var tokKey *token
+			b, tokKey, err = nextToken(b)
+			if err != nil {
+				return b, nil, err
+			}
+			if tokKey == nil || tokKey.Type != String || len(tokKey.Val.(string)) == 0 {
+				return b, nil, fmt.Errorf("Failed to parse key: %s", string(b))
+			}
 
-		obj.Set(tokKey.Val.(string), val)
+			// colon
+			var tokColon *token
+			b, tokColon, err = nextToken(b)
+			if err != nil {
+				return b, nil, err
+			}
+			if tokColon == nil || tokColon.Type != Colon {
+				return b, nil, fmt.Errorf("Failed to parse colon: %s", string(b))
+			}
+
+			// parse value
+			var val interface{}
+			b, val, err = parse(b)
+			if err != nil {
+				return b, nil, err
+			}
+			if err != nil {
+				return b, nil, fmt.Errorf("Error parsing value '%s': %s", err.Error(), string(b))
+			}
+
+			obj.Set(tokKey.Val.(string), val)
+		}
 
 		// check for end or next
 		var tokCommaOrEnd *token
