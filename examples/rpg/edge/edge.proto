@@ -25,12 +25,12 @@ message RpgResponse {
 
 message PlayerResponse {
     pb.Player player = 1;
-    pb.PlayerRelatedConcerns related = 2;
+    pb.PlayerRelated related = 2;
 }
 
 message CharacterResponse {
     pb.Character character = 1;
-    pb.CharacterRelatedConcerns related = 2;
+    pb.CharacterRelated related = 2;
 }
 
 service RpgService {

@@ -44,7 +44,7 @@ message TradeRequest {
     FundingRequest rhs = 2;
 }
 
-service CharacterCommands {
+service CharacterLogic {
     rpc Fund(FundingRequest) returns (Character);
     rpc DebitFunds(FundingRequest) returns (Character);
     rpc CreditFunds(FundingRequest) returns (Character);

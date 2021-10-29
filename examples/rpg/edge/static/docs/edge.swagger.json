@@ -332,7 +332,7 @@
           "$ref": "#/definitions/pb.Character"
         },
         "related": {
-          "$ref": "#/definitions/pb.CharacterRelatedConcerns"
+          "$ref": "#/definitions/pb.CharacterRelated"
         }
       }
     },
@@ -343,7 +343,7 @@
           "$ref": "#/definitions/pb.Player"
         },
         "related": {
-          "$ref": "#/definitions/pb.PlayerRelatedConcerns"
+          "$ref": "#/definitions/pb.PlayerRelated"
         }
       }
     },
@@ -435,9 +435,12 @@
         }
       }
     },
-    "pb.CharacterRelatedConcerns": {
+    "pb.CharacterRelated": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "player": {
           "$ref": "#/definitions/pb.Player"
         }
@@ -451,6 +454,18 @@
         },
         "currency": {
           "$ref": "#/definitions/pb.Character.Currency"
+        }
+      }
+    },
+    "pb.Limits": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "maxCharactersPerPlayer": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -471,14 +486,20 @@
         }
       }
     },
-    "pb.PlayerRelatedConcerns": {
+    "pb.PlayerRelated": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "characters": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/pb.Character"
           }
+        },
+        "limits": {
+          "$ref": "#/definitions/pb.Limits"
         }
       }
     },

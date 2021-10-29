@@ -30,7 +30,7 @@ import (
 type {{ $conf.Name }}ConfigHandler struct{}
 
 func (conf *{{ $conf.Name }}) Key() string {
-	return conf.{{ $conf.Msg.KeyField }}
+	return conf.{{ $conf.Msg.KeyFieldGo }}
 }
 
 func (*{{ $conf.Name }}ConfigHandler) GetKey(msg proto.Message) string {
@@ -67,17 +67,11 @@ func init() {
 {{- end }}
 {{- if gt (len .Concerns) 0 }}
 {{ range $cnc := .Concerns }}
-{{- $relConfArg := "" }}
-{{- $relConfType := "" }}
-{{- $relCncArg := "" }}
-{{- $relCncType := "" }}
-{{- if $cnc.RelConfigs }}
-{{- $relConfArg = printf "relConf *%s, " $cnc.RelConfigs.Msg.Name }}
-{{- $relConfType = printf "*%s, " $cnc.RelConfigs.Msg.Name }}
-{{- end }}
-{{- if $cnc.RelConcerns }}
-{{- $relCncArg = printf "relCnc *%s, " $cnc.RelConcerns.Msg.Name }}
-{{- $relCncType = printf "*%s, " $cnc.RelConcerns.Msg.Name }}
+{{- $relArg := "" }}
+{{- $relType := "" }}
+{{- if $cnc.Related }}
+{{- $relArg = printf "related *%s, " $cnc.Related.Msg.Name }}
+{{- $relType = printf "*%s, " $cnc.Related.Msg.Name }}
 {{- end }}
 // -----------------------------------------------------------------------------
 // Concern {{ $cnc.Name }}
@@ -87,20 +81,24 @@ func init() {
 }
 
 func (inst *{{ $cnc.Name }}) Key() string {
-	return inst.{{ $cnc.Msg.KeyField }}
+	return inst.{{ $cnc.Msg.KeyFieldGo }}
 }
-{{- if $cnc.RelConcerns }}
+{{- if $cnc.Related }}
 
-func {{ $cnc.Name }}GetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*{{ $cnc.RelConcerns.Msg.Name }}, error) {
-	relCnc := &{{ $cnc.RelConcerns.Msg.Name }}{}
+func (rel *{{ $cnc.Related.Msg.Name }}) Key() string {
+     return rel.{{ $cnc.Related.Msg.KeyFieldGo }}
+}
+
+func {{ $cnc.Name }}GetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*{{ $cnc.Related.Msg.Name }}, []byte, error) {
+	relCnc := &{{ $cnc.Related.Msg.Name }}{}
 	relCncBytes := instanceStore.GetRelated(instKey)
 	if relCncBytes != nil {
 		err := proto.Unmarshal(relCncBytes, relCnc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-    return relCnc, nil
+    return relCnc, relCncBytes, nil
 }
 {{- end }}
 
@@ -132,16 +130,16 @@ type {{ $cnc.Name }}LogicHandler interface {
 	ValidateUpdate(ctx context.Context, original *{{ $cnc.Name }}, updated *{{ $cnc.Name }}) (*{{ $cnc.Name }}, error)
 {{- if $cnc.Commands }}
 {{ range $cmd := $cnc.Commands }}
-	{{ $cmd.Name }}(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relCncArg }}{{ if $cmd.HasInput }}payload *{{ $cmd.InputType }}{{ end }}) ({{ if $cmd.HasOutput }}*{{ $cmd.OutputType }}, {{ end }}error)
+	{{ $cmd.Name }}(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relArg }}{{ if $cmd.HasInput }}payload *{{ $cmd.InputType }}{{ end }}) ({{ if $cmd.HasOutput }}*{{ $cmd.OutputType }}, {{ end }}error)
 {{- end }}
 {{- end }}
 }
 
 // CrudHandler Interface
 type {{ $cnc.Name }}CrudHandler interface {
-	Read(ctx context.Context, key string) (*{{ $cnc.Name }}, {{ $relCncType }}*rkcy.CompoundOffset, error)
+	Read(ctx context.Context, key string) (*{{ $cnc.Name }}, {{ $relType }}*rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *{{ $cnc.Name }}, cmpdOffset *rkcy.CompoundOffset) (*{{ $cnc.Name }}, error)
-	Update(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relCncArg }}cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relArg }}cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -228,13 +226,13 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 		case rkcy.UPDATE:
 			if direction == rkcy.Direction_FORWARD {
 				if !bytes.Equal(args.Payload, args.Instance) {
-                    {{- if $cnc.RelConcerns }}
-					relCnc, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
+                    {{- if $cnc.Related }}
+					rel, relBytes, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(args.Payload)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(args.Payload, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -318,13 +316,13 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				if !bytes.Equal(instSer, args.Instance) {
-                    {{- if $cnc.RelConcerns }}
-					relCnc, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
+                    {{- if $cnc.Related }}
+					rel, relBytes, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(instSer)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(instSer, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -334,7 +332,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					rslt.Instance = instSer
 				}
 			}
-        {{- if $cnc.RelConcerns }}
+        {{- if $cnc.Related }}
 		case rkcy.REQUEST_RELATED:
 			{
 				relReq := &rkcy.RelatedRequest{}
@@ -344,22 +342,23 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
+				rel, _, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related request to see if it fulfills any of our related items
-                changed, err := relCnc.HandleRequestRelatedDUMMY(relReq)
+                changed, err := rel.HandleRequestRelatedDUMMY(relReq)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
+                relPayload := rkcy.PackPayloads(args.Instance, relBytes)
                 if changed {
                     err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 					if err != nil {
@@ -371,7 +370,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 				relRsp := &rkcy.RelatedResponse{
                     Concern: "{{ $cnc.Name }}",
 					Field:   relReq.Field,
-					Payload: args.Instance,
+					Payload: relPayload,
 				}
 				relRspBytes, err := proto.Marshal(relRsp)
 				if err != nil {
@@ -400,27 +399,29 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
+				rel, _, err := {{ $cnc.Name }}GetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related response
-                err = relCnc.HandleRefreshRelatedDUMMY(relRsp)
+                changed, err := rel.HandleRefreshRelatedDUMMY(relRsp)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
-				if err != nil {
-					rslt.SetResult(err)
-					return rslt, nil
-				}
+                if changed {
+	                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt, nil
+					}
+                }
 				rslt.Payload = rkcy.PackPayloads(args.Instance, relBytes)
 			}
         {{- end }}
@@ -438,8 +439,8 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 
-				{{- if $cnc.RelConcerns }}
-				relCnc, err := {{ $cnc.Name }}GetRelated(inst.Key(), instanceStore)
+				{{- if $cnc.Related }}
+				rel, _, err := {{ $cnc.Name }}GetRelated(inst.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
@@ -453,7 +454,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				{{- end }}
-				{{ if .HasOutput }}payloadOut, {{ end }}err := cncHdlr.logicHandler.{{ .Name }}(ctx, inst{{ if $cnc.RelConcerns }}, relCnc{{ end }}{{ if .HasInput }}, payloadIn{{ end }})
+				{{ if .HasOutput }}payloadOut, {{ end }}err := cncHdlr.logicHandler.{{ .Name }}(ctx, inst{{ if $cnc.Related }}, rel{{ end }}{{ if .HasInput }}, payloadIn{{ end }})
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -547,9 +548,9 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 							EffectiveTime: timestamppb.New(args.EffectiveTime),
 						},
 					)
-                    {{- if $cnc.RelConcerns }}
+                    {{- if $cnc.Related }}
                     // Request related refresh messages from our related concerns
-                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload)
+                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload, nil)
                     if err != nil {
                         errDel := handler.Delete(ctx, payloadOut.Key(), args.CmpdOffset)
                         if errDel != nil {
@@ -572,10 +573,10 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *{{ $cnc.Name }}
-				{{- if $cnc.RelConcerns }}
-				var relCnc *{{ $cnc.RelConcerns.Msg.Name }}
+				{{- if $cnc.Related }}
+				var rel *{{ $cnc.Related.Msg.Name }}
 				{{- end }}
-				inst, {{ if $cnc.RelConcerns }}relCnc, {{ end }}rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
+				inst, {{ if $cnc.Related }}rel, {{ end }}rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -586,8 +587,8 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				var relBytes []byte
-				{{- if $cnc.RelConcerns }}
-				relBytes, err = proto.Marshal(relCnc)
+				{{- if $cnc.Related }}
+				relBytes, err = proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -614,14 +615,14 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				{{- if $cnc.RelConcerns }}
-				relCnc, err := {{ $cnc.Name }}GetRelated(payloadIn.Key(), instanceStore)
+				{{- if $cnc.Related }}
+				rel, _, err := {{ $cnc.Name }}GetRelated(payloadIn.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
 				{{- end }}
-				err = handler.Update(ctx, payloadIn, {{ if $cnc.RelConcerns }}relCnc, {{ end }}args.CmpdOffset)
+				err = handler.Update(ctx, payloadIn, {{ if $cnc.Related }}rel, {{ end }}args.CmpdOffset)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -663,21 +664,21 @@ func (*{{ $cnc.Name }}ConcernHandler) DecodeInstance(
 		}
         resProto.Instance = inst
     } else {
-        unpacked, err := rkcy.UnpackPayloads(buffer)
+        instBytes, relBytes, err := rkcy.UnpackPayloads(buffer)
         if err != nil {
             return nil, err
         }
 
 		inst := &{{ $cnc.Name }}{}
-		err = proto.Unmarshal(unpacked[0], inst)
+		err = proto.Unmarshal(instBytes, inst)
 		if err != nil {
 			return nil, err
 		}
         resProto.Instance = inst
 
-        if unpacked[1] != nil && len(unpacked[1]) > 0 {
-    		rel := &{{ $cnc.Name }}RelatedConcerns{}
-			err := proto.Unmarshal(unpacked[1], rel)
+        if relBytes != nil && len(relBytes) > 0 {
+    		rel := &{{ $cnc.Name }}Related{}
+			err := proto.Unmarshal(relBytes, rel)
 			if err != nil {
 				return nil, err
 			}

@@ -205,12 +205,12 @@ func advanceApecsTxn(
 			// Special case "RefreshInstance" command
 			// RefreshInstance command is only ever sent after a READ was executed
 			// against the Storage
-			unpacked, err := UnpackPayloads(step.Payload)
+			instBytes, relBytes, err := UnpackPayloads(step.Payload)
 			if err != nil {
 				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "UnpackPayloads error: %s", err.Error())
 				return Code_INTERNAL
 			}
-			gInstanceStore.Set(step.Key, unpacked[0], unpacked[1], cmpdOffset)
+			gInstanceStore.Set(step.Key, instBytes, relBytes, cmpdOffset)
 			step.Result = &ApecsTxn_Step_Result{
 				Code:          Code_OK,
 				ProcessedTime: now,

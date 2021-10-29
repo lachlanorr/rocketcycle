@@ -13,13 +13,15 @@ import (
 	"strings"
 )
 
-var header = `// This Source Code Form is subject to the terms of the Mozilla Public
+// Prepend the firs few chars so we don't match the license in this file and therefore
+// exclude check_file_headers.go from the checking.
+var header = "// " + `This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 `
 
 var incl *regexp.Regexp = regexp.MustCompile(`\.(go|proto)$`)
-var excl *regexp.Regexp = regexp.MustCompile(`(\.pb\.gw\.go|_grpc\.pb\.go)$`)
+var excl *regexp.Regexp = regexp.MustCompile(`(\.pb\.gw\.go|_grpc\.pb\.go|protobuf_internal_str_strings\.go)$`)
 
 func fileHasHeaderIssue(path string) bool {
 	if incl.MatchString(path) && !excl.MatchString(path) {

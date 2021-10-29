@@ -502,28 +502,28 @@ func PackPayloads(payload0 []byte, payload1 []byte) []byte {
 	return packed
 }
 
-func UnpackPayloads(packed []byte) ([][]byte, error) {
+func UnpackPayloads(packed []byte) ([]byte, []byte, error) {
 	if packed == nil || len(packed) < 8 {
-		return nil, fmt.Errorf("Not a packed payload, too small: %s", base64.StdEncoding.EncodeToString(packed))
+		return nil, nil, fmt.Errorf("Not a packed payload, too small: %s", base64.StdEncoding.EncodeToString(packed))
 	}
 	if string(packed[:4]) != "rkcy" {
-		return nil, fmt.Errorf("Not a packed payload, missing rkcy: %s", base64.StdEncoding.EncodeToString(packed))
+		return nil, nil, fmt.Errorf("Not a packed payload, missing rkcy: %s", base64.StdEncoding.EncodeToString(packed))
 	}
 	offset := binary.LittleEndian.Uint32(packed[4:8])
 	if offset < uint32(8) || offset > uint32(len(packed)) {
-		return nil, fmt.Errorf("Not a packed payload, invalid offset %d: %s", offset, base64.StdEncoding.EncodeToString(packed))
+		return nil, nil, fmt.Errorf("Not a packed payload, invalid offset %d: %s", offset, base64.StdEncoding.EncodeToString(packed))
 	}
-	ret := make([][]byte, 2)
-	ret[0] = packed[8:offset]
-	ret[1] = packed[offset:]
+
+	instBytes := packed[8:offset]
+	relBytes := packed[offset:]
 
 	// Return nils if there is no data in slices
-	if len(ret[0]) == 0 {
-		return nil, fmt.Errorf("No instance contained in packed payload: %s", base64.StdEncoding.EncodeToString(packed))
+	if len(instBytes) == 0 {
+		return nil, nil, fmt.Errorf("No instance contained in packed payload: %s", base64.StdEncoding.EncodeToString(packed))
 	}
-	if len(ret[1]) == 0 {
-		ret[1] = nil
+	if len(relBytes) == 0 {
+		relBytes = nil
 	}
 
-	return ret, nil
+	return instBytes, relBytes, nil
 }

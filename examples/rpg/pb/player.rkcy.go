@@ -67,16 +67,20 @@ func (inst *Player) Key() string {
 	return inst.Id
 }
 
-func PlayerGetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*PlayerRelatedConcerns, error) {
-	relCnc := &PlayerRelatedConcerns{}
+func (rel *PlayerRelated) Key() string {
+     return rel.Id
+}
+
+func PlayerGetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*PlayerRelated, []byte, error) {
+	relCnc := &PlayerRelated{}
 	relCncBytes := instanceStore.GetRelated(instKey)
 	if relCncBytes != nil {
 		err := proto.Unmarshal(relCncBytes, relCnc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-    return relCnc, nil
+    return relCnc, relCncBytes, nil
 }
 
 func MarshalPlayerOrPanic(inst *Player) []byte {
@@ -109,9 +113,9 @@ type PlayerLogicHandler interface {
 
 // CrudHandler Interface
 type PlayerCrudHandler interface {
-	Read(ctx context.Context, key string) (*Player, *PlayerRelatedConcerns, *rkcy.CompoundOffset, error)
+	Read(ctx context.Context, key string) (*Player, *PlayerRelated, *rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) (*Player, error)
-	Update(ctx context.Context, inst *Player, relCnc *PlayerRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Player, related *PlayerRelated, cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -198,12 +202,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 		case rkcy.UPDATE:
 			if direction == rkcy.Direction_FORWARD {
 				if !bytes.Equal(args.Payload, args.Instance) {
-					relCnc, err := PlayerGetRelated(args.Key, instanceStore)
+					rel, relBytes, err := PlayerGetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(args.Payload)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(args.Payload, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -286,12 +290,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				if !bytes.Equal(instSer, args.Instance) {
-					relCnc, err := PlayerGetRelated(args.Key, instanceStore)
+					rel, relBytes, err := PlayerGetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(instSer)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(instSer, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -309,22 +313,23 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := PlayerGetRelated(args.Key, instanceStore)
+				rel, _, err := PlayerGetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related request to see if it fulfills any of our related items
-                changed, err := relCnc.HandleRequestRelatedDUMMY(relReq)
+                changed, err := rel.HandleRequestRelatedDUMMY(relReq)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
+                relPayload := rkcy.PackPayloads(args.Instance, relBytes)
                 if changed {
                     err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 					if err != nil {
@@ -336,7 +341,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 				relRsp := &rkcy.RelatedResponse{
                     Concern: "Player",
 					Field:   relReq.Field,
-					Payload: args.Instance,
+					Payload: relPayload,
 				}
 				relRspBytes, err := proto.Marshal(relRsp)
 				if err != nil {
@@ -365,27 +370,29 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := PlayerGetRelated(args.Key, instanceStore)
+				rel, _, err := PlayerGetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related response
-                err = relCnc.HandleRefreshRelatedDUMMY(relRsp)
+                changed, err := rel.HandleRefreshRelatedDUMMY(relRsp)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
-				if err != nil {
-					rslt.SetResult(err)
-					return rslt, nil
-				}
+                if changed {
+	                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt, nil
+					}
+                }
 				rslt.Payload = rkcy.PackPayloads(args.Instance, relBytes)
 			}
 		default:
@@ -459,7 +466,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 						},
 					)
                     // Request related refresh messages from our related concerns
-                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload)
+                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload, nil)
                     if err != nil {
                         errDel := handler.Delete(ctx, payloadOut.Key(), args.CmpdOffset)
                         if errDel != nil {
@@ -481,8 +488,8 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *Player
-				var relCnc *PlayerRelatedConcerns
-				inst, relCnc, rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
+				var rel *PlayerRelated
+				inst, rel, rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -493,7 +500,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				var relBytes []byte
-				relBytes, err = proto.Marshal(relCnc)
+				relBytes, err = proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -519,12 +526,12 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relCnc, err := PlayerGetRelated(payloadIn.Key(), instanceStore)
+				rel, _, err := PlayerGetRelated(payloadIn.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-				err = handler.Update(ctx, payloadIn, relCnc, args.CmpdOffset)
+				err = handler.Update(ctx, payloadIn, rel, args.CmpdOffset)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -566,21 +573,21 @@ func (*PlayerConcernHandler) DecodeInstance(
 		}
         resProto.Instance = inst
     } else {
-        unpacked, err := rkcy.UnpackPayloads(buffer)
+        instBytes, relBytes, err := rkcy.UnpackPayloads(buffer)
         if err != nil {
             return nil, err
         }
 
 		inst := &Player{}
-		err = proto.Unmarshal(unpacked[0], inst)
+		err = proto.Unmarshal(instBytes, inst)
 		if err != nil {
 			return nil, err
 		}
         resProto.Instance = inst
 
-        if unpacked[1] != nil && len(unpacked[1]) > 0 {
-    		rel := &PlayerRelatedConcerns{}
-			err := proto.Unmarshal(unpacked[1], rel)
+        if relBytes != nil && len(relBytes) > 0 {
+    		rel := &PlayerRelated{}
+			err := proto.Unmarshal(relBytes, rel)
 			if err != nil {
 				return nil, err
 			}

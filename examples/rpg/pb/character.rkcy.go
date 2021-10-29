@@ -26,16 +26,20 @@ func (inst *Character) Key() string {
 	return inst.Id
 }
 
-func CharacterGetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*CharacterRelatedConcerns, error) {
-	relCnc := &CharacterRelatedConcerns{}
+func (rel *CharacterRelated) Key() string {
+     return rel.Id
+}
+
+func CharacterGetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*CharacterRelated, []byte, error) {
+	relCnc := &CharacterRelated{}
 	relCncBytes := instanceStore.GetRelated(instKey)
 	if relCncBytes != nil {
 		err := proto.Unmarshal(relCncBytes, relCnc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-    return relCnc, nil
+    return relCnc, relCncBytes, nil
 }
 
 func MarshalCharacterOrPanic(inst *Character) []byte {
@@ -65,16 +69,16 @@ type CharacterLogicHandler interface {
 	ValidateCreate(ctx context.Context, inst *Character) (*Character, error)
 	ValidateUpdate(ctx context.Context, original *Character, updated *Character) (*Character, error)
 
-	Fund(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
-	DebitFunds(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
-	CreditFunds(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, payload *FundingRequest) (*Character, error)
+	Fund(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
+	DebitFunds(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
+	CreditFunds(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
 }
 
 // CrudHandler Interface
 type CharacterCrudHandler interface {
-	Read(ctx context.Context, key string) (*Character, *CharacterRelatedConcerns, *rkcy.CompoundOffset, error)
+	Read(ctx context.Context, key string) (*Character, *CharacterRelated, *rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *Character, cmpdOffset *rkcy.CompoundOffset) (*Character, error)
-	Update(ctx context.Context, inst *Character, relCnc *CharacterRelatedConcerns, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Character, related *CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -161,12 +165,12 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 		case rkcy.UPDATE:
 			if direction == rkcy.Direction_FORWARD {
 				if !bytes.Equal(args.Payload, args.Instance) {
-					relCnc, err := CharacterGetRelated(args.Key, instanceStore)
+					rel, relBytes, err := CharacterGetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(args.Payload)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(args.Payload, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -249,12 +253,12 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				if !bytes.Equal(instSer, args.Instance) {
-					relCnc, err := CharacterGetRelated(args.Key, instanceStore)
+					rel, relBytes, err := CharacterGetRelated(args.Key, instanceStore)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
 	                }
-                    relSteps, err := relCnc.RefreshRelatedStepsDUMMY(instSer)
+                    relSteps, err := rel.RefreshRelatedStepsDUMMY(instSer, relBytes)
 	                if err != nil {
 	                    rslt.SetResult(err)
 	                    return rslt, nil
@@ -272,22 +276,23 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := CharacterGetRelated(args.Key, instanceStore)
+				rel, _, err := CharacterGetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related request to see if it fulfills any of our related items
-                changed, err := relCnc.HandleRequestRelatedDUMMY(relReq)
+                changed, err := rel.HandleRequestRelatedDUMMY(relReq)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
+                relPayload := rkcy.PackPayloads(args.Instance, relBytes)
                 if changed {
                     err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 					if err != nil {
@@ -299,7 +304,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 				relRsp := &rkcy.RelatedResponse{
                     Concern: "Character",
 					Field:   relReq.Field,
-					Payload: args.Instance,
+					Payload: relPayload,
 				}
 				relRspBytes, err := proto.Marshal(relRsp)
 				if err != nil {
@@ -328,27 +333,29 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					return rslt, nil
 				}
                 // Get our related concerns from instanceStore
-				relCnc, err := CharacterGetRelated(args.Key, instanceStore)
+				rel, _, err := CharacterGetRelated(args.Key, instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
                 // Handle refresh related response
-                err = relCnc.HandleRefreshRelatedDUMMY(relRsp)
+                changed, err := rel.HandleRefreshRelatedDUMMY(relRsp)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-   				relBytes, err := proto.Marshal(relCnc)
+   				relBytes, err := proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
-				if err != nil {
-					rslt.SetResult(err)
-					return rslt, nil
-				}
+                if changed {
+	                err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt, nil
+					}
+                }
 				rslt.Payload = rkcy.PackPayloads(args.Instance, relBytes)
 			}
 		case "Fund":
@@ -363,7 +370,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relCnc, err := CharacterGetRelated(inst.Key(), instanceStore)
+				rel, _, err := CharacterGetRelated(inst.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
@@ -374,7 +381,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				payloadOut, err := cncHdlr.logicHandler.Fund(ctx, inst, relCnc, payloadIn)
+				payloadOut, err := cncHdlr.logicHandler.Fund(ctx, inst, rel, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -407,7 +414,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relCnc, err := CharacterGetRelated(inst.Key(), instanceStore)
+				rel, _, err := CharacterGetRelated(inst.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
@@ -418,7 +425,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				payloadOut, err := cncHdlr.logicHandler.DebitFunds(ctx, inst, relCnc, payloadIn)
+				payloadOut, err := cncHdlr.logicHandler.DebitFunds(ctx, inst, rel, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -451,7 +458,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relCnc, err := CharacterGetRelated(inst.Key(), instanceStore)
+				rel, _, err := CharacterGetRelated(inst.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
@@ -462,7 +469,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				payloadOut, err := cncHdlr.logicHandler.CreditFunds(ctx, inst, relCnc, payloadIn)
+				payloadOut, err := cncHdlr.logicHandler.CreditFunds(ctx, inst, rel, payloadIn)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -554,7 +561,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 						},
 					)
                     // Request related refresh messages from our related concerns
-                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload)
+                    reqRfshSteps, err := payloadOut.RequestRelatedStepsDUMMY(rslt.Payload, nil)
                     if err != nil {
                         errDel := handler.Delete(ctx, payloadOut.Key(), args.CmpdOffset)
                         if errDel != nil {
@@ -576,8 +583,8 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 		case rkcy.READ:
 			{
 				var inst *Character
-				var relCnc *CharacterRelatedConcerns
-				inst, relCnc, rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
+				var rel *CharacterRelated
+				inst, rel, rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -588,7 +595,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				var relBytes []byte
-				relBytes, err = proto.Marshal(relCnc)
+				relBytes, err = proto.Marshal(rel)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -614,12 +621,12 @@ func (cncHdlr *CharacterConcernHandler) HandleCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relCnc, err := CharacterGetRelated(payloadIn.Key(), instanceStore)
+				rel, _, err := CharacterGetRelated(payloadIn.Key(), instanceStore)
                 if err != nil {
                     rslt.SetResult(err)
                     return rslt, nil
                 }
-				err = handler.Update(ctx, payloadIn, relCnc, args.CmpdOffset)
+				err = handler.Update(ctx, payloadIn, rel, args.CmpdOffset)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -661,21 +668,21 @@ func (*CharacterConcernHandler) DecodeInstance(
 		}
         resProto.Instance = inst
     } else {
-        unpacked, err := rkcy.UnpackPayloads(buffer)
+        instBytes, relBytes, err := rkcy.UnpackPayloads(buffer)
         if err != nil {
             return nil, err
         }
 
 		inst := &Character{}
-		err = proto.Unmarshal(unpacked[0], inst)
+		err = proto.Unmarshal(instBytes, inst)
 		if err != nil {
 			return nil, err
 		}
         resProto.Instance = inst
 
-        if unpacked[1] != nil && len(unpacked[1]) > 0 {
-    		rel := &CharacterRelatedConcerns{}
-			err := proto.Unmarshal(unpacked[1], rel)
+        if relBytes != nil && len(relBytes) > 0 {
+    		rel := &CharacterRelated{}
+			err := proto.Unmarshal(relBytes, rel)
 			if err != nil {
 				return nil, err
 			}

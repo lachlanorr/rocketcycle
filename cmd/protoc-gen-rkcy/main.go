@@ -6,6 +6,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -42,12 +43,14 @@ type catalog struct {
 }
 
 type message struct {
-	Name      string
-	FilePb    *descriptorpb.FileDescriptorProto
-	MsgPb     *descriptorpb.DescriptorProto
-	KeyField  string
-	IsConfig  bool
-	IsConcern bool
+	Name       string
+	FilePb     *descriptorpb.FileDescriptorProto
+	MsgPb      *descriptorpb.DescriptorProto
+	KeyField   string
+	KeyFieldGo string
+	IsConfig   bool
+	IsConcern  bool
+	IsRelated  bool
 }
 
 type service struct {
@@ -62,23 +65,26 @@ type config struct {
 }
 
 type concern struct {
-	Name        string
-	Msg         *message
-	RelConfigs  *related
-	RelConcerns *related
-	Svc         *service
-	Commands    []*command
+	Name     string
+	Msg      *message
+	Svc      *service
+	Related  *related
+	Commands []*command
 }
 
 type related struct {
 	Msg    *message
-	Fields []*messageField
+	Fields []*relatedField
 }
 
-type messageField struct {
-	Name    string
-	Msg     *message
-	FieldPb *descriptorpb.FieldDescriptorProto
+type relatedField struct {
+	Name       string
+	NameGo     string
+	TypeMsg    *message
+	IdField    string
+	IsReverse  bool
+	PairedWith *relatedField
+	FieldPb    *descriptorpb.FieldDescriptorProto
 }
 
 type command struct {
@@ -101,52 +107,140 @@ func debugPrintMessage(msg proto.Message) {
 	printError(reqJson)
 }
 
-func buildRelated(cat *catalog, msg *message, pkg string) (*related, error) {
+func printCatalogDestructive(cat *catalog) {
+	for _, msg := range cat.MessageMap {
+		msg.FilePb = nil
+		msg.MsgPb = nil
+	}
+
+	for _, svc := range cat.ServiceMap {
+		svc.FilePb = nil
+		svc.SvcPb = nil
+	}
+
+	for _, cnc := range cat.Concerns {
+		if cnc.Related != nil {
+			for _, fld := range cnc.Related.Fields {
+				fld.FieldPb = nil
+			}
+		}
+	}
+
+	b, err := json.MarshalIndent(cat, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	printError(string(b))
+
+	printError("Exiting after printCatalogDestructive!!!!!")
+	os.Exit(1)
+}
+
+func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*related, error) {
+	var err error
+	msg.KeyField, msg.KeyFieldGo, err = findKeyField(msg.MsgPb)
+	if err != nil {
+		return nil, err
+	}
+
 	rel := &related{
 		Msg: msg,
 	}
+	msg.IsRelated = true
+	cnc.Related = rel
 	pkgPrefix := fmt.Sprintf(".%s.", pkg)
 
 	if len(msg.MsgPb.Field) == 0 {
 		return nil, fmt.Errorf("Related message has no fields: %s", msg.Name)
 	}
 	for _, pbField := range msg.MsgPb.Field {
+		if *pbField.Name == msg.KeyField {
+			continue // skip id field
+		}
 		if *pbField.Type != descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
 			return nil, fmt.Errorf("Related field is not a message type: %s.%s", msg.Name, *pbField.Name)
 		}
+
+		field := &relatedField{
+			Name:    *pbField.Name,
+			NameGo:  GoCamelCase(*pbField.Name),
+			FieldPb: pbField,
+		}
+
+		var ok bool
 		fieldType := strings.TrimPrefix(*pbField.TypeName, pkgPrefix)
-		fieldMsg, ok := cat.MessageMap[fieldType]
+		field.TypeMsg, ok = cat.MessageMap[fieldType]
+		if !field.TypeMsg.IsConcern && !field.TypeMsg.IsConfig && !field.TypeMsg.IsRelated {
+			return nil, fmt.Errorf("Related field not a concern, config, or related message %s.%s", msg.Name, *pbField.Name)
+		}
+
+		rltn := proto.GetExtension(pbField.Options, rkcy.E_Relation).(*rkcy.Relation)
+		if rltn == nil {
+			return nil, fmt.Errorf("Related field lacking 'rkcy.relation' option: %s.%s", msg.Name, *pbField.Name)
+		}
+
+		if rltn.IdField != "" && rltn.RelatedIdField == "" && rltn.PairedWith == "" {
+			field.IdField = rltn.IdField
+			idFld := findField(cnc.Msg.MsgPb, field.IdField)
+			if idFld == nil {
+				return nil, fmt.Errorf("Related id field not found: %s.%s", msg.Name, field.IdField)
+			}
+		} else if rltn.RelatedIdField != "" && rltn.IdField == "" && rltn.PairedWith == "" {
+			field.IdField = rltn.RelatedIdField
+			field.IsReverse = true
+			idFld := findField(field.TypeMsg.MsgPb, field.IdField)
+			if idFld == nil {
+				return nil, fmt.Errorf("Related id field not found: %s.%s", msg.Name, field.IdField)
+			}
+		} else if rltn.PairedWith != "" && rltn.IdField == "" && rltn.RelatedIdField == "" {
+			for _, fld := range rel.Fields {
+				if fld.Name == rltn.PairedWith {
+					field.PairedWith = fld
+				}
+			}
+			if field.PairedWith == nil {
+				return nil, fmt.Errorf("Paired field not found: %s.%s", msg.Name, *pbField.Name)
+			}
+		} else {
+			return nil, fmt.Errorf("Invalid rkcy.relation options: %s.%s", msg.Name, *pbField.Name)
+		}
+
 		if !ok {
 			return nil, fmt.Errorf("Related field type not found: %s.%s, type: %s", msg.Name, *pbField.Name, fieldType)
 		}
-		rel.Fields = append(rel.Fields, &messageField{
-			Name:    *pbField.Name,
-			Msg:     fieldMsg,
-			FieldPb: pbField,
-		})
+		rel.Fields = append(rel.Fields, field)
 	}
+
 	return rel, nil
 }
 
-func findKeyField(pbMsg *descriptorpb.DescriptorProto) (string, error) {
+func findField(pbMsg *descriptorpb.DescriptorProto, fieldName string) *descriptorpb.FieldDescriptorProto {
+	for _, pbField := range pbMsg.Field {
+		if *pbField.Name == fieldName {
+			return pbField
+		}
+	}
+	return nil
+}
+
+func findKeyField(pbMsg *descriptorpb.DescriptorProto) (string, string, error) {
 	keyField := ""
 	for _, pbField := range pbMsg.Field {
 		if proto.GetExtension(pbField.Options, rkcy.E_IsKey).(bool) {
 			if *pbField.Type != descriptorpb.FieldDescriptorProto_TYPE_STRING {
-				return "", fmt.Errorf("Non string field with is_key=true: %s.s", *pbMsg.Name, *pbField.Name)
+				return "", "", fmt.Errorf("Non string field with is_key=true: %s.%ss", *pbMsg.Name, *pbField.Name)
 			}
 			if keyField == "" {
-				jsonName := *pbField.JsonName
-				keyField = strings.ToUpper(string(jsonName[0])) + jsonName[1:]
+				keyField = *pbField.Name
 			} else {
-				return "", fmt.Errorf("Multiple fields with is_key=true: %s.s and %s.s", *pbMsg.Name, keyField, *pbField.Name)
+				return "", "", fmt.Errorf("Multiple fields with is_key=true: %s.s and %s.%ss", *pbMsg.Name, keyField, *pbField.Name)
 			}
 		}
 	}
 	if keyField == "" {
-		return "", fmt.Errorf("No field found with is_key=true: %s", *pbMsg.Name)
+		return "", "", fmt.Errorf("No field found with is_key=true: %s", *pbMsg.Name)
 	}
-	return keyField, nil
+	return keyField, GoCamelCase(keyField), nil
 }
 
 func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error) {
@@ -171,7 +265,7 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 			}
 			if msg.IsConfig || msg.IsConcern {
 				var err error
-				msg.KeyField, err = findKeyField(pbMsg)
+				msg.KeyField, msg.KeyFieldGo, err = findKeyField(pbMsg)
 				if err != nil {
 					return nil, err
 				}
@@ -203,56 +297,32 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 
 	// Second pass through concerns to rind associated messages and services
 	for _, cnc := range cat.Concerns {
-
-		// RelatedConfigs
-		relConfsName := cnc.Name + "RelatedConfigs"
-		relConfs, ok := cat.MessageMap[relConfsName]
+		// Related
+		relName := cnc.Name + "Related"
+		relMsg, ok := cat.MessageMap[relName]
 		if ok {
 			var err error
-			cnc.RelConfigs, err = buildRelated(cat, relConfs, *relConfs.FilePb.Package)
+			cnc.Related, err = buildRelated(cat, cnc, relMsg, *relMsg.FilePb.Package)
 			if err != nil {
 				return nil, err
-			}
-
-			for _, field := range cnc.RelConfigs.Fields {
-				if !field.Msg.IsConfig {
-					return nil, fmt.Errorf("RelatedConfigs field not a config %s.%s", cnc.RelConfigs.Msg.Name, field.Name)
-				}
-			}
-		}
-
-		// RelatedConcerns
-		relCncsName := cnc.Name + "RelatedConcerns"
-		relCncs, ok := cat.MessageMap[relCncsName]
-		if ok {
-			var err error
-			cnc.RelConcerns, err = buildRelated(cat, relCncs, *relCncs.FilePb.Package)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, field := range cnc.RelConcerns.Fields {
-				if !field.Msg.IsConcern {
-					return nil, fmt.Errorf("RelatedConcerns field not a concern %s.%s", cnc.RelConcerns.Msg.Name, field.Name)
-				}
 			}
 		}
 
 		// Commands service methods
-		cmdsName := cnc.Name + "Commands"
-		cmdsSvc, ok := cat.ServiceMap[cmdsName]
+		logicName := cnc.Name + "Logic"
+		logicSvc, ok := cat.ServiceMap[logicName]
 		if ok {
-			cnc.Svc = cmdsSvc
-			for _, method := range cmdsSvc.SvcPb.Method {
+			cnc.Svc = logicSvc
+			for _, method := range logicSvc.SvcPb.Method {
 				if rkcy.IsReservedCommandName(*method.Name) {
-					return nil, fmt.Errorf("Reserved name used as Command: %s.%s", cmdsSvc.Name, *method.Name)
+					return nil, fmt.Errorf("Reserved name used as Command: %s.%s", logicSvc.Name, *method.Name)
 				}
 
 				cmd := &command{}
 
 				cmd.Name = *method.Name
 
-				typePrefix := *cmdsSvc.FilePb.Package + "."
+				typePrefix := *logicSvc.FilePb.Package + "."
 
 				if *method.InputType != ".rkcy.Void" {
 					cmd.HasInput = true
@@ -382,6 +452,8 @@ func main() {
 		panic(err)
 	}
 
+	//printCatalogDestructive(cat)
+
 	// print some debug info
 	if len(cat.Configs) > 0 {
 		printError("Compiling Configs:")
@@ -396,11 +468,8 @@ func main() {
 			if cnc.Svc != nil {
 				assoc = append(assoc, cnc.Svc.Name)
 			}
-			if cnc.RelConfigs != nil {
-				assoc = append(assoc, cnc.RelConfigs.Msg.Name)
-			}
-			if cnc.RelConcerns != nil {
-				assoc = append(assoc, cnc.RelConcerns.Msg.Name)
+			if cnc.Related != nil {
+				assoc = append(assoc, cnc.Related.Msg.Name)
 			}
 			withClause := ""
 			if len(assoc) > 0 {

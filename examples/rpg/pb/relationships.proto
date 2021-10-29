@@ -12,14 +12,13 @@ import "rkcy/extensions.proto";
 import "player.proto";
 import "character.proto";
 
-message PlayerRelatedConcerns {
-    repeated Character characters = 1 [(rkcy.rel_concern) = {id_field:"player_id", is_remote:true}];
+message PlayerRelated {
+    string id                     = 1 [(rkcy.is_key) = true];
+    repeated Character characters = 2 [(rkcy.relation) = {related_id_field:"player_id"}];
+    Limits limits                 = 3 [(rkcy.relation) = {id_field:"limits_id"}];
 }
 
-message PlayerRelatedConfigs {
-    Limits limit = 1 [(rkcy.rel_concern) = {id_field:"limit_id"}];
-}
-
-message CharacterRelatedConcerns {
-    Player player = 1 [(rkcy.rel_concern) = {id_field:"player_id"}];
+message CharacterRelated {
+    string id     = 1 [(rkcy.is_key) = true];
+    Player player = 2 [(rkcy.relation) = {id_field:"player_id"}];
 }

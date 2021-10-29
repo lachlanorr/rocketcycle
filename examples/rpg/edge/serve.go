@@ -90,7 +90,7 @@ func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerRespo
 		rkcy.RecordSpanError(span, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &PlayerResponse{Player: resProto.Instance.(*pb.Player), Related: resProto.Related.(*pb.PlayerRelatedConcerns)}, nil
+	return &PlayerResponse{Player: resProto.Instance.(*pb.Player), Related: resProto.Related.(*pb.PlayerRelated)}, nil
 }
 
 func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
@@ -158,7 +158,7 @@ func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*Characte
 		rkcy.RecordSpanError(span, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &CharacterResponse{Character: resProto.Instance.(*pb.Character), Related: resProto.Related.(*pb.CharacterRelatedConcerns)}, nil
+	return &CharacterResponse{Character: resProto.Instance.(*pb.Character), Related: resProto.Related.(*pb.CharacterRelated)}, nil
 }
 
 func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
