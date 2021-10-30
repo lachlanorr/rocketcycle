@@ -1026,18 +1026,92 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) DecodeRelatedRequest(
 	ctx context.Context,
 	relReq *rkcy.RelatedRequest,
 ) (*rkcy.ResultProto, error) {
-	return &rkcy.ResultProto{
-		Type: "{{ $cnc.Name }} Note: need to add this to codegen!!!",
-	}, nil
+	{{- if $cnc.Related.HasPureRelCncs }}
+	resProto := &rkcy.ResultProto{}
+
+	switch relReq.Field {
+	{{- range $relFld := $cnc.Related.Fields }}
+	{{- if $relFld.IsPureRelCnc }}
+	case "{{ $relFld.RelFieldGo }}":
+		if relReq.Concern == "{{ $relFld.TypeMsg.Name }}" {
+			resProto.Type = "{{ $relFld.TypeMsg.Name }}"
+
+			instBytes, relBytes, err := rkcy.UnpackPayloads(relReq.Payload)
+			if err != nil {
+				return nil, err
+			}
+			inst := &{{ $relFld.TypeMsg.Name }}{}
+			err = proto.Unmarshal(instBytes, inst)
+			if err != nil {
+				return nil, err
+			}
+			resProto.Instance = inst
+
+			if relBytes != nil {
+				rel := &{{ $relFld.TypeMsg.Name }}Related{}
+				err = proto.Unmarshal(relBytes, rel)
+				if err != nil {
+					return nil, err
+				}
+				resProto.Related = rel
+			}
+		} else {
+			return nil, fmt.Errorf("DecodeRelatedRequest: Invalid type '%s' for field {{ $relFld.NameGo }}, expecting '{{ $relFld.TypeMsg.Name }}'", relReq.Concern)
+		}
+	{{- end }}
+	{{- end }}
+	default:
+		return nil, fmt.Errorf("DecodeRelatedRequest: Invalid field '%s''", relReq.Field)
+	}
+	return resProto, nil
+	{{- else }}
+	// No 'pure' reverse relations, so we should never be decoding
+	return nil, fmt.Errorf("DecodeRelatedRequest: Invalid concern")
+	{{- end }}
 }
 
 func (cncHdlr *{{ $cnc.Name }}ConcernHandler) DecodeRelatedResponse(
 	ctx context.Context,
 	relRsp *rkcy.RelatedResponse,
 ) (*rkcy.ResultProto, error) {
-	return &rkcy.ResultProto{
-		Type: "{{ $cnc.Name }} Note: need to add this to codegen!!!",
-	}, nil
+	resProto := &rkcy.ResultProto{}
+
+	switch relRsp.Field {
+	{{- range $relFld := $cnc.Related.Fields }}
+	{{- if $relFld.TypeMsg.IsConcern }}
+	case "{{ $relFld.NameGo }}":
+		if relRsp.Concern == "{{ $relFld.TypeMsg.Name }}" {
+			resProto.Type = "{{ $relFld.TypeMsg.Name }}"
+
+			instBytes, relBytes, err := rkcy.UnpackPayloads(relRsp.Payload)
+			if err != nil {
+				return nil, err
+			}
+			inst := &{{ $relFld.TypeMsg.Name }}{}
+			err = proto.Unmarshal(instBytes, inst)
+			if err != nil {
+				return nil, err
+			}
+			resProto.Instance = inst
+
+			if relBytes != nil {
+				rel := &{{ $relFld.TypeMsg.Name }}Related{}
+				err = proto.Unmarshal(relBytes, rel)
+				if err != nil {
+					return nil, err
+				}
+				resProto.Related = rel
+			}
+		} else {
+			return nil, fmt.Errorf("DecodeRelatedResponse: Invalid type '%s' for field {{ $relFld.NameGo }}, expecting '{{ $relFld.TypeMsg.Name }}'", relRsp.Concern)
+		}
+	{{- end }}
+	{{- end }}
+	default:
+		return nil, fmt.Errorf("DecodeRelatedResponse: Invalid field '%s''", relRsp.Field)
+	}
+
+	return resProto, nil
 }
 
 // -----------------------------------------------------------------------------

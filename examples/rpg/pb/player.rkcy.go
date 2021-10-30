@@ -312,7 +312,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 						rslt.SetResult(err)
 						return rslt, nil
 					}
-					relSteps, err := rel.RefreshRelatedSteps(args.Payload, relBytes) // dummy
+					relSteps, err := rel.RefreshRelatedSteps(args.Payload, relBytes)
 					if err != nil {
 						rslt.SetResult(err)
 						return rslt, nil
@@ -402,7 +402,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 						rslt.SetResult(err)
 						return rslt, nil
 					}
-					relSteps, err := rel.RefreshRelatedSteps(instSer, relBytes) // dummy
+					relSteps, err := rel.RefreshRelatedSteps(instSer, relBytes)
 					if err != nil {
 						rslt.SetResult(err)
 						return rslt, nil
@@ -428,7 +428,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				// Handle refresh related request to see if it fulfills any of our related items
-				changed, err := rel.HandleRequestRelated(relReq) // dummy
+				changed, err := rel.HandleRequestRelated(relReq)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -575,7 +575,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCommand(
 						},
 					)
 					// Request related refresh messages from our related concerns
-					relSteps, err := payloadOut.RequestRelatedSteps(rslt.Payload, nil) // dummy
+					relSteps, err := payloadOut.RequestRelatedSteps(rslt.Payload, nil)
 					if err != nil {
 						errDel := handler.Delete(ctx, payloadOut.Key(), args.CmpdOffset)
 						if errDel != nil {
@@ -812,18 +812,79 @@ func (cncHdlr *PlayerConcernHandler) DecodeRelatedRequest(
 	ctx context.Context,
 	relReq *rkcy.RelatedRequest,
 ) (*rkcy.ResultProto, error) {
-	return &rkcy.ResultProto{
-		Type: "Player Note: need to add this to codegen!!!",
-	}, nil
+	resProto := &rkcy.ResultProto{}
+
+	switch relReq.Field {
+	case "Player":
+		if relReq.Concern == "Character" {
+			resProto.Type = "Character"
+
+			instBytes, relBytes, err := rkcy.UnpackPayloads(relReq.Payload)
+			if err != nil {
+				return nil, err
+			}
+			inst := &Character{}
+			err = proto.Unmarshal(instBytes, inst)
+			if err != nil {
+				return nil, err
+			}
+			resProto.Instance = inst
+
+			if relBytes != nil {
+				rel := &CharacterRelated{}
+				err = proto.Unmarshal(relBytes, rel)
+				if err != nil {
+					return nil, err
+				}
+				resProto.Related = rel
+			}
+		} else {
+			return nil, fmt.Errorf("DecodeRelatedRequest: Invalid type '%s' for field Characters, expecting 'Character'", relReq.Concern)
+		}
+	default:
+		return nil, fmt.Errorf("DecodeRelatedRequest: Invalid field '%s''", relReq.Field)
+	}
+	return resProto, nil
 }
 
 func (cncHdlr *PlayerConcernHandler) DecodeRelatedResponse(
 	ctx context.Context,
 	relRsp *rkcy.RelatedResponse,
 ) (*rkcy.ResultProto, error) {
-	return &rkcy.ResultProto{
-		Type: "Player Note: need to add this to codegen!!!",
-	}, nil
+	resProto := &rkcy.ResultProto{}
+
+	switch relRsp.Field {
+	case "Characters":
+		if relRsp.Concern == "Character" {
+			resProto.Type = "Character"
+
+			instBytes, relBytes, err := rkcy.UnpackPayloads(relRsp.Payload)
+			if err != nil {
+				return nil, err
+			}
+			inst := &Character{}
+			err = proto.Unmarshal(instBytes, inst)
+			if err != nil {
+				return nil, err
+			}
+			resProto.Instance = inst
+
+			if relBytes != nil {
+				rel := &CharacterRelated{}
+				err = proto.Unmarshal(relBytes, rel)
+				if err != nil {
+					return nil, err
+				}
+				resProto.Related = rel
+			}
+		} else {
+			return nil, fmt.Errorf("DecodeRelatedResponse: Invalid type '%s' for field Characters, expecting 'Character'", relRsp.Concern)
+		}
+	default:
+		return nil, fmt.Errorf("DecodeRelatedResponse: Invalid field '%s''", relRsp.Field)
+	}
+
+	return resProto, nil
 }
 
 // -----------------------------------------------------------------------------
