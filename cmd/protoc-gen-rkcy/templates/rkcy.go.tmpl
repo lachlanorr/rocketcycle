@@ -432,7 +432,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 						rslt.SetResult(err)
 						return rslt, nil
 					}
-					relSteps, err := rel.RefreshRelatedSteps(args.Payload, relBytes) // dummy
+					relSteps, err := rel.RefreshRelatedSteps(args.Payload, relBytes)
 					if err != nil {
 						rslt.SetResult(err)
 						return rslt, nil
@@ -524,7 +524,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 						rslt.SetResult(err)
 						return rslt, nil
 					}
-					relSteps, err := rel.RefreshRelatedSteps(instSer, relBytes) // dummy
+					relSteps, err := rel.RefreshRelatedSteps(instSer, relBytes)
 					if err != nil {
 						rslt.SetResult(err)
 						return rslt, nil
@@ -552,7 +552,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					return rslt, nil
 				}
 				// Handle refresh related request to see if it fulfills any of our related items
-				changed, err := rel.HandleRequestRelated(relReq) // dummy
+				changed, err := rel.HandleRequestRelated(relReq)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -754,7 +754,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleCommand(
 					)
 					{{- if $cnc.Related }}
 					// Request related refresh messages from our related concerns
-					relSteps, err := payloadOut.RequestRelatedSteps(rslt.Payload, nil) // dummy
+					relSteps, err := payloadOut.RequestRelatedSteps(rslt.Payload, nil)
 					if err != nil {
 						errDel := handler.Delete(ctx, payloadOut.Key(), args.CmpdOffset)
 						if errDel != nil {
