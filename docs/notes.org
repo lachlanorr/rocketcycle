@@ -16,6 +16,14 @@ In addition to Process and Storage, add an IO system
 It would have it's own dedicated topics and consumers
 Designed for long running IO tasks
 Is it now called APEICS??
+** Respect Timeout in ExecuteTxnSync
+- Put the timeout as a field on ApecsTxn
+- When processing txns, if this field is expired, immediately fail
+- Generated storage steps must never have a timeout
+- When this is in place, already timed out requests will drain quickly
+- Add a timeout result code so these are easy to identify in error topics
+** Daylight savings time
+Think through ramifications when everything is in utc
 ** Datacenter awareness improvements
 *** Newer idea, keeping below for context
 - Runner starts distinct consumers in each DC, duplicating them against partitions
