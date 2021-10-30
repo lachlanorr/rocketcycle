@@ -14,11 +14,11 @@ import "character.proto";
 
 message PlayerRelated {
     string id                     = 1 [(rkcy.is_key) = true];
-    repeated Character characters = 2 [(rkcy.relation) = {related_id_field:"player_id"}];
+    repeated Character characters = 2 [(rkcy.relation) = {rel_field:"player"}];
     Limits limits                 = 3 [(rkcy.relation) = {id_field:"limits_id"}];
 }
 
 message CharacterRelated {
     string id     = 1 [(rkcy.is_key) = true];
-    Player player = 2 [(rkcy.relation) = {id_field:"player_id"}];
+    Player player = 2 [(rkcy.relation) = {id_field:"player_id", rel_field:"characters"}];
 }

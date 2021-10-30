@@ -73,17 +73,31 @@ type concern struct {
 }
 
 type related struct {
-	Msg    *message
-	Fields []*relatedField
+	Msg            *message
+	Fields         []*relatedField
+	HasFwdCncs     bool
+	HasRvsCncs     bool
+	HasPureRelCncs bool
+	HasConfigs     bool
 }
 
 type relatedField struct {
 	Name       string
 	NameGo     string
 	TypeMsg    *message
-	IdField    string
-	IsReverse  bool
+	TypeMsgRel *message
+
+	IdField   string
+	IdFieldGo string
+
+	RelField   string
+	RelFieldGo string
+
+	IsPureRelCnc bool
+
 	PairedWith *relatedField
+
+	IsRepeated bool
 	FieldPb    *descriptorpb.FieldDescriptorProto
 }
 
@@ -146,7 +160,6 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 	rel := &related{
 		Msg: msg,
 	}
-	msg.IsRelated = true
 	cnc.Related = rel
 	pkgPrefix := fmt.Sprintf(".%s.", pkg)
 
@@ -167,11 +180,35 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 			FieldPb: pbField,
 		}
 
+		if pbField.Label != nil && *pbField.Label == descriptorpb.FieldDescriptorProto_LABEL_REPEATED {
+			field.IsRepeated = true
+		}
+
+		// find TypeMsg
 		var ok bool
 		fieldType := strings.TrimPrefix(*pbField.TypeName, pkgPrefix)
 		field.TypeMsg, ok = cat.MessageMap[fieldType]
+		if !ok {
+			return nil, fmt.Errorf("Related field type not found: %s.%s", msg.Name, *pbField.Name)
+		}
 		if !field.TypeMsg.IsConcern && !field.TypeMsg.IsConfig && !field.TypeMsg.IsRelated {
-			return nil, fmt.Errorf("Related field not a concern, config, or related message %s.%s", msg.Name, *pbField.Name)
+			return nil, fmt.Errorf("Related field not a concern, config, or related message: %s.%s", msg.Name, *pbField.Name)
+		}
+
+		// find TypeMsg's Related message
+		if field.TypeMsg.IsConcern {
+			fieldTypeRel := fieldType + "Related"
+			field.TypeMsgRel, ok = cat.MessageMap[fieldTypeRel]
+			if !ok {
+				return nil, fmt.Errorf("Related concern has no related data: %s.%s", msg.Name, *pbField.Name)
+			}
+			if !field.TypeMsgRel.IsRelated {
+				return nil, fmt.Errorf("Related concern's related data is not a related message: %s.%s", msg.Name, *pbField.Name)
+			}
+		}
+
+		if field.TypeMsg.IsConfig {
+			rel.HasConfigs = true
 		}
 
 		rltn := proto.GetExtension(pbField.Options, rkcy.E_Relation).(*rkcy.Relation)
@@ -179,20 +216,43 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 			return nil, fmt.Errorf("Related field lacking 'rkcy.relation' option: %s.%s", msg.Name, *pbField.Name)
 		}
 
-		if rltn.IdField != "" && rltn.RelatedIdField == "" && rltn.PairedWith == "" {
+		if rltn.IdField != "" {
 			field.IdField = rltn.IdField
+			field.IdFieldGo = GoCamelCase(rltn.IdField)
+
+			if field.TypeMsg.IsConcern {
+				rel.HasFwdCncs = true
+			}
+
 			idFld := findField(cnc.Msg.MsgPb, field.IdField)
 			if idFld == nil {
-				return nil, fmt.Errorf("Related id field not found: %s.%s", msg.Name, field.IdField)
+				return nil, fmt.Errorf("Related id_field field not found: %s.%s", msg.Name, field.IdField)
 			}
-		} else if rltn.RelatedIdField != "" && rltn.IdField == "" && rltn.PairedWith == "" {
-			field.IdField = rltn.RelatedIdField
-			field.IsReverse = true
-			idFld := findField(field.TypeMsg.MsgPb, field.IdField)
+		}
+		if rltn.RelField != "" {
+			field.RelField = rltn.RelField
+			field.RelFieldGo = GoCamelCase(rltn.RelField)
+
+			if field.TypeMsg.IsConcern {
+				rel.HasRvsCncs = true
+				if rltn.IdField == "" {
+					rel.HasPureRelCncs = true
+					field.IsPureRelCnc = true
+				}
+			}
+
+			idFld := findField(field.TypeMsg.MsgPb, field.RelField)
 			if idFld == nil {
-				return nil, fmt.Errorf("Related id field not found: %s.%s", msg.Name, field.IdField)
+				relIdFld := findField(field.TypeMsgRel.MsgPb, field.RelField)
+				if relIdFld == nil {
+					return nil, fmt.Errorf("Related rel_id_field not found: %s.%s", msg.Name, field.RelField)
+				}
 			}
-		} else if rltn.PairedWith != "" && rltn.IdField == "" && rltn.RelatedIdField == "" {
+		}
+		if rltn.PairedWith != "" {
+			if rltn.IdField != "" || rltn.RelField != "" {
+				return nil, fmt.Errorf("Invalid rkcy.relation options, no id_field or rel_id_field incompatible with paird_with option: %s.%s", msg.Name, *pbField.Name)
+			}
 			for _, fld := range rel.Fields {
 				if fld.Name == rltn.PairedWith {
 					field.PairedWith = fld
@@ -202,7 +262,16 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 				return nil, fmt.Errorf("Paired field not found: %s.%s", msg.Name, *pbField.Name)
 			}
 		} else {
-			return nil, fmt.Errorf("Invalid rkcy.relation options: %s.%s", msg.Name, *pbField.Name)
+			if rltn.IdField == "" && rltn.RelField == "" {
+				return nil, fmt.Errorf("Invalid rkcy.relation options, no id_field or rel_id_field: %s.%s", msg.Name, *pbField.Name)
+			}
+		}
+
+		// couple more checks for valid relations
+		if field.IsRepeated && field.IdField != "" && field.RelField == "" {
+			return nil, fmt.Errorf("Invalid rkcy.relation options, repeated fields must have rel_id_field and no id_field: %s.%s", msg.Name, *pbField.Name)
+		} else if !field.IsRepeated && field.IdField == "" {
+			return nil, fmt.Errorf("Invalid rkcy.relation options, no id_field for non repeated field: %s.%s", msg.Name, *pbField.Name)
 		}
 
 		if !ok {
@@ -282,6 +351,10 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 					Msg:  msg,
 				}
 				cat.Concerns = append(cat.Concerns, cnc)
+			}
+
+			if strings.HasSuffix(msg.Name, "Related") && len(msg.Name) > len("Related") {
+				msg.IsRelated = true
 			}
 		}
 
