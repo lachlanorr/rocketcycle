@@ -65,7 +65,7 @@ func BuildTopicName(topicNamePrefix string, name string, generation int32) strin
 	if !IsValidName(name) {
 		log.Fatal().Msgf("Invalid topicName: %s", name)
 	}
-	if generation < 0 {
+	if generation <= 0 {
 		log.Fatal().Msgf("Invalid generation: %d", generation)
 	}
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
@@ -87,7 +87,7 @@ func BuildFullTopicName(platformName string, environment string, concernName str
 	if !IsValidName(name) {
 		log.Fatal().Msgf("Invalid topicName: %s", name)
 	}
-	if generation < 0 {
+	if generation <= 0 {
 		log.Fatal().Msgf("Invalid generation: %d", generation)
 	}
 	prefix := BuildTopicNamePrefix(platformName, environment, concernName, concernType)
