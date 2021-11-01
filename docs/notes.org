@@ -73,3 +73,14 @@ Currently some stderr is happening on broker communication issues
 - Logs should be formatted correctly to go straight into elasticsearch
 - One partition per DC
 - Apps should optionally produce logs straight to this topic
+* consumer types
+** Config consumers
+- Always read latest, never commit offsets, upon start advance to latest offset and read
+- E.g. platform, config
+** Stateless read latest
+- Always start latest, only consider new messages, never commit offsets
+- E.g. control (non-admin tasks), producer, watch
+** Full Subscribe
+- Use subscribe
+- Use partition 0 as leader election
+- E.g. control (admin task)
