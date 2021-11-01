@@ -79,6 +79,7 @@ func NewConfigMgr(
 	ctx context.Context,
 	adminBrokers string,
 	platformName string,
+	environment string,
 	wg *sync.WaitGroup,
 ) *ConfigMgr {
 	confMgr := &ConfigMgr{
@@ -90,6 +91,7 @@ func NewConfigMgr(
 		ctx,
 		adminBrokers,
 		platformName,
+		environment,
 		wg,
 	)
 
@@ -297,11 +299,12 @@ func (confMgr *ConfigMgr) manageConfigTopic(
 	ctx context.Context,
 	adminBrokers string,
 	platformName string,
+	environment string,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
 
-	configTopic := ConfigTopic(platformName)
+	configTopic := ConfigTopic(platformName, environment)
 	groupName := uncommittedGroupName(configTopic, 0)
 
 	slog := log.With().
@@ -540,7 +543,7 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 	}
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, PlatformName())
+	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, PlatformName(), Environment())
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -549,7 +552,7 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 			Msg("Failed to create platform topics")
 	}
 
-	configTopic := ConfigTopic(PlatformName())
+	configTopic := ConfigTopic(PlatformName(), Environment())
 	slog = slog.With().
 		Str("Topic", configTopic).
 		Logger()

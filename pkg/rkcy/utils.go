@@ -35,12 +35,25 @@ func NewSpanId() string {
 }
 
 func prepLogging(platformName string) {
-	if os.Getenv("RKCY_DEBUG") == "1" {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	logLevel := os.Getenv("RKCY_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
 	}
+
+	badParse := false
+	lvl, err := zerolog.ParseLevel(logLevel)
+	if err != nil {
+		lvl = zerolog.InfoLevel
+		badParse = true
+	}
+
+	zerolog.SetGlobalLevel(lvl)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
+
+	if badParse {
+		log.Error().
+			Msgf("Bad value for RKCY_LOG_LEVEL: %s", os.Getenv("RKCY_LOG_LEVEL"))
+	}
 }
 
 func contains(slice []string, item string) bool {
@@ -110,18 +123,33 @@ func GetTraceId(msg *kafka.Message) string {
 	return TraceIdFromTraceParent(GetTraceParent(msg))
 }
 
-func AdminTopic(platformName string) string {
-	return fmt.Sprintf("%s.%s.admin", RKCY, platformName)
+func PlatformTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.platform", RKCY, platformName, environment)
 }
 
-func ConfigTopic(platformName string) string {
-	return fmt.Sprintf("%s.%s.config", RKCY, platformName)
+func ConfigTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.config", RKCY, platformName, environment)
 }
 
-func createPlatformTopics(ctx context.Context, bootstrapServers string, internalName string) error {
+func ProducersTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.producers", RKCY, platformName, environment)
+}
+
+func ControlTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.control", RKCY, platformName, environment)
+}
+
+func createPlatformTopics(
+	ctx context.Context,
+	bootstrapServers string,
+	platformName string,
+	environment string,
+) error {
 	topicNames := []string{
-		AdminTopic(internalName),
-		ConfigTopic(internalName),
+		PlatformTopic(platformName, environment),
+		ConfigTopic(platformName, environment),
+		ProducersTopic(platformName, environment),
+		ControlTopic(platformName, environment),
 	}
 
 	// connect to kafka and make sure we have our platform topic

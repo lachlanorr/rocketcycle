@@ -266,11 +266,12 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 
 	adminCh := make(chan *AdminMessage)
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumePlatformTopic(
 		ctx,
 		adminCh,
 		adminBrokers,
-		gPlatformName,
+		PlatformName(),
+		Environment(),
 		Directive_PLATFORM,
 		Directive_PLATFORM,
 		kAtLastMatch,

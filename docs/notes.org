@@ -24,6 +24,8 @@ Is it now called APEICS??
 - Add a timeout result code so these are easy to identify in error topics
 ** Daylight savings time
 Think through ramifications when everything is in utc
+** Handle all kafka log callbacks
+Currently some stderr is happening on broker communication issues
 ** Datacenter awareness improvements
 *** Newer idea, keeping below for context
 - Runner starts distinct consumers in each DC, duplicating them against partitions

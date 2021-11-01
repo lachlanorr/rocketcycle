@@ -33,8 +33,8 @@ type Producer struct {
 	prodCh  ProducerCh
 	topics  *rtTopics
 
-	adminTopic  string
-	adminProdCh ProducerCh
+	platformTopic string
+	adminProdCh   ProducerCh
 
 	doneCh    chan struct{}
 	pauseCh   chan bool
@@ -76,6 +76,7 @@ func NewProducer(
 	ctx context.Context,
 	adminBrokers string,
 	platformName string,
+	environment string,
 	concernName string,
 	topicName string,
 	wg *sync.WaitGroup,
@@ -97,15 +98,16 @@ func NewProducer(
 	prod.adminCh = make(chan *AdminMessage)
 	prod.produceCh = make(chan *message)
 
-	prod.adminTopic = AdminTopic(platformName)
+	prod.platformTopic = PlatformTopic(platformName, environment)
 	prod.adminProdCh = getProducerCh(ctx, adminBrokers, wg)
 
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumePlatformTopic(
 		ctx,
 		prod.adminCh,
 		adminBrokers,
 		platformName,
+		environment,
 		Directive_PLATFORM,
 		Directive_PLATFORM,
 		kAtLastMatch,
@@ -186,7 +188,7 @@ func (prod *Producer) Close() {
 func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 	pingAdminTicker := time.NewTicker(gAdminPingInterval)
 	pingMsg, err := kafkaMessage(
-		&prod.adminTopic,
+		&prod.platformTopic,
 		0,
 		prod.producerDirective(),
 		Directive_PRODUCER_STATUS,
@@ -216,7 +218,7 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 					directive = Directive_PRODUCER_STARTED
 				}
 				msg, err := kafkaMessage(
-					&prod.adminTopic,
+					&prod.platformTopic,
 					0,
 					prod.producerDirective(),
 					directive,

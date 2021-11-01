@@ -24,7 +24,7 @@ services:
       - ./grafana_dashboards.yaml:/etc/grafana/provisioning/dashboards/grafana_dashboards.yaml
       - ./dashboards:/etc/grafana/provisioning/dashboards/dashboards
     ports:
-      - "3000:3000"
+      - "3300:3000"
 
   jaeger:
     image: jaegertracing/all-in-one:latest

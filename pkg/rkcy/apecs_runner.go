@@ -361,6 +361,7 @@ func consumeApecsTopic(
 	adminBrokers string,
 	consumerBrokers string,
 	platformName string,
+	environment string,
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
@@ -368,10 +369,10 @@ func consumeApecsTopic(
 ) {
 	defer wg.Done()
 
-	confMgr := NewConfigMgr(ctx, adminBrokers, platformName, wg)
+	confMgr := NewConfigMgr(ctx, adminBrokers, platformName, environment, wg)
 	confRdr := NewConfigRdr(confMgr)
 
-	aprod := NewApecsProducer(ctx, adminBrokers, platformName, nil, wg)
+	aprod := NewApecsProducer(ctx, adminBrokers, platformName, environment, nil, wg)
 
 	groupName := fmt.Sprintf("rkcy_apecs_%s", fullTopic)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
@@ -563,6 +564,7 @@ func startApecsRunner(
 	adminBrokers string,
 	consumerBrokers string,
 	platformName string,
+	environment string,
 	fullTopic string,
 	partition int32,
 	wg *sync.WaitGroup,
@@ -588,6 +590,7 @@ func startApecsRunner(
 		adminBrokers,
 		consumerBrokers,
 		platformName,
+		environment,
 		fullTopic,
 		partition,
 		tp,

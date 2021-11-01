@@ -71,6 +71,7 @@ type ApecsProducer struct {
 	ctx               context.Context
 	adminBrokers      string
 	platformName      string
+	environment       string
 	respTarget        *TopicTarget
 	producers         map[string]map[StandardTopicName]*Producer
 	producersMtx      sync.Mutex
@@ -88,6 +89,7 @@ func NewApecsProducer(
 	ctx context.Context,
 	adminBrokers string,
 	platformName string,
+	environment string,
 	respTarget *TopicTarget,
 	wg *sync.WaitGroup,
 ) *ApecsProducer {
@@ -95,6 +97,7 @@ func NewApecsProducer(
 		ctx:          ctx,
 		adminBrokers: adminBrokers,
 		platformName: platformName,
+		environment:  environment,
 		respTarget:   respTarget,
 
 		producers:      make(map[string]map[StandardTopicName]*Producer),
@@ -142,7 +145,7 @@ func (aprod *ApecsProducer) getProducer(
 	}
 	pdc, ok := concernProds[topicName]
 	if !ok {
-		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, concernName, string(topicName), wg)
+		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, aprod.environment, concernName, string(topicName), wg)
 
 		if pdc == nil {
 			return nil, fmt.Errorf(

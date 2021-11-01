@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -26,16 +28,35 @@ import (
 const kUndefinedPlatformName string = "__UNDEFINED__"
 
 var gPlatformName string = kUndefinedPlatformName
+var gEnvironment string
+
+var nameRe = regexp.MustCompile(`^[a-zA-Z]{2,16}$`)
+
+func IsValidName(name string) bool {
+	return nameRe.MatchString(name)
+}
 
 func initPlatformName(name string) {
 	if gPlatformName != kUndefinedPlatformName {
 		panic("Platform can be initialized only once, current name: " + gPlatformName)
 	}
 	gPlatformName = name
+	if !IsValidName(gPlatformName) {
+		log.Fatal().Msgf("Invalid platform name: %s", gPlatformName)
+	}
+
+	gEnvironment = os.Getenv("RKCY_ENVIRONMENT")
+	if !IsValidName(gEnvironment) {
+		log.Fatal().Msgf("Invalid RKCY_ENVIRONMENT: %s", gEnvironment)
+	}
 }
 
 func PlatformName() string {
 	return gPlatformName
+}
+
+func Environment() string {
+	return gEnvironment
 }
 
 // Platform pb, with some convenience lookup maps
@@ -85,7 +106,7 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 		Topics: topics,
 	}
 
-	pref := BuildTopicNamePrefix(rtPlat.Platform.Name, rtConc.Concern.Name, rtConc.Concern.Type)
+	pref := BuildTopicNamePrefix(rtPlat.Platform.Name, rtPlat.Platform.Environment, rtConc.Concern.Name, rtConc.Concern.Type)
 	var ok bool
 
 	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
@@ -161,6 +182,9 @@ func initTopics(topics *Platform_Concern_Topics, defaultCluster string, concernT
 func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	if platform.Name != PlatformName() {
 		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName())
+	}
+	if platform.Environment != Environment() {
+		return nil, fmt.Errorf("Environment mismatch, '%s' != '%s'", platform.Environment, Environment())
 	}
 
 	rtPlat := rtPlatform{
@@ -319,11 +343,12 @@ type AdminMessage struct {
 	Timestamp         time.Time
 }
 
-func consumeAdminTopic(
+func consumePlatformTopic(
 	ctx context.Context,
 	ch chan<- *AdminMessage,
 	adminBrokers string,
 	platformName string,
+	environment string,
 	match Directive,
 	startMatch Directive,
 	startMatchLoc MatchLoc,
@@ -331,16 +356,16 @@ func consumeAdminTopic(
 ) {
 	defer wg.Done()
 
-	adminTopic := AdminTopic(platformName)
-	groupName := uncommittedGroupName(adminTopic, 0)
+	platformTopic := PlatformTopic(platformName, environment)
+	groupName := uncommittedGroupName(platformTopic, 0)
 
 	slog := log.With().
-		Str("Topic", adminTopic).
+		Str("Topic", platformTopic).
 		Logger()
 
 	_, lastPlatformOff, err := FindMostRecentMatching(
 		adminBrokers,
-		adminTopic,
+		platformTopic,
 		0,
 		startMatch,
 		startMatchLoc,
@@ -366,17 +391,17 @@ func consumeAdminTopic(
 	}
 	defer func() {
 		log.Warn().
-			Str("Topic", adminTopic).
+			Str("Topic", platformTopic).
 			Msgf("Closing kafka consumer")
 		cons.Close()
 		log.Warn().
-			Str("Topic", adminTopic).
+			Str("Topic", platformTopic).
 			Msgf("Closed kafka consumer")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
-			Topic:     &adminTopic,
+			Topic:     &platformTopic,
 			Partition: 0,
 			Offset:    kafka.Offset(lastPlatformOff),
 		},
@@ -395,7 +420,7 @@ func consumeAdminTopic(
 		select {
 		case <-ctx.Done():
 			log.Warn().
-				Msg("consumeAdminTopic exiting, ctx.Done()")
+				Msg("consumePlatformTopic exiting, ctx.Done()")
 			return
 		default:
 			msg, err := cons.ReadMessage(100 * time.Millisecond)
@@ -514,7 +539,7 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, plat.Name)
+	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, plat.Name, plat.Environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -523,9 +548,9 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 			Msg("Failed to create platform topics")
 	}
 
-	adminTopic := AdminTopic(plat.Name)
+	platformTopic := PlatformTopic(plat.Name, plat.Environment)
 	slog = slog.With().
-		Str("Topic", adminTopic).
+		Str("Topic", platformTopic).
 		Logger()
 
 	// At this point we are guaranteed to have a platform admin topic
@@ -550,7 +575,7 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := kafkaMessage(&adminTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
+	msg, err := kafkaMessage(&platformTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

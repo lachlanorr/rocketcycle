@@ -21,9 +21,9 @@ type Settings struct {
 	AdminBrokers    string
 	ConsumerBrokers string
 
-	HttpAddr  string
-	GrpcAddr  string
-	AdminAddr string
+	HttpAddr   string
+	GrpcAddr   string
+	PortalAddr string
 
 	Topic     string
 	Partition int32
@@ -93,64 +93,72 @@ func runCobra(impl *PlatformImpl) {
 	// admin sub command
 	adminCmd := &cobra.Command{
 		Use:   "admin",
-		Short: "Admin server and client command",
+		Short: "Admin service that manages topics and orchestration",
+		Run:   cobraAdminServe,
 	}
 	rootCmd.AddCommand(adminCmd)
 
-	adminReadCmd := &cobra.Command{
+	// portal sub command
+	portalCmd := &cobra.Command{
+		Use:   "portal",
+		Short: "Portal rest apis and client commands",
+	}
+	rootCmd.AddCommand(portalCmd)
+
+	portalReadCmd := &cobra.Command{
 		Use:   "read",
 		Short: "read a specific resource from rest api",
 	}
-	adminReadCmd.PersistentFlags().StringVar(&gSettings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
-	adminCmd.AddCommand(adminReadCmd)
+	portalReadCmd.PersistentFlags().StringVar(&gSettings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
+	portalCmd.AddCommand(portalReadCmd)
 
-	adminReadPlatformCmd := &cobra.Command{
+	portalReadPlatformCmd := &cobra.Command{
 		Use:   "platform",
 		Short: "read the platform definition",
-		Run:   cobraAdminReadPlatform,
+		Run:   cobraPortalReadPlatform,
 	}
-	adminReadCmd.AddCommand(adminReadPlatformCmd)
+	portalReadCmd.AddCommand(portalReadPlatformCmd)
 
-	adminReadConfigCmd := &cobra.Command{
+	portalReadConfigCmd := &cobra.Command{
 		Use:   "config",
 		Short: "read the current config",
-		Run:   cobraAdminReadConfig,
+		Run:   cobraPortalReadConfig,
 	}
-	adminReadCmd.AddCommand(adminReadConfigCmd)
+	portalReadCmd.AddCommand(portalReadConfigCmd)
 
-	adminDecodeCmd := &cobra.Command{
+	portalDecodeCmd := &cobra.Command{
 		Use:   "decode",
-		Short: "decode base64 opaque payloads by calling admin api",
+		Short: "decode base64 opaque payloads by calling portal api",
 	}
-	adminCmd.AddCommand(adminDecodeCmd)
-	adminDecodeCmd.PersistentFlags().StringVar(&gSettings.AdminAddr, "admin_addr", "http://localhost:11371", "Address against which to make client requests")
+	portalCmd.AddCommand(portalDecodeCmd)
+	portalDecodeCmd.PersistentFlags().StringVar(&gSettings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
 
-	adminReadProducersCmd := &cobra.Command{
+	portalReadProducersCmd := &cobra.Command{
 		Use:   "producers",
 		Short: "read the active tracked producers",
-		Run:   cobraAdminReadProducers,
+		Run:   cobraPortalReadProducers,
 	}
-	adminReadCmd.AddCommand(adminReadProducersCmd)
+	portalReadCmd.AddCommand(portalReadProducersCmd)
 
-	adminDecodeInstanceCmd := &cobra.Command{
+	portalDecodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
 		Short:     "decode and print base64 payload",
-		Run:       cobraAdminDecodeInstance,
+		Run:       cobraPortalDecodeInstance,
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"concern", "base64_payload"},
 	}
-	adminDecodeCmd.AddCommand(adminDecodeInstanceCmd)
+	portalDecodeCmd.AddCommand(portalDecodeInstanceCmd)
 
-	adminServeCmd := &cobra.Command{
+	portalServeCmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Rocketcycle Admin Server",
-		Long:  "Manages topics and provides rest api for admin activities",
-		Run:   cobraAdminServe,
+		Short: "Rocketcycle Portal Server",
+		Long:  "Host rest api",
+		Run:   cobraPortalServe,
 	}
-	adminServeCmd.PersistentFlags().StringVar(&gSettings.HttpAddr, "http_addr", ":11371", "Address to host http api")
-	adminServeCmd.PersistentFlags().StringVar(&gSettings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
-	adminCmd.AddCommand(adminServeCmd)
-	// admin sub command (END)
+	portalServeCmd.PersistentFlags().StringVar(&gSettings.HttpAddr, "http_addr", ":11371", "Address to host http api")
+	portalServeCmd.PersistentFlags().StringVar(&gSettings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
+	portalCmd.AddCommand(portalServeCmd)
+	// portal sub command (END)
 
 	// config sub command
 	configCmd := &cobra.Command{

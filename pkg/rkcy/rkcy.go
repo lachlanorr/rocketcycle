@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -44,26 +45,58 @@ func StartPlatform(impl *PlatformImpl) {
 	runCobra(impl)
 }
 
-func InitAncillary(platformName string) {
-	initPlatformName(platformName)
-	prepLogging(platformName)
-}
-
-func BuildTopicNamePrefix(platformName string, concernName string, concernType Platform_Concern_Type) string {
-	return fmt.Sprintf("%s.%s.%s.%s", RKCY, platformName, concernName, Platform_Concern_Type_name[int32(concernType)])
+func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType Platform_Concern_Type) string {
+	if !IsValidName(platformName) {
+		log.Fatal().Msgf("Invalid platformName: %s", platformName)
+	}
+	if !IsValidName(environment) {
+		log.Fatal().Msgf("Invalid environment: %s", environment)
+	}
+	if !IsValidName(concernName) {
+		log.Fatal().Msgf("Invalid concernName: %s", concernName)
+	}
+	if !IsValidName(concernType.String()) {
+		log.Fatal().Msgf("Invalid concernType: %s", concernType.String())
+	}
+	return fmt.Sprintf("%s.%s.%s.%s.%s", RKCY, platformName, environment, concernName, concernType.String())
 }
 
 func BuildTopicName(topicNamePrefix string, name string, generation int32) string {
+	if !IsValidName(name) {
+		log.Fatal().Msgf("Invalid topicName: %s", name)
+	}
+	if generation < 0 {
+		log.Fatal().Msgf("Invalid generation: %d", generation)
+	}
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func BuildFullTopicName(platformName string, concernName string, concernType Platform_Concern_Type, name string, generation int32) string {
-	prefix := BuildTopicNamePrefix(platformName, concernName, concernType)
+func BuildFullTopicName(platformName string, environment string, concernName string, concernType Platform_Concern_Type, name string, generation int32) string {
+	if !IsValidName(platformName) {
+		log.Fatal().Msgf("Invalid platformName: %s", platformName)
+	}
+	if !IsValidName(environment) {
+		log.Fatal().Msgf("Invalid environment: %s", environment)
+	}
+	if !IsValidName(concernName) {
+		log.Fatal().Msgf("Invalid concernName: %s", concernName)
+	}
+	if !IsValidName(concernType.String()) {
+		log.Fatal().Msgf("Invalid concernType: %s", concernType.String())
+	}
+	if !IsValidName(name) {
+		log.Fatal().Msgf("Invalid topicName: %s", name)
+	}
+	if generation < 0 {
+		log.Fatal().Msgf("Invalid generation: %d", generation)
+	}
+	prefix := BuildTopicNamePrefix(platformName, environment, concernName, concernType)
 	return BuildTopicName(prefix, name, generation)
 }
 
 type TopicParts struct {
 	Platform    string
+	Environment string
 	Concern     string
 	Topic       string
 	System      System
@@ -73,14 +106,28 @@ type TopicParts struct {
 
 func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	parts := strings.Split(fullTopic, ".")
-	if len(parts) != 6 || parts[0] != RKCY {
+	if len(parts) != 7 || parts[0] != RKCY {
 		return nil, fmt.Errorf("Invalid rkcy topic: %s", fullTopic)
 	}
 
 	tp := TopicParts{
-		Platform: parts[1],
-		Concern:  parts[2],
-		Topic:    parts[4],
+		Platform:    parts[1],
+		Environment: parts[2],
+		Concern:     parts[3],
+		Topic:       parts[5],
+	}
+
+	if !IsValidName(tp.Platform) {
+		return nil, fmt.Errorf("Invalid tp.Platform: %s", tp.Platform)
+	}
+	if !IsValidName(tp.Environment) {
+		return nil, fmt.Errorf("Invalid tp.Environment: %s", tp.Environment)
+	}
+	if !IsValidName(tp.Concern) {
+		return nil, fmt.Errorf("Invalid tp.Concern: %s", tp.Concern)
+	}
+	if !IsValidName(tp.Topic) {
+		return nil, fmt.Errorf("Invalid tp.Topic: %s", tp.Topic)
 	}
 
 	if tp.Topic == PROCESS {
@@ -91,17 +138,20 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 		tp.System = System_NO_SYSTEM
 	}
 
-	concernType, ok := Platform_Concern_Type_value[parts[3]]
+	concernType, ok := Platform_Concern_Type_value[parts[4]]
 	if !ok {
 		return nil, fmt.Errorf("Invalid rkcy topic, unable to parse ConcernType: %s", fullTopic)
 	}
 	tp.ConcernType = Platform_Concern_Type(concernType)
 
-	generation, err := strconv.Atoi(parts[5])
+	generation, err := strconv.Atoi(parts[6])
 	if err != nil {
 		return nil, fmt.Errorf("Invalid rkcy topic, unable to parse Generation: %s", fullTopic)
 	}
 	tp.Generation = int32(generation)
+	if tp.Generation < 0 {
+		return nil, fmt.Errorf("Invalid tp.Generation: %d", tp.Generation)
+	}
 
 	return &tp, nil
 }

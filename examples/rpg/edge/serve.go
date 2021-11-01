@@ -280,6 +280,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 		ctx,
 		settings.AdminBrokers,
 		rkcy.PlatformName(),
+		rkcy.Environment(),
 		&rkcy.TopicTarget{
 			Brokers:   settings.ConsumerBrokers,
 			Topic:     settings.Topic,

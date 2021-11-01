@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "rkcy/admin.proto",
+    "title": "rkcy/portal.proto",
     "version": "version not set"
   },
   "consumes": [
@@ -13,7 +13,7 @@
   "paths": {
     "/v1/config/read": {
       "get": {
-        "operationId": "AdminService_ConfigRead",
+        "operationId": "PortalService_ConfigRead",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -29,13 +29,13 @@
           }
         },
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/config/update": {
       "post": {
-        "operationId": "AdminService_ConfigUpdate",
+        "operationId": "PortalService_ConfigUpdate",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -51,13 +51,13 @@
           }
         },
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/config/update/complex": {
       "post": {
-        "operationId": "AdminService_ConfigUpdateComplex",
+        "operationId": "PortalService_ConfigUpdateComplex",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -73,13 +73,13 @@
           }
         },
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/decode/arg": {
       "post": {
-        "operationId": "AdminService_DecodeArgPayload",
+        "operationId": "PortalService_DecodeArgPayload",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -105,13 +105,13 @@
           }
         ],
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/decode/instance": {
       "post": {
-        "operationId": "AdminService_DecodeInstance",
+        "operationId": "PortalService_DecodeInstance",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -137,13 +137,13 @@
           }
         ],
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/decode/result": {
       "post": {
-        "operationId": "AdminService_DecodeResultPayload",
+        "operationId": "PortalService_DecodeResultPayload",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -169,13 +169,13 @@
           }
         ],
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/platform/read": {
       "get": {
-        "operationId": "AdminService_Platform",
+        "operationId": "PortalService_Platform",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -191,13 +191,13 @@
           }
         },
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     },
     "/v1/producers/read": {
       "get": {
-        "operationId": "AdminService_Producers",
+        "operationId": "PortalService_Producers",
         "responses": {
           "200": {
             "description": "A successful response.",
@@ -213,7 +213,7 @@
           }
         },
         "tags": [
-          "AdminService"
+          "PortalService"
         ]
       }
     }
@@ -358,6 +358,9 @@
       "type": "object",
       "properties": {
         "name": {
+          "type": "string"
+        },
+        "environment": {
           "type": "string"
         },
         "concerns": {

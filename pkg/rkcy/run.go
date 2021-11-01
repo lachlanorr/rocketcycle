@@ -243,7 +243,7 @@ func defaultArgs() []string {
 	}
 }
 
-func startAdminServer(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+func startAdmin(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
 	updateRunning(
 		ctx,
 		running,
@@ -251,9 +251,26 @@ func startAdminServer(ctx context.Context, running map[string]*rtProgram, printC
 		&ConsumerDirective{
 			Program: &Program{
 				Name:   "./" + gPlatformName,
-				Args:   append(defaultArgs(), "admin", "serve"),
+				Args:   append(defaultArgs(), "admin"),
 				Abbrev: "admin",
 				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", gPlatformImpl.Name)},
+			},
+		},
+		printCh,
+	)
+}
+
+func startPortalServer(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+	updateRunning(
+		ctx,
+		running,
+		Directive_CONSUMER_START,
+		&ConsumerDirective{
+			Program: &Program{
+				Name:   "./" + gPlatformName,
+				Args:   append(defaultArgs(), "portal", "serve"),
+				Abbrev: "portal",
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.portal", gPlatformImpl.Name)},
 			},
 		},
 		printCh,
@@ -288,11 +305,12 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 	adminCh := make(chan *AdminMessage)
 
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumePlatformTopic(
 		ctx,
 		adminCh,
 		gSettings.AdminBrokers,
-		gPlatformName,
+		PlatformName(),
+		Environment(),
 		Directive_CONSUMER,
 		Directive_CONSUMER,
 		kPastLastMatch,
@@ -304,7 +322,8 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, printCh, wg)
-	startAdminServer(ctx, running, printCh)
+	startAdmin(ctx, running, printCh)
+	startPortalServer(ctx, running, printCh)
 	startWatch(ctx, running, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)

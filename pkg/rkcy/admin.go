@@ -5,14 +5,9 @@
 package rkcy
 
 import (
-	"bytes"
 	"context"
-	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"os/signal"
 	"sort"
@@ -21,21 +16,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/version"
 )
-
-//go:embed static/admin/docs
-var gDocsFiles embed.FS
 
 var gAdminPingInterval = 1 * time.Second
 var gPlatformRepublishInterval = 60 * time.Second
@@ -44,15 +32,17 @@ var gCurrentRtPlat *rtPlatform = nil
 
 type ProducerTracker struct {
 	platformName  string
+	environment   string
 	topicProds    map[string]map[string]time.Time
 	topicProdsMtx *sync.Mutex
 }
 
 var gProducerTracker *ProducerTracker
 
-func NewProducerTracker(platformName string) *ProducerTracker {
+func NewProducerTracker(platformName string, environment string) *ProducerTracker {
 	pt := &ProducerTracker{
 		platformName:  platformName,
+		environment:   environment,
 		topicProds:    make(map[string]map[string]time.Time),
 		topicProdsMtx: &sync.Mutex{},
 	}
@@ -67,6 +57,7 @@ func (pt *ProducerTracker) update(pd *ProducerDirective, timestamp time.Time, pi
 	if now.Sub(timestamp) < pingInterval {
 		fullTopicName := BuildFullTopicName(
 			pt.platformName,
+			pt.environment,
 			pd.ConcernName,
 			pd.ConcernType,
 			pd.Topic,
@@ -129,7 +120,7 @@ func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
 func cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Msg("admin server started")
+		Msg("admin started")
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -140,277 +131,19 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 		cancel()
 	}()
 
-	gProducerTracker = NewProducerTracker(gPlatformName)
+	gProducerTracker = NewProducerTracker(PlatformName(), Environment())
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go managePlatform(ctx, gPlatformName, &wg)
-	go adminServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr, &wg)
+	go managePlatform(ctx, PlatformName(), Environment(), &wg)
 
 	select {
 	case <-interruptCh:
 		log.Warn().
-			Msg("Admin server stopped")
+			Msg("admin stopped")
 		cancel()
 		wg.Wait()
 		return
 	}
-}
-
-func cobraAdminReadPlatform(cmd *cobra.Command, args []string) {
-	path := "/v1/platform/read?pretty"
-
-	slog := log.With().
-		Str("Path", path).
-		Logger()
-
-	resp, err := http.Get(gSettings.AdminAddr + path)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to READ")
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to ReadAll")
-	}
-
-	fmt.Println(string(body))
-}
-
-func cobraAdminReadConfig(cmd *cobra.Command, args []string) {
-	path := "/v1/config/read"
-
-	slog := log.With().
-		Str("Path", path).
-		Logger()
-
-	resp, err := http.Get(gSettings.AdminAddr + path)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to READ")
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to ReadAll")
-		return
-	}
-
-	confRsp := &ConfigReadResponse{}
-	err = protojson.Unmarshal(body, confRsp)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to Unmarshal ConfigResponse")
-		return
-	}
-
-	var prettyJson bytes.Buffer
-	err = json.Indent(&prettyJson, []byte(confRsp.ConfigJson), "", "  ")
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Str("Json", confRsp.ConfigJson).
-			Msg("Failed to prettify json")
-		return
-	}
-
-	fmt.Printf("%s\n", string(prettyJson.Bytes()))
-}
-
-func cobraAdminReadProducers(cmd *cobra.Command, args []string) {
-	path := "/v1/producers/read?pretty"
-
-	slog := log.With().
-		Str("Path", path).
-		Logger()
-
-	resp, err := http.Get(gSettings.AdminAddr + path)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to READ")
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to ReadAll")
-	}
-
-	fmt.Println(string(body))
-}
-
-func cobraAdminDecodeInstance(cmd *cobra.Command, args []string) {
-	path := "/v1/decode/instance"
-	slog := log.With().
-		Str("Path", path).
-		Logger()
-
-	var err error
-
-	rpcArgs := DecodeInstanceArgs{
-		Concern:   args[0],
-		Payload64: args[1],
-	}
-
-	rpcArgsSer, err := protojson.Marshal(&rpcArgs)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to marshal rpcArgs")
-	}
-
-	contentRdr := bytes.NewReader(rpcArgsSer)
-	resp, err := http.Post(gSettings.AdminAddr+path, "application/json", contentRdr)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to DECODE")
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to ReadAll")
-	}
-
-	decodeRsp := DecodeResponse{}
-	err = protojson.Unmarshal(body, &decodeRsp)
-	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to Unmarshal DecodeResponse")
-	}
-
-	fmt.Printf("%s\n", decodeRsp.Instance)
-	if decodeRsp.Related != "" {
-		fmt.Printf("\nRelated:\n%s\n", decodeRsp.Related)
-	}
-}
-
-type adminServer struct {
-	UnimplementedAdminServiceServer
-
-	httpAddr string
-	grpcAddr string
-
-	confMgr *ConfigMgr
-}
-
-func (srv adminServer) HttpAddr() string {
-	return srv.httpAddr
-}
-
-func (srv adminServer) GrpcAddr() string {
-	return srv.grpcAddr
-}
-
-func (adminServer) StaticFiles() http.FileSystem {
-	return http.FS(gDocsFiles)
-}
-
-func (adminServer) StaticFilesPathPrefix() string {
-	return "/static/admin/docs"
-}
-
-func (srv adminServer) RegisterServer(srvReg grpc.ServiceRegistrar) {
-	RegisterAdminServiceServer(srvReg, srv)
-}
-
-func (adminServer) RegisterHandlerFromEndpoint(
-	ctx context.Context,
-	mux *runtime.ServeMux,
-	endpoint string,
-	opts []grpc.DialOption,
-) (err error) {
-	return RegisterAdminServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
-}
-
-func (adminServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
-	if gCurrentRtPlat != nil {
-		return gCurrentRtPlat.Platform, nil
-	}
-	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
-}
-
-func (srv adminServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
-	return srv.confMgr.BuildConfigResponse(), nil
-}
-
-func (adminServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, error) {
-	return gProducerTracker.toTrackedProducers(), nil
-}
-
-func (adminServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
-	jsonBytes, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
-	if err != nil {
-		return nil, err
-	}
-	return &DecodeResponse{
-		Type:     args.Concern,
-		Instance: string(jsonBytes),
-	}, nil
-}
-
-func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) {
-	instJson, err := protojson.Marshal(resProto.Instance)
-	if err != nil {
-		return nil, err
-	}
-
-	decResp := &DecodeResponse{
-		Type:     resProto.Type,
-		Instance: string(instJson),
-	}
-
-	if resProto.Related != nil {
-		relJson, err := protojson.Marshal(resProto.Related)
-		if err != nil {
-			return nil, err
-		}
-		decResp.Related = string(relJson)
-	}
-
-	return decResp, nil
-}
-
-func (adminServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
-	if err != nil {
-		return nil, err
-	}
-	return resultProto2DecodeResponse(resProto)
-}
-
-func (adminServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
-	if err != nil {
-		return nil, err
-	}
-	return resultProto2DecodeResponse(resProto)
-}
-
-func adminServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync.WaitGroup) {
-	srv := adminServer{
-		httpAddr: httpAddr,
-		grpcAddr: grpcAddr,
-		confMgr:  NewConfigMgr(ctx, gSettings.AdminBrokers, PlatformName(), wg),
-	}
-	ServeGrpcGateway(ctx, srv)
 }
 
 type clusterInfo struct {
@@ -569,7 +302,7 @@ func updateTopics(rtPlat *rtPlatform) {
 		if contains(concernTypesAutoCreate, Platform_Concern_Type_name[int32(concern.Type)]) {
 			for _, topics := range concern.Topics {
 				createMissingTopics(
-					BuildTopicNamePrefix(rtPlat.Platform.Name, concern.Name, concern.Type),
+					BuildTopicNamePrefix(rtPlat.Platform.Name, rtPlat.Platform.Environment, concern.Name, concern.Type),
 					topics,
 					clusterInfos)
 			}
@@ -577,17 +310,18 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup) {
-	adminTopic := AdminTopic(platformName)
+func managePlatform(ctx context.Context, platformName string, environment string, wg *sync.WaitGroup) {
+	platformTopic := PlatformTopic(platformName, environment)
 	adminProdCh := getProducerCh(ctx, gSettings.AdminBrokers, wg)
 
 	adminCh := make(chan *AdminMessage)
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumePlatformTopic(
 		ctx,
 		adminCh,
 		gSettings.AdminBrokers,
 		platformName,
+		environment,
 		Directive_PLATFORM|Directive_PRODUCER_STATUS,
 		Directive_PLATFORM,
 		kAtLastMatch,
@@ -608,7 +342,7 @@ func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup
 		case <-republishTicker.C:
 			if gCurrentRtPlat != nil {
 				log.Info().Msg("Republishing platform")
-				msg, err := kafkaMessage(&adminTopic, 0, gCurrentRtPlat.Platform, Directive_PLATFORM, "")
+				msg, err := kafkaMessage(&platformTopic, 0, gCurrentRtPlat.Platform, Directive_PLATFORM, "")
 				if err != nil {
 					log.Error().
 						Err(err).
@@ -631,7 +365,7 @@ func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup
 
 				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
 				updateTopics(gCurrentRtPlat)
-				updateRunner(ctx, adminProdCh, adminTopic, platDiff)
+				updateRunner(ctx, adminProdCh, platformTopic, platDiff)
 			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
 				gProducerTracker.update(adminMsg.ProducerDirective, adminMsg.Timestamp, gAdminPingInterval*2)
 			}
@@ -639,14 +373,14 @@ func managePlatform(ctx context.Context, platformName string, wg *sync.WaitGroup
 	}
 }
 
-func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProdCh ProducerCh, platformTopic string, platDiff *platformDiff) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
 
 	for _, p := range platDiff.progsToStop {
 		msg, err := kafkaMessage(
-			&adminTopic,
+			&platformTopic,
 			0,
 			&ConsumerDirective{Program: p},
 			Directive_CONSUMER_STOP,
@@ -662,7 +396,7 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, adminTopic string
 
 	for _, p := range platDiff.progsToStart {
 		msg, err := kafkaMessage(
-			&adminTopic,
+			&platformTopic,
 			0,
 			&ConsumerDirective{Program: p},
 			Directive_CONSUMER_START,
@@ -700,7 +434,7 @@ var gStdTags map[string]string = map[string]string{
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
 	progs := make([]*Program, topics.Current.PartitionCount)
 	for i := int32(0); i < topics.Current.PartitionCount; i++ {
-		topicName := BuildFullTopicName(gPlatformName, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+		topicName := BuildFullTopicName(PlatformName(), Environment(), concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 		cluster := clusters[topics.Current.Cluster]
 		progs[i] = &Program{
 			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
