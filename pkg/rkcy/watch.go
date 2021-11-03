@@ -39,11 +39,16 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	groupName := uncommittedGroupNameAllPartitions(wt.topicName)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
+	kafkaLogCh := make(chan kafka.LogEvent)
+	go printKafkaLogs(ctx, kafkaLogCh)
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        wt.brokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       false,
 		"enable.auto.offset.store": false,
+
+		"go.logs.channel.enable": true,
+		"go.logs.channel":        kafkaLogCh,
 	})
 	if err != nil {
 		log.Error().

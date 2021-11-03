@@ -394,10 +394,18 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 		Logger()
 
 	// At this point we are guaranteed to have a platform admin topic
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	kafkaLogCh := make(chan kafka.LogEvent)
+	go printKafkaLogs(ctx, kafkaLogCh)
+
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":  gSettings.AdminBrokers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
+
+		"go.logs.channel.enable": true,
+		"go.logs.channel":        kafkaLogCh,
 	})
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())

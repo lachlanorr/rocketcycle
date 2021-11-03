@@ -205,11 +205,17 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 
 	groupName := fmt.Sprintf("rkcy_response_%s", respTarget.Topic)
 
+	kafkaLogCh := make(chan kafka.LogEvent)
+	go printKafkaLogs(ctx, kafkaLogCh)
+
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        respTarget.Brokers,
 		"group.id":                 groupName,
-		"enable.auto.commit":       false, // we commit manually on an interval
-		"enable.auto.offset.store": false, // we commit to local store after processeing to get at least once behavior
+		"enable.auto.commit":       false,
+		"enable.auto.offset.store": false,
+
+		"go.logs.channel.enable": true,
+		"go.logs.channel":        kafkaLogCh,
 	})
 	if err != nil {
 		log.Fatal().

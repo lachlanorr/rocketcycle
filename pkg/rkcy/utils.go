@@ -140,13 +140,28 @@ func ConsumersTopic(platformName string, environment string) string {
 	return fmt.Sprintf("%s.%s.%s.consumers", RKCY, platformName, environment)
 }
 
+func librdkafkaToZerologLevel(kafkaLevel int) zerolog.Level {
+	switch kafkaLevel {
+	case 7:
+		return zerolog.DebugLevel
+	case 6:
+		fallthrough
+	case 5:
+		return zerolog.InfoLevel
+	case 4:
+		return zerolog.WarnLevel
+	default:
+		return zerolog.ErrorLevel
+	}
+}
+
 func printKafkaLogs(ctx context.Context, kafkaLogCh <-chan kafka.LogEvent) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case logEvt := <-kafkaLogCh:
-			log.Warn().
+			log.WithLevel(librdkafkaToZerologLevel(logEvt.Level)).
 				Str("Name", logEvt.Name).
 				Str("Tag", logEvt.Tag).
 				Int("Level", logEvt.Level).
