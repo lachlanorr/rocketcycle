@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -135,8 +136,24 @@ func ProducersTopic(platformName string, environment string) string {
 	return fmt.Sprintf("%s.%s.%s.producers", RKCY, platformName, environment)
 }
 
-func ControlTopic(platformName string, environment string) string {
-	return fmt.Sprintf("%s.%s.%s.control", RKCY, platformName, environment)
+func ConsumersTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.consumers", RKCY, platformName, environment)
+}
+
+func printKafkaLogs(ctx context.Context, kafkaLogCh <-chan kafka.LogEvent) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case logEvt := <-kafkaLogCh:
+			log.Warn().
+				Str("Name", logEvt.Name).
+				Str("Tag", logEvt.Tag).
+				Int("Level", logEvt.Level).
+				Str("Timestamp", logEvt.Timestamp.Format(time.RFC3339)).
+				Msgf("Kafka Log: %s", logEvt.Message)
+		}
+	}
 }
 
 func createPlatformTopics(
@@ -149,7 +166,7 @@ func createPlatformTopics(
 		PlatformTopic(platformName, environment),
 		ConfigTopic(platformName, environment),
 		ProducersTopic(platformName, environment),
-		ControlTopic(platformName, environment),
+		ConsumersTopic(platformName, environment),
 	}
 
 	// connect to kafka and make sure we have our platform topic

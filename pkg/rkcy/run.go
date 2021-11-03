@@ -300,20 +300,14 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 }
 
 func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
+	consCh := make(chan *ConsumerMessage)
 
-	adminCh := make(chan *AdminMessage)
-
-	wg.Add(1)
-	go consumePlatformTopic(
+	consumeConsumersTopic(
 		ctx,
-		adminCh,
+		consCh,
 		gSettings.AdminBrokers,
 		PlatformName(),
 		Environment(),
-		Directive_CONSUMER,
-		Directive_CONSUMER,
-		kPastLastMatch,
 		wg,
 	)
 
@@ -337,12 +331,16 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
-		case adminMsg := <-adminCh:
+		case consMsg := <-consCh:
+			if (consMsg.Directive & Directive_CONSUMER) != Directive_CONSUMER {
+				log.Error().Msgf("Invalid directive for ConsumersTopic: %s", consMsg.Directive.String())
+				continue
+			}
 			updateRunning(
 				ctx,
 				running,
-				adminMsg.Directive,
-				adminMsg.ConsumerDirective,
+				consMsg.Directive,
+				consMsg.ConsumerDirective,
 				printCh,
 			)
 		}

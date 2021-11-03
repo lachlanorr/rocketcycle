@@ -26,7 +26,6 @@ import (
 )
 
 var gAdminPingInterval = 1 * time.Second
-var gPlatformRepublishInterval = 60 * time.Second
 
 var gCurrentRtPlat *rtPlatform = nil
 
@@ -311,24 +310,28 @@ func updateTopics(rtPlat *rtPlatform) {
 }
 
 func managePlatform(ctx context.Context, platformName string, environment string, wg *sync.WaitGroup) {
-	platformTopic := PlatformTopic(platformName, environment)
+	consumersTopic := ConsumersTopic(platformName, environment)
 	adminProdCh := getProducerCh(ctx, gSettings.AdminBrokers, wg)
 
-	adminCh := make(chan *AdminMessage)
-	wg.Add(1)
-	go consumePlatformTopic(
+	platCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
 		ctx,
-		adminCh,
+		platCh,
 		gSettings.AdminBrokers,
 		platformName,
 		environment,
-		Directive_PLATFORM|Directive_PRODUCER_STATUS,
-		Directive_PLATFORM,
-		kAtLastMatch,
 		wg,
 	)
 
-	republishTicker := time.NewTicker(gPlatformRepublishInterval)
+	prodCh := make(chan *ProducerMessage)
+	consumeProducersTopic(
+		ctx,
+		prodCh,
+		gSettings.AdminBrokers,
+		platformName,
+		environment,
+		wg,
+	)
 
 	cullInterval := gAdminPingInterval * 10
 	cullTicker := time.NewTicker(cullInterval)
@@ -339,48 +342,44 @@ func managePlatform(ctx context.Context, platformName string, environment string
 			log.Warn().
 				Msg("managePlatform exiting, ctx.Done()")
 			return
-		case <-republishTicker.C:
-			if gCurrentRtPlat != nil {
-				log.Info().Msg("Republishing platform")
-				msg, err := kafkaMessage(&platformTopic, 0, gCurrentRtPlat.Platform, Directive_PLATFORM, "")
-				if err != nil {
-					log.Error().
-						Err(err).
-						Msg("Failed to kafkaMessage")
-					continue
-				}
-				adminProdCh <- msg
-			}
 		case <-cullTicker.C:
 			// cull stale producers
 			gProducerTracker.cull(cullInterval)
-		case adminMsg := <-adminCh:
-			if (adminMsg.Directive & Directive_PLATFORM) == Directive_PLATFORM {
-				gCurrentRtPlat = adminMsg.NewRtPlat
-
-				jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
-				log.Info().
-					Str("PlatformJson", string(jsonBytes)).
-					Msg("Platform Replaced")
-
-				platDiff := gCurrentRtPlat.diff(adminMsg.OldRtPlat)
-				updateTopics(gCurrentRtPlat)
-				updateRunner(ctx, adminProdCh, platformTopic, platDiff)
-			} else if (adminMsg.Directive & Directive_PRODUCER_STATUS) == Directive_PRODUCER_STATUS {
-				gProducerTracker.update(adminMsg.ProducerDirective, adminMsg.Timestamp, gAdminPingInterval*2)
+		case platMsg := <-platCh:
+			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+				continue
 			}
+
+			gCurrentRtPlat = platMsg.NewRtPlat
+
+			jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
+			log.Info().
+				Str("PlatformJson", string(jsonBytes)).
+				Msg("Platform Replaced")
+
+			platDiff := gCurrentRtPlat.diff(platMsg.OldRtPlat)
+			updateTopics(gCurrentRtPlat)
+			updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
+		case prodMsg := <-prodCh:
+			if (prodMsg.Directive & Directive_PRODUCER_STATUS) != Directive_PRODUCER_STATUS {
+				log.Error().Msgf("Invalid directive for ProducerTopic: %s", prodMsg.Directive.String())
+				continue
+			}
+
+			gProducerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, gAdminPingInterval*2)
 		}
 	}
 }
 
-func updateRunner(ctx context.Context, adminProdCh ProducerCh, platformTopic string, platDiff *platformDiff) {
+func updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic string, platDiff *platformDiff) {
 	ctx, span := Telem().StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
 
 	for _, p := range platDiff.progsToStop {
 		msg, err := kafkaMessage(
-			&platformTopic,
+			&consumersTopic,
 			0,
 			&ConsumerDirective{Program: p},
 			Directive_CONSUMER_STOP,
@@ -396,7 +395,7 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, platformTopic str
 
 	for _, p := range platDiff.progsToStart {
 		msg, err := kafkaMessage(
-			&platformTopic,
+			&consumersTopic,
 			0,
 			&ConsumerDirective{Program: p},
 			Directive_CONSUMER_START,

@@ -86,7 +86,6 @@ func NewConfigMgr(
 		config: newEmptyConfig(),
 	}
 
-	wg.Add(1)
 	go confMgr.manageConfigTopic(
 		ctx,
 		adminBrokers,
@@ -302,99 +301,27 @@ func (confMgr *ConfigMgr) manageConfigTopic(
 	environment string,
 	wg *sync.WaitGroup,
 ) {
-	defer wg.Done()
+	confPubCh := make(chan *ConfigPublishMessage)
 
-	configTopic := ConfigTopic(platformName, environment)
-	groupName := uncommittedGroupName(configTopic, 0)
-
-	slog := log.With().
-		Str("Topic", configTopic).
-		Logger()
-
-	found, lastPlatformOff, err := FindMostRecentMatching(
+	consumeConfigTopic(
+		ctx,
+		confPubCh,
 		adminBrokers,
-		configTopic,
-		0,
-		Directive_CONFIG_PUBLISH,
-		kAtLastMatch,
+		platformName,
+		environment,
+		wg,
 	)
-	if err != nil {
-		slog.Warn().
-			Msg("Failed to FindMostRecentOffset, defaulting to empty config")
-	}
-	if !found {
-		slog.Warn().
-			Msg("No matching found with FindMostRecentOffset, defaulting to empty config")
-	}
-
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        adminBrokers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false, // we never commit this topic, always want every consumer go have latest
-		"enable.auto.offset.store": false, // we never commit this topic
-	})
-	if err != nil {
-		slog.Error().
-			Err(err).
-			Msg("Failed to NewConsumer")
-		return
-	}
-	defer func() {
-		log.Warn().
-			Str("Topic", configTopic).
-			Msgf("Closing kafka consumer")
-		cons.Close()
-		log.Warn().
-			Str("Topic", configTopic).
-			Msgf("Closed kafka consumer")
-	}()
-
-	err = cons.Assign([]kafka.TopicPartition{
-		{
-			Topic:     &configTopic,
-			Partition: 0,
-			Offset:    kafka.Offset(lastPlatformOff),
-		},
-	})
-
-	if err != nil {
-		slog.Error().
-			Err(err).
-			Msg("Failed to Assign")
-		return
-	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
-				Msg("consumeConfigTopic exiting, ctx.Done()")
 			return
-		default:
-			msg, err := cons.ReadMessage(100 * time.Millisecond)
-			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
-			if err != nil && !timedOut {
-				slog.Error().
-					Err(err).
-					Msg("Error during ReadMessage")
-			} else if !timedOut && msg != nil {
-				directive := GetDirective(msg)
-				if (directive & Directive_CONFIG_PUBLISH) == Directive_CONFIG_PUBLISH {
-					newConf := &Config{}
-					err := proto.Unmarshal(msg.Value, newConf)
-					if err != nil {
-						log.Error().
-							Err(err).
-							Msg("Failed to Unmarshal Config")
-						continue
-					}
-					confMgr.mtx.Lock()
-					confMgr.config = newConf
-					confMgr.lastChanged = msg.Timestamp
-					confMgr.lastChangedOffset = int64(msg.TopicPartition.Offset)
-					confMgr.mtx.Unlock()
-				}
-			}
+		case confPubMsg := <-confPubCh:
+			confMgr.mtx.Lock()
+			confMgr.config = confPubMsg.Config
+			confMgr.lastChanged = confPubMsg.Timestamp
+			confMgr.lastChangedOffset = confPubMsg.Offset
+			confMgr.mtx.Unlock()
 		}
 	}
 }

@@ -45,7 +45,6 @@ func cobraPortalServe(cmd *cobra.Command, args []string) {
 	}()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
 	go portalServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr, &wg)
 
 	select {

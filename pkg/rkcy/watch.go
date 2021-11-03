@@ -36,14 +36,14 @@ func (wt *watchTopic) String() string {
 }
 
 func (wt *watchTopic) consume(ctx context.Context) {
-	groupName := fmt.Sprintf("rkcy_watch_%s", wt.topicName)
-	log.Info().Msgf("watching: %s, groupname: %s", wt.topicName, groupName)
+	groupName := uncommittedGroupNameAllPartitions(wt.topicName)
+	log.Info().Msgf("watching: %s", wt.topicName)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        wt.brokers,
 		"group.id":                 groupName,
-		"enable.auto.commit":       false, // we don't commit the watcher, only want new stuff
-		"enable.auto.offset.store": false, // we don't commit the watcher, only want new stuff
+		"enable.auto.commit":       false,
+		"enable.auto.offset.store": false,
 	})
 	if err != nil {
 		log.Error().
@@ -117,7 +117,6 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
 				if tp.Topic == ERROR || tp.Topic == COMPLETE {
-					log.Info().Msgf("topic: %+v", topic)
 					wt := watchTopic{
 						clusterName:    topic.CurrentCluster.Name,
 						brokers:        topic.CurrentCluster.Brokers,
@@ -264,17 +263,13 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 
 	wtMap := make(map[string]bool)
 
-	adminCh := make(chan *AdminMessage)
-	wg.Add(1)
-	go consumePlatformTopic(
+	platformCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
 		ctx,
-		adminCh,
+		platformCh,
 		adminBrokers,
 		PlatformName(),
 		Environment(),
-		Directive_PLATFORM,
-		Directive_PLATFORM,
-		kAtLastMatch,
 		wg,
 	)
 
@@ -284,8 +279,13 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 			log.Warn().
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
-		case adminMsg := <-adminCh:
-			wts := getAllWatchTopics(adminMsg.NewRtPlat)
+		case platMsg := <-platformCh:
+			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+				continue
+			}
+
+			wts := getAllWatchTopics(platMsg.NewRtPlat)
 
 			for _, wt := range wts {
 				_, ok := wtMap[wt.String()]

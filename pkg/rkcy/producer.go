@@ -33,13 +33,13 @@ type Producer struct {
 	prodCh  ProducerCh
 	topics  *rtTopics
 
-	platformTopic string
-	adminProdCh   ProducerCh
+	producersTopic string
+	adminProdCh    ProducerCh
 
-	doneCh    chan struct{}
-	pauseCh   chan bool
-	adminCh   chan *AdminMessage
-	produceCh chan *message
+	doneCh     chan struct{}
+	pauseCh    chan bool
+	platformCh chan *PlatformMessage
+	produceCh  chan *message
 
 	fnv64 hash.Hash64
 }
@@ -95,27 +95,23 @@ func NewProducer(
 	prod.slog = prod.constlog.With().Logger()
 	prod.doneCh = make(chan struct{})
 	prod.pauseCh = make(chan bool)
-	prod.adminCh = make(chan *AdminMessage)
+	prod.platformCh = make(chan *PlatformMessage)
 	prod.produceCh = make(chan *message)
 
-	prod.platformTopic = PlatformTopic(platformName, environment)
+	prod.producersTopic = ProducersTopic(platformName, environment)
 	prod.adminProdCh = getProducerCh(ctx, adminBrokers, wg)
 
-	wg.Add(1)
-	go consumePlatformTopic(
+	consumePlatformTopic(
 		ctx,
-		prod.adminCh,
+		prod.platformCh,
 		adminBrokers,
 		platformName,
 		environment,
-		Directive_PLATFORM,
-		Directive_PLATFORM,
-		kAtLastMatch,
 		wg,
 	)
 
-	adminMsg := <-prod.adminCh
-	prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
+	platMsg := <-prod.platformCh
+	prod.updatePlatform(ctx, platMsg.NewRtPlat, wg)
 
 	go prod.run(ctx, wg)
 
@@ -188,7 +184,7 @@ func (prod *Producer) Close() {
 func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 	pingAdminTicker := time.NewTicker(gAdminPingInterval)
 	pingMsg, err := kafkaMessage(
-		&prod.platformTopic,
+		&prod.producersTopic,
 		0,
 		prod.producerDirective(),
 		Directive_PRODUCER_STATUS,
@@ -213,12 +209,12 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 			case paused = <-prod.pauseCh:
 				var directive Directive
 				if paused {
-					directive = Directive_PRODUCER_STOPPED
+					directive = Directive_PRODUCER_PAUSED
 				} else {
-					directive = Directive_PRODUCER_STARTED
+					directive = Directive_PRODUCER_RUNNING
 				}
 				msg, err := kafkaMessage(
-					&prod.platformTopic,
+					&prod.producersTopic,
 					0,
 					prod.producerDirective(),
 					directive,
@@ -232,8 +228,8 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 				}
 				log.Info().Msgf("pause produce %+v", msg)
 				prod.adminProdCh <- msg
-			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
+			case platformMsg := <-prod.platformCh:
+				prod.updatePlatform(ctx, platformMsg.NewRtPlat, wg)
 			case msg := <-prod.produceCh:
 				if prod.prodCh == nil {
 					prod.slog.Error().
@@ -269,8 +265,8 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 				return
 			case paused = <-prod.pauseCh:
 				continue
-			case adminMsg := <-prod.adminCh:
-				prod.updatePlatform(ctx, adminMsg.NewRtPlat, wg)
+			case platMsg := <-prod.platformCh:
+				prod.updatePlatform(ctx, platMsg.NewRtPlat, wg)
 			}
 		}
 	}
