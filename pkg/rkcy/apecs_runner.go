@@ -103,7 +103,6 @@ func produceNextStep(
 		if rtxn.txn.Direction == Direction_FORWARD {
 			if gSettings.System == System_PROCESS {
 				for _, step := range rtxn.txn.ForwardSteps {
-					log.Info().Msgf("Considering step: %s %s %s", step.System.String(), step.Command, step.Result.Code.String())
 					if step.System == System_STORAGE {
 						// generate secondary storage steps
 						if step.Command == CREATE || step.Command == UPDATE || step.Command == DELETE {
@@ -448,7 +447,6 @@ func advanceApecsTxn(
 	// if we have additional steps from handleCommand we should place
 	// them in the transaction
 	if addSteps != nil && len(addSteps) > 0 {
-		log.Warn().Msgf("InsertSteps from handleCommand %s %s", step.System.String(), step.Command)
 		err := rtxn.insertSteps(rtxn.txn.CurrentStepIdx+1, addSteps...)
 		if err != nil {
 			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "insertSteps failure: %s", err.Error())
@@ -638,7 +636,7 @@ func consumeApecsTopic(
 				// not default to latest.
 				if firstMessage {
 					firstMessage = false
-					log.Info().
+					log.Debug().
 						Str("Topic", fullTopic).
 						Int32("Partition", partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
@@ -659,7 +657,7 @@ func consumeApecsTopic(
 							Int64("Offset", int64(msg.TopicPartition.Offset)).
 							Msgf("Unable to commit initial offset")
 					}
-					log.Info().
+					log.Debug().
 						Str("Topic", fullTopic).
 						Int32("Partition", partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).

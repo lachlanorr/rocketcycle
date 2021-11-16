@@ -319,7 +319,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 				// not default to latest.
 				if firstMessage {
 					firstMessage = false
-					log.Info().
+					log.Debug().
 						Str("Topic", respTarget.Topic).
 						Int32("Partition", respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
@@ -340,7 +340,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 							Int64("Offset", int64(msg.TopicPartition.Offset)).
 							Msgf("Unable to commit initial offset")
 					}
-					log.Info().
+					log.Debug().
 						Str("Topic", respTarget.Topic).
 						Int32("Partition", respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).

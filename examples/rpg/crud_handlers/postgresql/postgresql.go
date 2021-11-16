@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/rs/zerolog/log"
 )
 
 var pool *pgxpool.Pool = nil
@@ -16,8 +15,6 @@ func InitPostgresqlPool(ctx context.Context, config map[string]string, wg *sync.
 	if !ok {
 		return fmt.Errorf("No connString specified in config")
 	}
-
-	log.Warn().Msgf("InitPostgresqlPool %s", connString)
 
 	var err error
 	pool, err = pgxpool.Connect(context.Background(), connString)

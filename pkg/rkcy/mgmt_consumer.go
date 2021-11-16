@@ -174,7 +174,7 @@ func FindMostRecentMatching(
 		}
 	}
 
-	log.Info().
+	log.Debug().
 		Str("Topic", topic).
 		Int("Partition", int(partition)).
 		Str("Match", match.String()).
