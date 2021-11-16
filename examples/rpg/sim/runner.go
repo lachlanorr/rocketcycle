@@ -67,6 +67,30 @@ var commandsBalanced = map[CommandId]Command{
 	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 20},
 }
 
+var commandsReadCharacter = map[CommandId]Command{
+	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 0},
+	CmdFund:            {Handler: cmdFund, Ratio: 0},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 0},
+	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 0},
+	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 100},
+}
+
+var commandsFund = map[CommandId]Command{
+	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 0},
+	CmdFund:            {Handler: cmdFund, Ratio: 100},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 0},
+	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 0},
+	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 0},
+}
+
+var commandsTrade = map[CommandId]Command{
+	CmdCreateCharacter: {Handler: cmdCreateCharacter, Ratio: 0},
+	CmdFund:            {Handler: cmdFund, Ratio: 0},
+	CmdTrade:           {Handler: cmdTrade, Ratio: 100},
+	CmdReadPlayer:      {Handler: cmdReadPlayer, Ratio: 0},
+	CmdReadCharacter:   {Handler: cmdReadCharacter, Ratio: 0},
+}
+
 var commands = commandsBalanced
 
 type DifferenceType string
@@ -256,6 +280,12 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 
 func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
 	diffs := make([]*Difference, 0, 10)
+
+	wg := &sync.WaitGroup{}
+	dbConfig := map[string]string{
+		"connString": "postgresql://postgres@127.0.0.1:5432/rpg",
+	}
+	store_pg.InitPostgresqlPool(ctx, dbConfig, wg)
 
 	playerPg := store_pg.Player{}
 	characterPg := store_pg.Character{}

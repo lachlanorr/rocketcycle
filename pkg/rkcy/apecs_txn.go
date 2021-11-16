@@ -64,13 +64,12 @@ func newApecsTxn(
 				Payload:       step.Payload,
 				EffectiveTime: step.EffectiveTime,
 			}
+			step.System = System_STORAGE // switch to storage UPDATE
 			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		} else if step.System == System_PROCESS && step.Command == DELETE {
-			storStep := *step
-			storStep.System = System_STORAGE
+			step.System = System_STORAGE // switch to storage DELETE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
-			txn.ForwardSteps = append(txn.ForwardSteps, &storStep)
 		} else {
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		}
@@ -151,6 +150,17 @@ func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 	return nil
 }
 
+func (rtxn *rtApecsTxn) replaceStep(idx int32, step *ApecsTxn_Step) error {
+	currSteps := rtxn.getSteps()
+
+	if idx < 0 || idx >= int32(len(currSteps)) {
+		return fmt.Errorf("Index out of range")
+	}
+
+	currSteps[idx] = step
+	return nil
+}
+
 func getSteps(txn *ApecsTxn) []*ApecsTxn_Step {
 	if txn.Direction == Direction_FORWARD {
 		return txn.ForwardSteps
@@ -220,11 +230,11 @@ func validateSteps(txnId string, currentStepIdx int32, steps []*ApecsTxn_Step, n
 	}
 
 	for _, step := range steps {
-		if step.System != System_PROCESS && step.System != System_STORAGE {
+		if step.System != System_PROCESS && !IsStorageSystem(step.System) {
 			return fmt.Errorf(
-				"rtApecsTxn.validateSteps TxnId=%s System=%d: Invalid System",
+				"rtApecsTxn.validateSteps TxnId=%s System=%s: Invalid System",
 				txnId,
-				step.System,
+				step.System.String(),
 			)
 		}
 	}

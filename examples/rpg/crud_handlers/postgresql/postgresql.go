@@ -2,28 +2,28 @@ package postgresql
 
 import (
 	"context"
-	"os"
+	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog/log"
 )
 
-var _pool *pgxpool.Pool = nil
+var pool *pgxpool.Pool = nil
 
-func pool() *pgxpool.Pool {
-	if _pool == nil {
-		connString := os.Getenv("DATABASE_URL")
-		if connString == "" {
-			connString = "postgresql://postgres@127.0.0.1:5432/rpg"
-		}
-
-		var err error
-		_pool, err = pgxpool.Connect(context.Background(), connString)
-		if err != nil {
-			log.Fatal().
-				Err(err).
-				Msgf("Failed to create pgxpool: %s", connString)
-		}
+func InitPostgresqlPool(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error {
+	connString, ok := config["connString"]
+	if !ok {
+		return fmt.Errorf("No connString specified in config")
 	}
-	return _pool
+
+	log.Warn().Msgf("InitPostgresqlPool %s", connString)
+
+	var err error
+	pool, err = pgxpool.Connect(context.Background(), connString)
+	if err != nil {
+		return fmt.Errorf("Failed to create pgxpool: %s", connString)
+	}
+
+	return nil
 }

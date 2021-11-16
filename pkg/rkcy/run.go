@@ -43,7 +43,7 @@ func newRtProgram(program *Program, key string) *rtProgram {
 	}
 	rtProg.color = gColors[gCurrColorIdx%len(gColors)]
 	gCurrColorIdx++
-	rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
+	rtProg.abbrev = colorize(fmt.Sprintf("%-20s |  ", rtProg.program.Abbrev), rtProg.color)
 
 	return rtProg
 }
@@ -308,6 +308,7 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 		gSettings.AdminBrokers,
 		PlatformName(),
 		Environment(),
+		nil,
 		wg,
 	)
 

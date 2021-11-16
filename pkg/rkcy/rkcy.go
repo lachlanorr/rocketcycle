@@ -5,9 +5,11 @@
 package rkcy
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -29,16 +31,20 @@ const (
 type StandardTopicName string
 
 const (
-	ADMIN    StandardTopicName = "admin"
-	PROCESS                    = "process"
-	ERROR                      = "error"
-	COMPLETE                   = "complete"
-	STORAGE                    = "storage"
+	ADMIN        StandardTopicName = "admin"
+	PROCESS                        = "process"
+	ERROR                          = "error"
+	COMPLETE                       = "complete"
+	STORAGE                        = "storage"
+	STORAGE_SCND                   = "storage-scnd"
 )
+
+type StorageInit func(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error
 
 type PlatformImpl struct {
 	Name          string
 	CobraCommands []*cobra.Command
+	StorageInits  map[string]StorageInit
 }
 
 func StartPlatform(impl *PlatformImpl) {
@@ -134,6 +140,8 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 		tp.System = System_PROCESS
 	} else if tp.Topic == STORAGE {
 		tp.System = System_STORAGE
+	} else if tp.Topic == STORAGE_SCND {
+		tp.System = System_STORAGE_SCND
 	} else {
 		tp.System = System_NO_SYSTEM
 	}

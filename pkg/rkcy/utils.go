@@ -80,6 +80,20 @@ func mini(x, y int) int {
 	return x
 }
 
+func maxi32(x, y int32) int32 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func mini32(x, y int32) int32 {
+	if x > y {
+		return y
+	}
+	return x
+}
+
 func maxi64(x, y int64) int64 {
 	if x < y {
 		return y
@@ -270,7 +284,7 @@ const (
 // reasonable list of colors that change greatly each time
 var gColors []int = []int{
 	11, 12, /*13, 14, 10,*/ /*9,*/
-	31 /*47,*/ /*63,*/, 79, 95 /*111,*/, 127, 143, 159, 175, 191, 207, 223,
+	31 /*47,*/ /*63,*/, 79, 95 /*111,*/, 127, 143, 159, 175 /*191,*/, 207, 223,
 	25, 41, 57, 73, 89, 105, 121, 137, 153, 169, 185, 201, 217,
 	26, 42, 58, 74, 90, 106, 122, 138, 154, 170, 186, 202, 218,
 	27, 43, 59, 75, 91, 107, 123, 139, 155, 171, 187, 203, 219,
@@ -300,7 +314,7 @@ func BytesToInt(arr []byte) int {
 	return val
 }
 
-func OffsetGreaterThan(lhs *CompoundOffset, rhs *CompoundOffset) bool {
+func OffsetGT(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 	if lhs.Generation == rhs.Generation {
 		if lhs.Partition == rhs.Partition {
 			return lhs.Offset > rhs.Offset
@@ -308,6 +322,17 @@ func OffsetGreaterThan(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 		return lhs.Partition > rhs.Partition
 	} else {
 		return lhs.Generation > rhs.Generation
+	}
+}
+
+func OffsetGTE(lhs *CompoundOffset, rhs *CompoundOffset) bool {
+	if lhs.Generation == rhs.Generation {
+		if lhs.Partition == rhs.Partition {
+			return lhs.Offset >= rhs.Offset
+		}
+		return lhs.Partition >= rhs.Partition
+	} else {
+		return lhs.Generation >= rhs.Generation
 	}
 }
 

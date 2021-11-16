@@ -27,7 +27,7 @@ import (
 
 var gAdminPingInterval = 1 * time.Second
 
-var gCurrentRtPlat *rtPlatform = nil
+var gCurrentRtPlat *rtPlatform
 
 type ProducerTracker struct {
 	platformName  string
@@ -309,7 +309,12 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(ctx context.Context, platformName string, environment string, wg *sync.WaitGroup) {
+func managePlatform(
+	ctx context.Context,
+	platformName string,
+	environment string,
+	wg *sync.WaitGroup,
+) {
 	consumersTopic := ConsumersTopic(platformName, environment)
 	adminProdCh := getProducerCh(ctx, gSettings.AdminBrokers, wg)
 
@@ -320,6 +325,7 @@ func managePlatform(ctx context.Context, platformName string, environment string
 		gSettings.AdminBrokers,
 		platformName,
 		environment,
+		nil,
 		wg,
 	)
 
@@ -330,6 +336,7 @@ func managePlatform(ctx context.Context, platformName string, environment string
 		gSettings.AdminBrokers,
 		platformName,
 		environment,
+		nil,
 		wg,
 	)
 
@@ -339,8 +346,6 @@ func managePlatform(ctx context.Context, platformName string, environment string
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
-				Msg("managePlatform exiting, ctx.Done()")
 			return
 		case <-cullTicker.C:
 			// cull stale producers
@@ -378,7 +383,7 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic st
 	traceParent := ExtractTraceParent(ctx)
 
 	for _, p := range platDiff.progsToStop {
-		msg, err := kafkaMessage(
+		msg, err := newKafkaMessage(
 			&consumersTopic,
 			0,
 			&ConsumerDirective{Program: p},
@@ -394,7 +399,7 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic st
 	}
 
 	for _, p := range platDiff.progsToStart {
-		msg, err := kafkaMessage(
+		msg, err := newKafkaMessage(
 			&consumersTopic,
 			0,
 			&ConsumerDirective{Program: p},
@@ -431,27 +436,30 @@ var gStdTags map[string]string = map[string]string{
 }
 
 func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
-	progs := make([]*Program, topics.Current.PartitionCount)
-	for i := int32(0); i < topics.Current.PartitionCount; i++ {
-		topicName := BuildFullTopicName(PlatformName(), Environment(), concern.Name, concern.Type, topics.Name, topics.Current.Generation)
-		cluster := clusters[topics.Current.Cluster]
-		progs[i] = &Program{
-			Name:   substStr(topics.ConsumerProgram.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
-			Args:   make([]string, len(topics.ConsumerProgram.Args)),
-			Abbrev: substStr(topics.ConsumerProgram.Abbrev, concern.Name, cluster.Brokers, topics.Name, topicName, i),
-			Tags:   make(map[string]string),
-		}
-		for j := 0; j < len(topics.ConsumerProgram.Args); j++ {
-			progs[i].Args[j] = substStr(topics.ConsumerProgram.Args[j], concern.Name, cluster.Brokers, topics.Name, topicName, i)
-		}
-
-		for k, v := range gStdTags {
-			progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
-		}
-		if topics.ConsumerProgram.Tags != nil {
-			for k, v := range topics.ConsumerProgram.Tags {
-				progs[i].Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
+	progs := make([]*Program, 0, topics.Current.PartitionCount)
+	for _, consProg := range topics.ConsumerPrograms {
+		for i := int32(0); i < topics.Current.PartitionCount; i++ {
+			topicName := BuildFullTopicName(PlatformName(), Environment(), concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+			cluster := clusters[topics.Current.Cluster]
+			prog := &Program{
+				Name:   substStr(consProg.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
+				Args:   make([]string, len(consProg.Args)),
+				Abbrev: substStr(consProg.Abbrev, concern.Name, cluster.Brokers, topics.Name, topicName, i),
+				Tags:   make(map[string]string),
 			}
+			for j := 0; j < len(consProg.Args); j++ {
+				prog.Args[j] = substStr(consProg.Args[j], concern.Name, cluster.Brokers, topics.Name, topicName, i)
+			}
+
+			for k, v := range gStdTags {
+				prog.Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
+			}
+			if consProg.Tags != nil {
+				for k, v := range consProg.Tags {
+					prog.Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
+				}
+			}
+			progs = append(progs, prog)
 		}
 	}
 	return progs

@@ -14,7 +14,7 @@ func (rtPlat *rtPlatform) getAllProgs() map[string]*Program {
 	if rtPlat != nil {
 		for _, concern := range rtPlat.Platform.Concerns {
 			for _, topics := range concern.Topics {
-				if topics.ConsumerProgram != nil {
+				if topics.ConsumerPrograms != nil {
 					exProgs := expandProgs(concern, topics, rtPlat.Clusters)
 					for _, p := range exProgs {
 						progs[progKey(p)] = p

@@ -25,8 +25,11 @@ type Settings struct {
 	GrpcAddr   string
 	PortalAddr string
 
+	System    System
 	Topic     string
 	Partition int32
+
+	StorageTarget string
 
 	WatchDecode bool
 }
@@ -59,6 +62,12 @@ func prepPlatformImpl(impl *PlatformImpl) {
 	if !validateConcernHandlers() {
 		log.Fatal().
 			Msg("validateConcernHandlers failed")
+	}
+
+	// Make sure we at least have an empty map. Concern handler
+	// codegen will validate the right stuff is in there.
+	if impl.StorageInits == nil {
+		impl.StorageInits = make(map[string]StorageInit)
 	}
 }
 
@@ -140,6 +149,16 @@ func runCobra(impl *PlatformImpl) {
 	}
 	portalReadCmd.AddCommand(portalReadProducersCmd)
 
+	portalCancelTxnCmd := &cobra.Command{
+		Use:       "cancel",
+		Short:     "Cancel APECS transaction",
+		Args:      cobra.MinimumNArgs(1),
+		ValidArgs: []string{"txn_id"},
+		Run:       cobraPortalCancelTxn,
+	}
+	portalCancelTxnCmd.PersistentFlags().StringVar(&gSettings.PortalAddr, "portal_addr", "localhost:11381", "Address against which to make client requests")
+	portalCmd.AddCommand(portalCancelTxnCmd)
+
 	portalDecodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
 		Short:     "decode and print base64 payload",
@@ -196,7 +215,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   "process",
 		Short: "APECS processing mode",
 		Long:  "Runs a proc consumer against the partition specified",
-		Run:   cobraProcess,
+		Run:   cobraApecsConsumer,
 	}
 	procCmd.PersistentFlags().StringVar(&gSettings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
 	procCmd.MarkPersistentFlagRequired("consumer_brokers")
@@ -211,7 +230,7 @@ func runCobra(impl *PlatformImpl) {
 		Use:   "storage",
 		Short: "APECS storage mode",
 		Long:  "Runs a storage consumer against the partition specified",
-		Run:   cobraStorage,
+		Run:   cobraApecsConsumer,
 	}
 	storageCmd.PersistentFlags().StringVar(&gSettings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
 	storageCmd.MarkPersistentFlagRequired("consumer_brokers")
@@ -219,7 +238,26 @@ func runCobra(impl *PlatformImpl) {
 	storageCmd.MarkPersistentFlagRequired("topic")
 	storageCmd.PersistentFlags().Int32VarP(&gSettings.Partition, "partition", "p", -1, "Partition to consume")
 	storageCmd.MarkPersistentFlagRequired("partition")
+	storageCmd.PersistentFlags().StringVar(&gSettings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
+	storageCmd.MarkPersistentFlagRequired("storage_target")
 	rootCmd.AddCommand(storageCmd)
+
+	// secondary-storage sub command
+	storageScndCmd := &cobra.Command{
+		Use:   "storage-scnd",
+		Short: "APECS secondary storage mode",
+		Long:  "Runs a secondary storage consumer against the partition specified",
+		Run:   cobraApecsConsumer,
+	}
+	storageScndCmd.PersistentFlags().StringVar(&gSettings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	storageScndCmd.MarkPersistentFlagRequired("consumer_brokers")
+	storageScndCmd.PersistentFlags().StringVarP(&gSettings.Topic, "topic", "t", "", "Topic to consume")
+	storageScndCmd.MarkPersistentFlagRequired("topic")
+	storageScndCmd.PersistentFlags().Int32VarP(&gSettings.Partition, "partition", "p", -1, "Partition to consume")
+	storageScndCmd.MarkPersistentFlagRequired("partition")
+	storageScndCmd.PersistentFlags().StringVar(&gSettings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
+	storageScndCmd.MarkPersistentFlagRequired("storage_target")
+	rootCmd.AddCommand(storageScndCmd)
 
 	// watch sub command
 	watchCmd := &cobra.Command{

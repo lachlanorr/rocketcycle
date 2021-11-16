@@ -12,10 +12,6 @@ import (
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
-func init() {
-	rkcy.RegisterLogicHandler("Player", &Player{})
-}
-
 type Player struct{}
 
 func (*Player) ValidateCreate(ctx context.Context, inst *pb.Player) (*pb.Player, error) {

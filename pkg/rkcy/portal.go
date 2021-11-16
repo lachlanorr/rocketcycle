@@ -47,6 +47,8 @@ func cobraPortalServe(cmd *cobra.Command, args []string) {
 	var wg sync.WaitGroup
 	go portalServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr, &wg)
 
+	go portalPlatform(ctx, PlatformName(), Environment(), &wg)
+
 	select {
 	case <-interruptCh:
 		log.Warn().
@@ -152,8 +154,31 @@ func cobraPortalReadProducers(cmd *cobra.Command, args []string) {
 	fmt.Println(string(body))
 }
 
+func cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
+	conn, err := grpc.Dial(gSettings.PortalAddr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Str("PortalAddr", gSettings.PortalAddr).
+			Msg("Failed to grpc.Dial")
+	}
+	defer conn.Close()
+	client := NewPortalServiceClient(conn)
+
+	cancelTxnReq := &CancelTxnRequest{
+		TxnId: args[0],
+	}
+
+	_, err = client.CancelTxn(context.Background(), cancelTxnReq)
+	if err != nil {
+		log.Fatal().
+			Err(err).
+			Msg("CancelTxn error")
+	}
+}
+
 func cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
-	path := "/v1/decode/instance"
+	path := "/v1/instance/decode"
 	slog := log.With().
 		Str("Path", path).
 		Logger()
@@ -251,10 +276,6 @@ func (srv portalServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadRe
 	return srv.confMgr.BuildConfigResponse(), nil
 }
 
-func (portalServer) Producers(ctx context.Context, pa *Void) (*TrackedProducers, error) {
-	return gProducerTracker.toTrackedProducers(), nil
-}
-
 func (portalServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
 	jsonBytes, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
@@ -304,6 +325,62 @@ func (portalServer) DecodeResultPayload(ctx context.Context, args *DecodePayload
 	return resultProto2DecodeResponse(resProto)
 }
 
+func (portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) (*Void, error) {
+	ctx, traceId, span := Telem().StartRequest(ctx)
+	defer span.End()
+
+	log.Warn().Msgf("CancelTxn %s", cancelTxn.TxnId)
+
+	cncAdminDir := &ConcernAdminDirective{
+		TxnId: cancelTxn.TxnId,
+	}
+
+	wg := &sync.WaitGroup{}
+
+	platCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
+		ctx,
+		platCh,
+		gSettings.AdminBrokers,
+		gPlatformName,
+		gEnvironment,
+		nil,
+		wg,
+	)
+
+	platMsg := <-platCh
+	rtPlat := platMsg.NewRtPlat
+
+	for _, rtCnc := range rtPlat.Concerns {
+		if rtCnc.Concern.Type == Platform_Concern_APECS {
+			adminRtTopics, ok := rtCnc.Topics[string(ADMIN)]
+			if !ok {
+				return nil, fmt.Errorf("No admin topic for concern: %s", rtCnc.Concern.Name)
+			}
+			cluster, ok := rtPlat.Clusters[adminRtTopics.Topics.Current.Cluster]
+			if !ok {
+				return nil, fmt.Errorf("No brokers (%s) for concern topic: %s.%s", adminRtTopics.Topics.Current.Cluster, rtCnc.Concern.Name, ADMIN)
+			}
+			log.Info().Msgf("%s - %s", cluster.Brokers, adminRtTopics.CurrentTopic)
+
+			prodCh := getProducerCh(ctx, cluster.Brokers, wg)
+			msg, err := newKafkaMessage(
+				&adminRtTopics.CurrentTopic,
+				0,
+				cncAdminDir,
+				Directive_CONCERN_ADMIN_CANCEL_TXN,
+				traceId,
+			)
+			if err != nil {
+				return nil, err
+			}
+			prodCh <- msg
+		}
+	}
+
+	return &Void{}, nil
+}
+
 func portalServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync.WaitGroup) {
 	srv := portalServer{
 		httpAddr: httpAddr,
@@ -311,4 +388,38 @@ func portalServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync
 		confMgr:  NewConfigMgr(ctx, gSettings.AdminBrokers, PlatformName(), Environment(), wg),
 	}
 	ServeGrpcGateway(ctx, srv)
+}
+
+func portalPlatform(
+	ctx context.Context,
+	platformName string,
+	environment string,
+	wg *sync.WaitGroup,
+) {
+	platCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
+		ctx,
+		platCh,
+		gSettings.AdminBrokers,
+		platformName,
+		environment,
+		nil,
+		wg,
+	)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Warn().
+				Msg("managePlatform exiting, ctx.Done()")
+			return
+		case platMsg := <-platCh:
+			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+				continue
+			}
+
+			gCurrentRtPlat = platMsg.NewRtPlat
+		}
+	}
 }

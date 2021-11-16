@@ -14,15 +14,13 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-type FullMessage struct {
+type RawMessage struct {
 	Directive   Directive
 	Value       []byte
 	Offset      int64
 	Timestamp   time.Time
 	TraceParent string
 }
-
-type MessageHandler func(fullMsg *FullMessage)
 
 type MatchLoc int
 
@@ -184,13 +182,17 @@ func FindMostRecentMatching(
 	return found == kFound, mro, nil
 }
 
-func consumeAdminTopic(
+// consumeMgmtTopic is intended for single paritition topics used in
+// the management of the system. Examples include platform, consumers,
+// producers, and config topics.
+func consumeMgmtTopic(
 	ctx context.Context,
 	adminBrokers string,
 	topic string,
 	match Directive,
 	startMatchLoc MatchLoc,
-	handler MessageHandler,
+	handler func(rawMsg *RawMessage),
+	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -239,10 +241,10 @@ func consumeAdminTopic(
 	}
 	defer func() {
 		slog.Warn().
-			Msgf("Closing kafka consumer")
+			Msgf("CONSUMER Closing...")
 		cons.Close()
 		slog.Warn().
-			Msgf("Closed kafka consumer")
+			Msgf("CONSUMER CLOSED")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
@@ -260,11 +262,13 @@ func consumeAdminTopic(
 		return
 	}
 
+	if readyCh != nil {
+		readyCh <- true
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Warn().
-				Msg("consumeAdminTopic exiting, ctx.Done()")
 			return
 		default:
 			msg, err := cons.ReadMessage(100 * time.Millisecond)
@@ -276,14 +280,14 @@ func consumeAdminTopic(
 			} else if !timedOut && msg != nil {
 				directive := GetDirective(msg)
 				if (directive & match) != 0 {
-					fullMsg := &FullMessage{
+					rawMsg := &RawMessage{
 						Directive:   directive,
 						Value:       msg.Value,
 						Offset:      int64(msg.TopicPartition.Offset),
 						Timestamp:   msg.Timestamp,
 						TraceParent: GetTraceParent(msg),
 					}
-					handler(fullMsg)
+					handler(rawMsg)
 				}
 			}
 		}
@@ -304,20 +308,21 @@ func consumePlatformTopic(
 	adminBrokers string,
 	platformName string,
 	environment string,
+	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	var currRtPlat *rtPlatform
 
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumeMgmtTopic(
 		ctx,
 		adminBrokers,
 		PlatformTopic(platformName, environment),
 		Directive_PLATFORM,
 		kAtLastMatch,
-		func(fullMsg *FullMessage) {
+		func(rawMsg *RawMessage) {
 			plat := &Platform{}
-			err := proto.Unmarshal(fullMsg.Value, plat)
+			err := proto.Unmarshal(rawMsg.Value, plat)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -346,13 +351,14 @@ func consumePlatformTopic(
 			}
 
 			ch <- &PlatformMessage{
-				Directive: fullMsg.Directive,
-				Timestamp: fullMsg.Timestamp,
-				Offset:    fullMsg.Offset,
+				Directive: rawMsg.Directive,
+				Timestamp: rawMsg.Timestamp,
+				Offset:    rawMsg.Offset,
 				NewRtPlat: rtPlat,
 				OldRtPlat: currRtPlat,
 			}
 		},
+		readyCh,
 		wg,
 	)
 }
@@ -370,19 +376,20 @@ func consumeConfigTopic(
 	adminBrokers string,
 	platformName string,
 	environment string,
+	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumeMgmtTopic(
 		ctx,
 		adminBrokers,
 		ConfigTopic(platformName, environment),
 		Directive_CONFIG,
 		kAtLastMatch,
-		func(fullMsg *FullMessage) {
-			if chPublish != nil && (fullMsg.Directive&Directive_CONFIG_PUBLISH) == Directive_CONFIG_PUBLISH {
+		func(rawMsg *RawMessage) {
+			if chPublish != nil && (rawMsg.Directive&Directive_CONFIG_PUBLISH) == Directive_CONFIG_PUBLISH {
 				conf := &Config{}
-				err := proto.Unmarshal(fullMsg.Value, conf)
+				err := proto.Unmarshal(rawMsg.Value, conf)
 				if err != nil {
 					log.Error().
 						Err(err).
@@ -391,13 +398,14 @@ func consumeConfigTopic(
 				}
 
 				chPublish <- &ConfigPublishMessage{
-					Directive: fullMsg.Directive,
-					Timestamp: fullMsg.Timestamp,
-					Offset:    fullMsg.Offset,
+					Directive: rawMsg.Directive,
+					Timestamp: rawMsg.Timestamp,
+					Offset:    rawMsg.Offset,
 					Config:    conf,
 				}
 			}
 		},
+		readyCh,
 		wg,
 	)
 }
@@ -415,18 +423,19 @@ func consumeConsumersTopic(
 	adminBrokers string,
 	platformName string,
 	environment string,
+	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumeMgmtTopic(
 		ctx,
 		adminBrokers,
 		ConsumersTopic(platformName, environment),
 		Directive_CONSUMER,
 		kPastLastMatch,
-		func(fullMsg *FullMessage) {
+		func(rawMsg *RawMessage) {
 			consDir := &ConsumerDirective{}
-			err := proto.Unmarshal(fullMsg.Value, consDir)
+			err := proto.Unmarshal(rawMsg.Value, consDir)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -435,12 +444,13 @@ func consumeConsumersTopic(
 			}
 
 			ch <- &ConsumerMessage{
-				Directive:         fullMsg.Directive,
-				Timestamp:         fullMsg.Timestamp,
-				Offset:            fullMsg.Offset,
+				Directive:         rawMsg.Directive,
+				Timestamp:         rawMsg.Timestamp,
+				Offset:            rawMsg.Offset,
 				ConsumerDirective: consDir,
 			}
 		},
+		readyCh,
 		wg,
 	)
 }
@@ -458,18 +468,19 @@ func consumeProducersTopic(
 	adminBrokers string,
 	platformName string,
 	environment string,
+	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	wg.Add(1)
-	go consumeAdminTopic(
+	go consumeMgmtTopic(
 		ctx,
 		adminBrokers,
 		ProducersTopic(platformName, environment),
 		Directive_PRODUCER,
 		kPastLastMatch,
-		func(fullMsg *FullMessage) {
+		func(rawMsg *RawMessage) {
 			prodDir := &ProducerDirective{}
-			err := proto.Unmarshal(fullMsg.Value, prodDir)
+			err := proto.Unmarshal(rawMsg.Value, prodDir)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -478,12 +489,163 @@ func consumeProducersTopic(
 			}
 
 			ch <- &ProducerMessage{
-				Directive:         fullMsg.Directive,
-				Timestamp:         fullMsg.Timestamp,
-				Offset:            fullMsg.Offset,
+				Directive:         rawMsg.Directive,
+				Timestamp:         rawMsg.Timestamp,
+				Offset:            rawMsg.Offset,
 				ProducerDirective: prodDir,
 			}
 		},
+		readyCh,
+		wg,
+	)
+}
+
+// consumeACETopic behaves much like consumeMgmtTopic, but is intended
+// to operate upon Admin, Complete, and Error topics belonging to
+// concerns which are always single partition but may contain
+// divergent generational definitions. The platform topic is read as
+// well, and if the ACE topic being consumed changes definitions,
+// consumeACETopic will automatically adjust to the new current topic
+// definition.
+func consumeACETopic(
+	ctx context.Context,
+	adminBrokers string,
+	platformName string,
+	environment string,
+	concern string,
+	aceTopic StandardTopicName,
+
+	match Directive,
+	startMatchLoc MatchLoc,
+	handler func(rawMsg *RawMessage),
+
+	readyCh chan<- bool,
+	wg *sync.WaitGroup,
+) {
+	if !isACETopic(string(aceTopic)) {
+		log.Fatal().Msgf("consumeConcernACETopic invalid topic: %s", aceTopic)
+	}
+
+	var (
+		topicACE  string
+		ctxACE    context.Context
+		cancelACE context.CancelFunc
+		wgACE     *sync.WaitGroup
+	)
+
+	// consume platform topic so we can read messages off the correct
+	// concern admin physical topic
+	platCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
+		ctx,
+		platCh,
+		gSettings.AdminBrokers,
+		platformName,
+		environment,
+		nil,
+		wg,
+	)
+
+	for {
+		select {
+		case <-ctx.Done():
+			if cancelACE != nil {
+				cancelACE()
+				wgACE.Wait()
+			}
+			return
+		case platMsg := <-platCh:
+			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+				continue
+			}
+
+			rtPlat := platMsg.NewRtPlat
+			rtCnc, ok := rtPlat.Concerns[concern]
+			if !ok {
+				log.Error().Msgf("Concern not found in platform: %s", concern)
+				continue
+			}
+
+			rtTop, ok := rtCnc.Topics[string(aceTopic)]
+			if !ok {
+				log.Error().Msgf("ACE topic '%s' not found in concern: %s", aceTopic, concern)
+				continue
+			}
+
+			if rtTop.CurrentTopicPartitionCount != 1 {
+				log.Error().Msgf("ACE topic '%s' invalid partition count in concern: %s", aceTopic, concern)
+			}
+
+			if rtTop.CurrentTopic != topicACE {
+				if cancelACE != nil {
+					cancelACE()
+					wgACE.Wait()
+				}
+				topicACE = rtTop.CurrentTopic
+				ctxACE, cancelACE = context.WithCancel(ctx)
+				wgACE = &sync.WaitGroup{}
+				wgACE.Add(1)
+				go consumeMgmtTopic(
+					ctxACE,
+					adminBrokers,
+					topicACE,
+					match,
+					startMatchLoc,
+					handler,
+					readyCh,
+					wgACE,
+				)
+				readyCh = nil // only send ready on first consumeMgmtTopic call
+			}
+		}
+	}
+}
+
+type ConcernAdminMessage struct {
+	Directive             Directive
+	Timestamp             time.Time
+	Offset                int64
+	ConcernAdminDirective *ConcernAdminDirective
+}
+
+func consumeConcernAdminTopic(
+	ctx context.Context,
+	ch chan<- *ConcernAdminMessage,
+	adminBrokers string,
+	platformName string,
+	environment string,
+	concern string,
+	readyCh chan<- bool,
+	wg *sync.WaitGroup,
+) {
+	go consumeACETopic(
+		ctx,
+		adminBrokers,
+		platformName,
+		environment,
+		concern,
+		ADMIN,
+		Directive_CONCERN_ADMIN,
+		kPastLastMatch,
+		func(rawMsg *RawMessage) {
+			cncAdminDir := &ConcernAdminDirective{}
+			err := proto.Unmarshal(rawMsg.Value, cncAdminDir)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msg("Failed to Unmarshal ConcernAdminDirective")
+				return
+			}
+
+			ch <- &ConcernAdminMessage{
+				Directive:             rawMsg.Directive,
+				Timestamp:             rawMsg.Timestamp,
+				Offset:                rawMsg.Offset,
+				ConcernAdminDirective: cncAdminDir,
+			}
+		},
+		readyCh,
 		wg,
 	)
 }

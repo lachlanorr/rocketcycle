@@ -309,6 +309,7 @@ func (confMgr *ConfigMgr) manageConfigTopic(
 		adminBrokers,
 		platformName,
 		environment,
+		nil,
 		wg,
 	)
 
@@ -514,7 +515,7 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := kafkaMessage(&configTopic, 0, conf, Directive_CONFIG_PUBLISH, ExtractTraceParent(ctx))
+	msg, err := newKafkaMessage(&configTopic, 0, conf, Directive_CONFIG_PUBLISH, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

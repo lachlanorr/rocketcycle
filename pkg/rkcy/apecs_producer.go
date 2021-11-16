@@ -59,7 +59,7 @@ func ValidateTxn(txn *Txn) error {
 	}
 
 	for _, s := range txn.Steps {
-		if IsTxnProhibitedCommandName(s.Command) {
+		if IsTxnProhibitedCommand(s.Command) {
 			return fmt.Errorf("Invalid step command: %s", s.Command)
 		}
 	}
@@ -172,7 +172,7 @@ func (aprod *ApecsProducer) produceResponse(
 
 	respTgt := rtxn.txn.ResponseTarget
 
-	kMsg, err := kafkaMessage(&respTgt.Topic, respTgt.Partition, rtxn.txn, Directive_APECS_TXN, rtxn.traceParent)
+	kMsg, err := newKafkaMessage(&respTgt.Topic, respTgt.Partition, rtxn.txn, Directive_APECS_TXN, rtxn.traceParent)
 	if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 	defer func() {
 		log.Warn().
 			Str("Topic", respTarget.Topic).
-			Msgf("Closing kafka consumer")
+			Msgf("CONSUMER Closing...")
 		if shouldCommit {
 			_, err = cons.Commit()
 			shouldCommit = false
@@ -241,7 +241,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 		cons.Close()
 		log.Warn().
 			Str("Topic", respTarget.Topic).
-			Msgf("Closed kafka consumer")
+			Msgf("CONSUMER CLOSED")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
@@ -574,8 +574,9 @@ func (aprod *ApecsProducer) executeTxn(
 }
 
 var gSystemToTopic = map[System]StandardTopicName{
-	System_PROCESS: PROCESS,
-	System_STORAGE: STORAGE,
+	System_PROCESS:      PROCESS,
+	System_STORAGE:      STORAGE,
+	System_STORAGE_SCND: STORAGE_SCND,
 }
 
 func (aprod *ApecsProducer) produceError(
@@ -680,7 +681,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	var prd *Producer = nil
 	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%d: Invalid System", rtxn.txn.Id, step.System)
+		return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%s: Invalid System", rtxn.txn.Id, step.System.String())
 	}
 
 	prd, err = aprod.getProducer(step.Concern, topicName, wg)
@@ -699,7 +700,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	} else {
 		uid, err := uuid.NewRandom() // use a new randomized string
 		if err != nil {
-			return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%d: uuid.NewRandom error: %s", rtxn.txn.Id, step.System, err.Error())
+			return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%s: uuid.NewRandom error: %s", rtxn.txn.Id, step.System.String(), err.Error())
 		}
 		hashKey = uid[:]
 	}

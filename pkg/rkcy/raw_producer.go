@@ -87,7 +87,7 @@ func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) Prod
 func closeProducer(cp *ChanneledProducer) {
 	log.Warn().
 		Str("Brokers", cp.Brokers).
-		Msg("Closing producer")
+		Msg("PRODUCER Closing...")
 	if cp.Ch != nil {
 		close(cp.Ch)
 	}
@@ -97,7 +97,7 @@ func closeProducer(cp *ChanneledProducer) {
 	}
 	log.Warn().
 		Str("Brokers", cp.Brokers).
-		Msg("Closed producer")
+		Msg("PRODUCER CLOSED")
 }
 
 func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup) {
@@ -107,8 +107,6 @@ func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
-				Msg("runProducer exiting, ctx.Done()")
 			return
 		case msg := <-cp.Ch:
 			err := cp.Prod.Produce(msg, nil)

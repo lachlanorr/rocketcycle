@@ -11,73 +11,7 @@
     "application/json"
   ],
   "paths": {
-    "/v1/config/read": {
-      "get": {
-        "operationId": "PortalService_ConfigRead",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/rkcy.ConfigReadResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/google.rpc.Status"
-            }
-          }
-        },
-        "tags": [
-          "PortalService"
-        ]
-      }
-    },
-    "/v1/config/update": {
-      "post": {
-        "operationId": "PortalService_ConfigUpdate",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/rkcy.Void"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/google.rpc.Status"
-            }
-          }
-        },
-        "tags": [
-          "PortalService"
-        ]
-      }
-    },
-    "/v1/config/update/complex": {
-      "post": {
-        "operationId": "PortalService_ConfigUpdateComplex",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/rkcy.Void"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/google.rpc.Status"
-            }
-          }
-        },
-        "tags": [
-          "PortalService"
-        ]
-      }
-    },
-    "/v1/decode/arg": {
+    "/v1/arg/decode": {
       "post": {
         "operationId": "PortalService_DecodeArgPayload",
         "responses": {
@@ -109,7 +43,29 @@
         ]
       }
     },
-    "/v1/decode/instance": {
+    "/v1/config/read": {
+      "get": {
+        "operationId": "PortalService_ConfigRead",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.ConfigReadResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "PortalService"
+        ]
+      }
+    },
+    "/v1/instance/decode": {
       "post": {
         "operationId": "PortalService_DecodeInstance",
         "responses": {
@@ -141,7 +97,29 @@
         ]
       }
     },
-    "/v1/decode/result": {
+    "/v1/platform/read": {
+      "get": {
+        "operationId": "PortalService_Platform",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/rkcy.Platform"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/google.rpc.Status"
+            }
+          }
+        },
+        "tags": [
+          "PortalService"
+        ]
+      }
+    },
+    "/v1/result/decode": {
       "post": {
         "operationId": "PortalService_DecodeResultPayload",
         "responses": {
@@ -173,14 +151,14 @@
         ]
       }
     },
-    "/v1/platform/read": {
-      "get": {
-        "operationId": "PortalService_Platform",
+    "/v1/txn/cancel": {
+      "post": {
+        "operationId": "PortalService_CancelTxn",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rkcy.Platform"
+              "$ref": "#/definitions/rkcy.Void"
             }
           },
           "default": {
@@ -190,28 +168,16 @@
             }
           }
         },
-        "tags": [
-          "PortalService"
-        ]
-      }
-    },
-    "/v1/producers/read": {
-      "get": {
-        "operationId": "PortalService_Producers",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
             "schema": {
-              "$ref": "#/definitions/rkcy.TrackedProducers"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/google.rpc.Status"
+              "$ref": "#/definitions/rkcy.CancelTxnRequest"
             }
           }
-        },
+        ],
         "tags": [
           "PortalService"
         ]
@@ -246,6 +212,14 @@
           "items": {
             "$ref": "#/definitions/google.protobuf.Any"
           }
+        }
+      }
+    },
+    "rkcy.CancelTxnRequest": {
+      "type": "object",
+      "properties": {
+        "txnId": {
+          "type": "string"
         }
       }
     },
@@ -375,6 +349,12 @@
             "$ref": "#/definitions/rkcy.Platform.Cluster"
           }
         },
+        "storageTargets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.Platform.StorageTarget"
+          }
+        },
         "updateTime": {
           "type": "string",
           "format": "date-time"
@@ -391,6 +371,10 @@
         "brokers": {
           "type": "string",
           "title": "kafka brokers for the cluster"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "title": "brokers used for admin topics, only one cluster can have this set"
         }
       }
     },
@@ -455,8 +439,11 @@
           "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
           "title": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
         },
-        "consumerProgram": {
-          "$ref": "#/definitions/rkcy.Program"
+        "consumerPrograms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.Program"
+          }
         }
       }
     },
@@ -494,6 +481,26 @@
       "default": "FNV64_MOD",
       "description": "- FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count",
       "title": "Different types of partitioning mechanisms"
+    },
+    "rkcy.Platform.StorageTarget": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "isPrimary": {
+          "type": "boolean"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
     },
     "rkcy.Program": {
       "type": "object",
@@ -533,34 +540,10 @@
       "enum": [
         "NO_SYSTEM",
         "PROCESS",
-        "STORAGE"
+        "STORAGE",
+        "STORAGE_SCND"
       ],
       "default": "NO_SYSTEM"
-    },
-    "rkcy.TrackedProducers": {
-      "type": "object",
-      "properties": {
-        "topicProducers": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/rkcy.TrackedProducers.ProducerInfo"
-          }
-        }
-      }
-    },
-    "rkcy.TrackedProducers.ProducerInfo": {
-      "type": "object",
-      "properties": {
-        "topic": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "timeSinceUpdate": {
-          "type": "string"
-        }
-      }
     },
     "rkcy.Void": {
       "type": "object",

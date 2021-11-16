@@ -19,12 +19,10 @@ const _ = grpc.SupportPackageIsVersion7
 type PortalServiceClient interface {
 	Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error)
 	ConfigRead(ctx context.Context, in *Void, opts ...grpc.CallOption) (*ConfigReadResponse, error)
-	ConfigUpdate(ctx context.Context, in *ConfigUpdateRequest, opts ...grpc.CallOption) (*Void, error)
-	ConfigUpdateComplex(ctx context.Context, in *ConfigUpdateComplexRequest, opts ...grpc.CallOption) (*Void, error)
-	Producers(ctx context.Context, in *Void, opts ...grpc.CallOption) (*TrackedProducers, error)
 	DecodeInstance(ctx context.Context, in *DecodeInstanceArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeArgPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeResultPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
+	CancelTxn(ctx context.Context, in *CancelTxnRequest, opts ...grpc.CallOption) (*Void, error)
 }
 
 type portalServiceClient struct {
@@ -47,33 +45,6 @@ func (c *portalServiceClient) Platform(ctx context.Context, in *Void, opts ...gr
 func (c *portalServiceClient) ConfigRead(ctx context.Context, in *Void, opts ...grpc.CallOption) (*ConfigReadResponse, error) {
 	out := new(ConfigReadResponse)
 	err := c.cc.Invoke(ctx, "/rkcy.PortalService/ConfigRead", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *portalServiceClient) ConfigUpdate(ctx context.Context, in *ConfigUpdateRequest, opts ...grpc.CallOption) (*Void, error) {
-	out := new(Void)
-	err := c.cc.Invoke(ctx, "/rkcy.PortalService/ConfigUpdate", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *portalServiceClient) ConfigUpdateComplex(ctx context.Context, in *ConfigUpdateComplexRequest, opts ...grpc.CallOption) (*Void, error) {
-	out := new(Void)
-	err := c.cc.Invoke(ctx, "/rkcy.PortalService/ConfigUpdateComplex", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *portalServiceClient) Producers(ctx context.Context, in *Void, opts ...grpc.CallOption) (*TrackedProducers, error) {
-	out := new(TrackedProducers)
-	err := c.cc.Invoke(ctx, "/rkcy.PortalService/Producers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,18 +78,25 @@ func (c *portalServiceClient) DecodeResultPayload(ctx context.Context, in *Decod
 	return out, nil
 }
 
+func (c *portalServiceClient) CancelTxn(ctx context.Context, in *CancelTxnRequest, opts ...grpc.CallOption) (*Void, error) {
+	out := new(Void)
+	err := c.cc.Invoke(ctx, "/rkcy.PortalService/CancelTxn", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PortalServiceServer is the server API for PortalService service.
 // All implementations must embed UnimplementedPortalServiceServer
 // for forward compatibility
 type PortalServiceServer interface {
 	Platform(context.Context, *Void) (*Platform, error)
 	ConfigRead(context.Context, *Void) (*ConfigReadResponse, error)
-	ConfigUpdate(context.Context, *ConfigUpdateRequest) (*Void, error)
-	ConfigUpdateComplex(context.Context, *ConfigUpdateComplexRequest) (*Void, error)
-	Producers(context.Context, *Void) (*TrackedProducers, error)
 	DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error)
 	DecodeArgPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
 	DecodeResultPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
+	CancelTxn(context.Context, *CancelTxnRequest) (*Void, error)
 	mustEmbedUnimplementedPortalServiceServer()
 }
 
@@ -132,15 +110,6 @@ func (UnimplementedPortalServiceServer) Platform(context.Context, *Void) (*Platf
 func (UnimplementedPortalServiceServer) ConfigRead(context.Context, *Void) (*ConfigReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConfigRead not implemented")
 }
-func (UnimplementedPortalServiceServer) ConfigUpdate(context.Context, *ConfigUpdateRequest) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ConfigUpdate not implemented")
-}
-func (UnimplementedPortalServiceServer) ConfigUpdateComplex(context.Context, *ConfigUpdateComplexRequest) (*Void, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ConfigUpdateComplex not implemented")
-}
-func (UnimplementedPortalServiceServer) Producers(context.Context, *Void) (*TrackedProducers, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Producers not implemented")
-}
 func (UnimplementedPortalServiceServer) DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DecodeInstance not implemented")
 }
@@ -149,6 +118,9 @@ func (UnimplementedPortalServiceServer) DecodeArgPayload(context.Context, *Decod
 }
 func (UnimplementedPortalServiceServer) DecodeResultPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DecodeResultPayload not implemented")
+}
+func (UnimplementedPortalServiceServer) CancelTxn(context.Context, *CancelTxnRequest) (*Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CancelTxn not implemented")
 }
 func (UnimplementedPortalServiceServer) mustEmbedUnimplementedPortalServiceServer() {}
 
@@ -195,60 +167,6 @@ func _PortalService_ConfigRead_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PortalServiceServer).ConfigRead(ctx, req.(*Void))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PortalService_ConfigUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfigUpdateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PortalServiceServer).ConfigUpdate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/rkcy.PortalService/ConfigUpdate",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PortalServiceServer).ConfigUpdate(ctx, req.(*ConfigUpdateRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PortalService_ConfigUpdateComplex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfigUpdateComplexRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PortalServiceServer).ConfigUpdateComplex(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/rkcy.PortalService/ConfigUpdateComplex",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PortalServiceServer).ConfigUpdateComplex(ctx, req.(*ConfigUpdateComplexRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PortalService_Producers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Void)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PortalServiceServer).Producers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/rkcy.PortalService/Producers",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PortalServiceServer).Producers(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -307,6 +225,24 @@ func _PortalService_DecodeResultPayload_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PortalService_CancelTxn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelTxnRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PortalServiceServer).CancelTxn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rkcy.PortalService/CancelTxn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PortalServiceServer).CancelTxn(ctx, req.(*CancelTxnRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _PortalService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "rkcy.PortalService",
 	HandlerType: (*PortalServiceServer)(nil),
@@ -320,18 +256,6 @@ var _PortalService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _PortalService_ConfigRead_Handler,
 		},
 		{
-			MethodName: "ConfigUpdate",
-			Handler:    _PortalService_ConfigUpdate_Handler,
-		},
-		{
-			MethodName: "ConfigUpdateComplex",
-			Handler:    _PortalService_ConfigUpdateComplex_Handler,
-		},
-		{
-			MethodName: "Producers",
-			Handler:    _PortalService_Producers_Handler,
-		},
-		{
 			MethodName: "DecodeInstance",
 			Handler:    _PortalService_DecodeInstance_Handler,
 		},
@@ -342,6 +266,10 @@ var _PortalService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DecodeResultPayload",
 			Handler:    _PortalService_DecodeResultPayload_Handler,
+		},
+		{
+			MethodName: "CancelTxn",
+			Handler:    _PortalService_CancelTxn_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

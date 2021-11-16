@@ -9,16 +9,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
+	"github.com/rs/zerolog/log"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
-
-func init() {
-	rkcy.RegisterCrudHandler("postgresql", "Character", &Character{})
-}
 
 type Character struct{}
 
@@ -27,7 +24,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 		Currency: &pb.Character_Currency{},
 	}
 	cmpdOffset := rkcy.CompoundOffset{}
-	err := pool().QueryRow(
+	err := pool.QueryRow(
 		ctx,
 		`SELECT c.id,
                 c.player_id,
@@ -73,7 +70,9 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 }
 
 func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) (*pb.Character, error) {
-	inst.Id = uuid.NewString()
+	if inst.Id == "" {
+		inst.Id = uuid.NewString()
+	}
 	err := c.upsert(ctx, inst, nil, cmpdOffset)
 	if err != nil {
 		return nil, err
@@ -86,7 +85,8 @@ func (c *Character) Update(ctx context.Context, inst *pb.Character, relCnc *pb.C
 }
 
 func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
-	_, err := pool().Exec(
+	log.Warn().Msgf("Character DELETE %s", key)
+	_, err := pool.Exec(
 		ctx,
 		"CALL rpg.sp_delete_character($1, $2, $3, $4)",
 		key,
@@ -99,7 +99,7 @@ func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.Compo
 
 func (*Character) readItems(ctx context.Context, key string) ([]*pb.Character_Item, error) {
 	var items []*pb.Character_Item
-	rows, err := pool().Query(ctx, "select id, description from rpg.character_item where character_id = $1", key)
+	rows, err := pool.Query(ctx, "select id, description from rpg.character_item where character_id = $1", key)
 	if err == nil {
 		for rows.Next() {
 			item := pb.Character_Item{}
@@ -128,7 +128,7 @@ func (*Character) hasItem(id string, items []*pb.Character_Item) bool {
 }
 
 func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
-	_, err := pool().Exec(
+	_, err := pool.Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
 		inst.Id,
@@ -146,7 +146,7 @@ func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.C
 	if inst.Currency == nil {
 		inst.Currency = &pb.Character_Currency{}
 	}
-	_, err = pool().Exec(
+	_, err = pool.Exec(
 		ctx,
 		"CALL rpg.sp_upsert_character_currency($1, $2, $3, $4, $5, $6, $7, $8)",
 		inst.Id,
@@ -170,7 +170,7 @@ func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.C
 	}
 	for _, dbItem := range dbItems {
 		if !c.hasItem(dbItem.Id, inst.Items) {
-			_, err = pool().Exec(
+			_, err = pool.Exec(
 				ctx,
 				"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 				dbItem.Id,
@@ -188,7 +188,7 @@ func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.C
 	}
 
 	for _, item := range inst.Items {
-		_, err = pool().Exec(
+		_, err = pool.Exec(
 			ctx,
 			"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 			item.Id,

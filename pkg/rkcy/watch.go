@@ -206,6 +206,21 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 						}
 					}
 
+					iB64, ok = step.Get("instance")
+					if ok {
+						b64, ok := iB64.(string)
+						if ok && b64 != "" {
+							argJson, err := decodeInstance64Json(ctx, concern, b64)
+							var argOmap *jsonutils.OrderedMap
+							err = jsonutils.UnmarshalOrdered(argJson, &argOmap)
+							if err == nil {
+								step.SetAfter("instanceDec", argOmap, "instance")
+							} else {
+								step.SetAfter("instanceDecErr", err.Error(), "instance")
+							}
+						}
+					}
+
 					iRslt, ok := step.Get("result")
 					if ok {
 						rslt, ok := iRslt.(*jsonutils.OrderedMap)
@@ -275,6 +290,7 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 		adminBrokers,
 		PlatformName(),
 		Environment(),
+		nil,
 		wg,
 	)
 

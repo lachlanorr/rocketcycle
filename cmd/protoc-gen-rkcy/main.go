@@ -29,6 +29,7 @@ type templateData struct {
 	LeadingComments      string
 	HasConfigs           bool
 	HasConcerns          bool
+	HasConcernCommands   bool
 	HasConfigsOrConcerns bool
 
 	Configs  []*config
@@ -387,7 +388,7 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 		if ok {
 			cnc.Svc = logicSvc
 			for _, method := range logicSvc.SvcPb.Method {
-				if rkcy.IsReservedCommandName(*method.Name) {
+				if rkcy.IsReservedCommand(*method.Name) {
 					return nil, fmt.Errorf("Reserved name used as Command: %s.%s", logicSvc.Name, *method.Name)
 				}
 
@@ -451,7 +452,15 @@ func buildTemplateData(pbFile *descriptorpb.FileDescriptorProto, cat *catalog, r
 	}
 
 	tmplData.HasConfigs = len(tmplData.Configs) > 0
-	tmplData.HasConcerns = len(tmplData.Concerns) > 0
+	if len(tmplData.Concerns) > 0 {
+		tmplData.HasConcerns = true
+		for _, cnc := range tmplData.Concerns {
+			if len(cnc.Commands) > 0 {
+				tmplData.HasConcernCommands = true
+				break
+			}
+		}
+	}
 	tmplData.HasConfigsOrConcerns = tmplData.HasConfigs || tmplData.HasConcerns
 
 	return tmplData

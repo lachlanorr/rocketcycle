@@ -52,7 +52,7 @@ type message struct {
 	deliveryCh  chan kafka.Event
 }
 
-func kafkaMessage(
+func newKafkaMessage(
 	topic *string,
 	partition int32,
 	value proto.Message,
@@ -107,6 +107,7 @@ func NewProducer(
 		adminBrokers,
 		platformName,
 		environment,
+		nil,
 		wg,
 	)
 
@@ -183,7 +184,7 @@ func (prod *Producer) Close() {
 
 func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 	pingAdminTicker := time.NewTicker(gAdminPingInterval)
-	pingMsg, err := kafkaMessage(
+	pingMsg, err := newKafkaMessage(
 		&prod.producersTopic,
 		0,
 		prod.producerDirective(),
@@ -213,7 +214,7 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 				} else {
 					directive = Directive_PRODUCER_RUNNING
 				}
-				msg, err := kafkaMessage(
+				msg, err := newKafkaMessage(
 					&prod.producersTopic,
 					0,
 					prod.producerDirective(),

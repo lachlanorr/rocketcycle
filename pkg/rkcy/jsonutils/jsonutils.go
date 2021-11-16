@@ -97,6 +97,35 @@ func isTrivialArray(arr []interface{}) bool {
 	return false
 }
 
+func EncodeString(bld *strings.Builder, s string) string {
+	if bld == nil {
+		bld = &strings.Builder{}
+	}
+	bld.WriteByte('"')
+	for _, c := range s {
+		switch c {
+		case '"':
+			bld.WriteString(`\"`)
+		case '\\':
+			bld.WriteString(`\\`)
+		case '\b':
+			bld.WriteString(`\b`)
+		case '\f':
+			bld.WriteString(`\f`)
+		case '\n':
+			bld.WriteString(`\n`)
+		case '\r':
+			bld.WriteString(`\r`)
+		case '\t':
+			bld.WriteString(`\t`)
+		default:
+			bld.WriteRune(c)
+		}
+	}
+	bld.WriteByte('"')
+	return bld.String()
+}
+
 func marshal(v interface{}, bld *strings.Builder, eol string, indent string, currIndent string, colonSpace string) error {
 	if v == nil {
 		bld.WriteString("null")
@@ -109,9 +138,7 @@ func marshal(v interface{}, bld *strings.Builder, eol string, indent string, cur
 	case float64:
 		bld.WriteString(strconv.FormatFloat(val, 'f', -1, 64))
 	case string:
-		bld.WriteByte('"')
-		bld.WriteString(val)
-		bld.WriteByte('"')
+		EncodeString(bld, val)
 	case []interface{}:
 		newIndent := currIndent + indent
 		if isTrivialArray(val) {

@@ -8,11 +8,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel/attribute"
 	otel_codes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -20,6 +23,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
 var (
@@ -95,23 +101,64 @@ func produceNextStep(
 	} else {
 		// search for instance updates and create new storage txn to update storage
 		if rtxn.txn.Direction == Direction_FORWARD {
+			if gSettings.System == System_PROCESS {
+				for _, step := range rtxn.txn.ForwardSteps {
+					log.Info().Msgf("Considering step: %s %s %s", step.System.String(), step.Command, step.Result.Code.String())
+					if step.System == System_STORAGE {
+						// generate secondary storage steps
+						if step.Command == CREATE || step.Command == UPDATE || step.Command == DELETE {
+							storageStep := &ApecsTxn_Step{
+								System:     System_STORAGE_SCND,
+								Concern:    step.Concern,
+								Command:    step.Command,
+								Key:        step.Result.Key,
+								Payload:    step.Result.Payload,
+								CmpdOffset: step.CmpdOffset,
+							}
+							storageSteps := []*ApecsTxn_Step{storageStep}
+							storageTxnId := NewTraceId()
+							rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_SECONDARY_STORAGE})
+
+							err := aprod.executeTxn(
+								storageTxnId,
+								&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
+								rtxn.traceParent,
+								UponError_BAILOUT,
+								storageSteps,
+								wg,
+							)
+							if err != nil {
+								produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to apply secondary storage steps", err.Error(), step.Key)
+								// This should be extremely rare, maybe impossible
+								// assuming we can produce at all.  Without proper
+								// storage messages going through, we are better
+								// off failing very loudly.
+								log.Fatal().
+									Msgf("produceNextStep error=\"%s\" Key=%s: Failed to generate secondar storage steps", err.Error(), step.Key)
+							}
+						}
+					}
+				}
+			}
+
+			// Generate update steps for any changed instances
 			storageStepsMap := make(map[string]*ApecsTxn_Step)
 			for _, step := range rtxn.txn.ForwardSteps {
 				if step.System == System_PROCESS && step.Result.Instance != nil {
 					stepKey := fmt.Sprintf("%s_%s", step.Concern, step.Key)
 					storageStepsMap[stepKey] = &ApecsTxn_Step{
-						System:     System_STORAGE,
-						Concern:    step.Concern,
-						Command:    UPDATE,
-						Key:        step.Key,
-						Payload:    step.Result.Instance,
-						CmpdOffset: step.CmpdOffset,
+						System:        System_STORAGE,
+						Concern:       step.Concern,
+						Command:       UPDATE_ASYNC,
+						Key:           step.Key,
+						Payload:       step.Result.Instance,
+						CmpdOffset:    step.CmpdOffset,
+						EffectiveTime: step.EffectiveTime,
 					}
 				}
 			}
-
 			// generate a distinct storage transaction with a single
-			// UPDATE storage step for every instance modified
+			// UPDATE_ASYNC storage step for every instance modified
 			for _, step := range storageStepsMap {
 				storageSteps := []*ApecsTxn_Step{step}
 				storageTxnId := NewTraceId()
@@ -133,6 +180,30 @@ func produceNextStep(
 					// off failing very loudly.
 					log.Fatal().
 						Msgf("produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+
+				} else {
+					// also execute secondary storage txn
+					storageSteps[0].System = System_STORAGE_SCND
+					storageScndTxnId := NewTraceId()
+					rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_STORAGE})
+
+					err := aprod.executeTxn(
+						storageScndTxnId,
+						&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
+						rtxn.traceParent,
+						UponError_BAILOUT,
+						storageSteps,
+						wg,
+					)
+					if err != nil {
+						produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update secondary storage", err.Error(), step.Key)
+						// This should be extremely rare, maybe impossible
+						// assuming we can produce at all.  Without proper
+						// storage messages going through, we are better
+						// off failing very loudly.
+						log.Fatal().
+							Msgf("produceNextStep error=\"%s\" Key=%s: Failed to update secondary storage", err.Error(), step.Key)
+					}
 				}
 			}
 		}
@@ -150,6 +221,35 @@ func isKeylessStep(step *ApecsTxn_Step) bool {
 		(step.System == System_PROCESS && step.Command == VALIDATE_CREATE)
 }
 
+func isInstanceStoreStep(step *ApecsTxn_Step) bool {
+	return step.System == System_PROCESS &&
+		(step.Command == REFRESH_INSTANCE || step.Command == FLUSH_INSTANCE)
+}
+
+func jsonNoErr(msg proto.Message) string {
+	j, err := protojson.Marshal(msg)
+	if err != nil {
+		j = []byte(fmt.Sprintf(`{"err":%s}`, jsonutils.EncodeString(nil, err.Error())))
+	}
+	return string(j)
+}
+
+func cancelApecsTxn(
+	ctx context.Context,
+	rtxn *rtApecsTxn,
+	tp *TopicParts,
+	cmpdOffset *CompoundOffset,
+	aprod *ApecsProducer,
+	confRdr *ConfigRdr,
+	wg *sync.WaitGroup,
+) {
+	ctx = InjectTraceParent(ctx, rtxn.traceParent)
+	ctx, span, step := Telem().StartStep(ctx, rtxn)
+	defer span.End()
+
+	produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_CANCELLED, true, wg, "Txn Cancelled")
+}
+
 func advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
@@ -165,20 +265,20 @@ func advanceApecsTxn(
 
 	log.Debug().
 		Str("TxnId", rtxn.txn.Id).
-		Msgf("Advancing ApecsTxn: %s %d %+v", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, step)
+		Msgf("Advancing ApecsTxn: %s %d %s", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, jsonNoErr(step))
 
 	if step.Result != nil {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result", step.Result)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result, %s", step.Result, jsonNoErr(step))
 		return Code_INTERNAL
 	}
 
 	if step.Concern != tp.Concern {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s", tp.Concern, step.Concern)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s, %s", tp.Concern, step.Concern, jsonNoErr(step))
 		return Code_INTERNAL
 	}
 
 	if step.System != tp.System {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d", tp.System, step.System)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d, %s", tp.System, step.System, jsonNoErr(step))
 		return Code_INTERNAL
 	}
 
@@ -188,7 +288,7 @@ func advanceApecsTxn(
 		if prevStep != nil && prevStep.Result != nil && prevStep.Result.Key != "" {
 			step.Key = prevStep.Result.Key
 		} else {
-			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step")
+			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step: %s %s, %s", step.System.String(), step.Command, jsonNoErr(step))
 			return Code_INTERNAL
 		}
 	}
@@ -201,45 +301,25 @@ func advanceApecsTxn(
 	if step.System == System_PROCESS {
 		step.CmpdOffset = cmpdOffset
 
-		if step.Command == REFRESH_INSTANCE {
-			// Special case "RefreshInstance" command
-			// RefreshInstance command is only ever sent after a READ was executed
-			// against the Storage
-			instBytes, relBytes, err := UnpackPayloads(step.Payload)
-			if err != nil {
-				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "UnpackPayloads error: %s", err.Error())
-				return Code_INTERNAL
-			}
-			gInstanceStore.Set(step.Key, instBytes, relBytes, cmpdOffset)
-			step.Result = &ApecsTxn_Step_Result{
-				Code:          Code_OK,
-				ProcessedTime: now,
-				Payload:       step.Payload,
-			}
-			produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
-			return Code_OK
-		} else if step.Command == FLUSH_INSTANCE {
-			// Special case "FlushInstance" command
-			// All FlushInstance does is flush the key from the instace store
-			// Typically this is only used for debugging
-			log.Warn().
-				Str("Key", step.Key).
-				Msg("Flushing key from instance store")
-			gInstanceStore.Remove(step.Key)
-		} else {
-			if !isKeylessStep(step) {
-				inst = gInstanceStore.GetInstance(step.Key)
-			}
+		if !isKeylessStep(step) && !isInstanceStoreStep(step) {
+			inst = gInstanceStore.GetInstance(step.Key)
+		}
 
-			if inst == nil && !isKeylessStep(step) {
-				// We should attempt to get the value from the DB, and we
-				// do this by inserting a Storage READ step before this
-				// one and sending things through again
-				log.Debug().
-					Str("TxnId", rtxn.txn.Id).
-					Str("Key", step.Key).
-					Msg("Instance not found, generating STORAGE READ")
-				err := rtxn.insertSteps(
+		if inst == nil && !isKeylessStep(step) && !isInstanceStoreStep(step) {
+			// We should attempt to get the value from the DB, and we
+			// do this by inserting a Storage READ step before this
+			// one and sending things through again
+			log.Debug().
+				Str("TxnId", rtxn.txn.Id).
+				Str("Key", step.Key).
+				Msg("Instance not found, injecting STORAGE READ")
+
+			var err error
+			if step.System == System_PROCESS && step.Command == READ {
+				// If we are doing a PROCESS READ, we can just substitute a STORAGE READ
+				// The STORAGE READ, if successful, will inject a REFRESH_INSTANCE which
+				// can safely stand in for the original PROCESS READ
+				err = rtxn.replaceStep(
 					rtxn.txn.CurrentStepIdx,
 					&ApecsTxn_Step{
 						System:     System_STORAGE,
@@ -249,21 +329,34 @@ func advanceApecsTxn(
 						CmpdOffset: cmpdOffset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
 					},
 				)
-				if err != nil {
-					log.Error().Err(err).Msg("error in insertSteps")
-					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
-					return Code_INTERNAL
-				}
-				err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
-				if err != nil {
-					produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
-					return Code_INTERNAL
-				}
-				return Code_OK
-			} else if inst != nil && step.Command == CREATE {
-				produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in store in CREATE command", step.Key)
+			} else {
+				// If not a PROCESS READ, we insert the STORAGE READ but preseve the original
+				// command to run after the STORAGE READ runs
+				err = rtxn.insertSteps(
+					rtxn.txn.CurrentStepIdx,
+					&ApecsTxn_Step{
+						System:     System_STORAGE,
+						Concern:    step.Concern,
+						Command:    READ,
+						Key:        step.Key,
+						CmpdOffset: cmpdOffset, // provide our PROCESS offset to the STORAGE step so it is recorded in the DB
+					},
+				)
+			}
+			if err != nil {
+				log.Error().Err(err).Msg("error in insertSteps")
+				produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
 				return Code_INTERNAL
 			}
+			err = aprod.produceCurrentStep(rtxn.txn, rtxn.traceParent, wg)
+			if err != nil {
+				produceApecsTxnError(ctx, span, rtxn, nil, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+				return Code_INTERNAL
+			}
+			return Code_OK
+		} else if inst != nil && step.Command == CREATE {
+			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in store in CREATE command", step.Key)
+			return Code_INTERNAL
 		}
 	}
 
@@ -282,7 +375,16 @@ func advanceApecsTxn(
 	}
 
 	var addSteps []*ApecsTxn_Step
-	step.Result, addSteps = handleCommand(ctx, step.Concern, step.System, step.Command, rtxn.txn.Direction, args, confRdr)
+	step.Result, addSteps = handleCommand(
+		ctx,
+		step.Concern,
+		step.System,
+		step.Command,
+		rtxn.txn.Direction,
+		args,
+		confRdr,
+		wg,
+	)
 
 	if (step.Result == nil || step.Result.Code != Code_OK) &&
 		rtxn.txn.UponError == UponError_BAILOUT {
@@ -303,11 +405,12 @@ func advanceApecsTxn(
 		} else {
 			code = Code_NIL_RESULT
 		}
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: BAILOUT, %s", step.Key, jsonNoErr(step))
 		return code
 	}
 
 	if step.Result == nil {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler", step.Key)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler, %s", step.Key, jsonNoErr(step))
 		return step.Result.Code
 	}
 
@@ -327,7 +430,7 @@ func advanceApecsTxn(
 		attribute.String("rkcy.code", strconv.Itoa(int(step.Result.Code))),
 	)
 	if step.Result.Code != Code_OK {
-		produceApecsTxnError(ctx, span, rtxn, step, aprod, step.Result.Code, false, wg, "advanceApecsTxn Key=%s: Step failed with non OK result", step.Key)
+		produceApecsTxnError(ctx, span, rtxn, step, aprod, step.Result.Code, false, wg, "advanceApecsTxn Key=%s: Step failed with non OK result, %s", step.Key, jsonNoErr(step))
 		return step.Result.Code
 	}
 
@@ -337,14 +440,15 @@ func advanceApecsTxn(
 		step.Result.Payload = step.Payload
 	}
 
-	// Update InstanceStore if instance contents have changed
+	// Record orignal instance in step if result has changed the instance
 	if tp.System == System_PROCESS && step.Result.Instance != nil {
-		gInstanceStore.SetInstance(step.Key, step.Result.Instance, cmpdOffset)
+		step.Instance = inst
 	}
 
 	// if we have additional steps from handleCommand we should place
 	// them in the transaction
 	if addSteps != nil && len(addSteps) > 0 {
+		log.Warn().Msgf("InsertSteps from handleCommand %s %s", step.System.String(), step.Command)
 		err := rtxn.insertSteps(rtxn.txn.CurrentStepIdx+1, addSteps...)
 		if err != nil {
 			produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_INTERNAL, true, wg, "insertSteps failure: %s", err.Error())
@@ -356,25 +460,88 @@ func advanceApecsTxn(
 	return step.Result.Code
 }
 
+func updateStorageTargets(platMsg *PlatformMessage) {
+	if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+		log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+		return
+	}
+
+	if IsStorageSystem(gSettings.System) {
+		stgTgts := make(map[string]*StorageTarget)
+		for _, platStgTgt := range platMsg.NewRtPlat.StorageTargets {
+			tgt := &StorageTarget{
+				Name:      platStgTgt.Name,
+				Type:      platStgTgt.Type,
+				IsPrimary: platStgTgt.IsPrimary,
+				Config:    platStgTgt.Config,
+			}
+			if tgt.Config == nil {
+				tgt.Config = make(map[string]string)
+			}
+			var ok bool
+			tgt.Init, ok = gPlatformImpl.StorageInits[platStgTgt.Type]
+			if !ok {
+				log.Warn().
+					Str("StorageTarget", platStgTgt.Name).
+					Msgf("No StorageInit for target")
+			}
+			stgTgts[platStgTgt.Name] = tgt
+		}
+		for _, cncHdlr := range gConcernHandlers {
+			cncHdlr.SetStorageTargets(stgTgts)
+		}
+	}
+}
+
 func consumeApecsTopic(
 	ctx context.Context,
 	adminBrokers string,
 	consumerBrokers string,
-	platformName string,
-	environment string,
 	fullTopic string,
 	partition int32,
 	tp *TopicParts,
+	bailoutCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
 
-	confMgr := NewConfigMgr(ctx, adminBrokers, platformName, environment, wg)
+	platCh := make(chan *PlatformMessage)
+	consumePlatformTopic(
+		ctx,
+		platCh,
+		gSettings.AdminBrokers,
+		tp.Platform,
+		tp.Environment,
+		nil,
+		wg,
+	)
+	platMsg := <-platCh
+	updateStorageTargets(platMsg)
+
+	cncAdminReadyCh := make(chan bool)
+	cncAdminCh := make(chan *ConcernAdminMessage)
+	consumeConcernAdminTopic(
+		ctx,
+		cncAdminCh,
+		gSettings.AdminBrokers,
+		tp.Platform,
+		tp.Environment,
+		tp.Concern,
+		cncAdminReadyCh,
+		wg,
+	)
+
+	confMgr := NewConfigMgr(ctx, adminBrokers, tp.Platform, tp.Environment, wg)
 	confRdr := NewConfigRdr(confMgr)
 
-	aprod := NewApecsProducer(ctx, adminBrokers, platformName, environment, nil, wg)
+	aprod := NewApecsProducer(ctx, adminBrokers, tp.Platform, tp.Environment, nil, wg)
 
-	groupName := fmt.Sprintf("rkcy_apecs_%s", fullTopic)
+	var groupName string
+	if gSettings.System == System_STORAGE {
+		groupName = fmt.Sprintf("rkcy_apecs_%s_%s", fullTopic, gSettings.StorageTarget)
+	} else {
+		groupName = fmt.Sprintf("rkcy_apecs_%s", fullTopic)
+	}
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go printKafkaLogs(ctx, kafkaLogCh)
@@ -396,7 +563,7 @@ func consumeApecsTopic(
 	defer func() {
 		log.Warn().
 			Str("Topic", fullTopic).
-			Msgf("Closing kafka consumer")
+			Msgf("CONSUMER Closing...")
 		if shouldCommit {
 			_, err = cons.Commit()
 			shouldCommit = false
@@ -409,7 +576,7 @@ func consumeApecsTopic(
 		cons.Close()
 		log.Warn().
 			Str("Topic", fullTopic).
-			Msgf("Closed kafka consumer")
+			Msgf("CONSUMER CLOSED")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
@@ -426,6 +593,9 @@ func consumeApecsTopic(
 			Msg("Failed to Assign")
 	}
 
+	txnsToCancel := make(map[string]time.Time)
+
+	//	cncAdminReady := false
 	firstMessage := true
 	commitTicker := time.NewTicker(5 * time.Second)
 	for {
@@ -444,6 +614,16 @@ func consumeApecsTopic(
 						Msgf("Unable to commit")
 				}
 			}
+		case platMsg := <-platCh:
+			updateStorageTargets(platMsg)
+		case <-cncAdminReadyCh:
+			//			cncAdminReady = true
+		case cncAdminMsg := <-cncAdminCh:
+			if cncAdminMsg.Directive == Directive_CONCERN_ADMIN_CANCEL_TXN {
+				log.Info().Msgf("CANCEL TXN %s", cncAdminMsg.ConcernAdminDirective.TxnId)
+				txnsToCancel[cncAdminMsg.ConcernAdminDirective.TxnId] = time.Now()
+			}
+
 		default:
 			msg, err := cons.ReadMessage(100 * time.Millisecond)
 			timedOut := err != nil && err.(kafka.Error).Code() == kafka.ErrTimedOut
@@ -507,37 +687,46 @@ func consumeApecsTopic(
 								Err(err).
 								Msg("Failed to create RtApecsTxn")
 						} else {
-							code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
-							// Bailout is necessary when a storage step fails.
-							// Those must be retried indefinitely until success.
-							// So... we force commit the offset to current and
-							// kill ourselves, and we'll pick up where we left
-							// off when we are restarted.
-							if code != Code_OK && rtxn.txn.UponError == UponError_BAILOUT {
-								_, err := cons.CommitOffsets([]kafka.TopicPartition{
-									{
-										Topic:     &fullTopic,
-										Partition: partition,
-										Offset:    msg.TopicPartition.Offset,
-									},
-								})
-								if err != nil {
+							_, shouldCancel := txnsToCancel[rtxn.txn.Id]
+							if shouldCancel {
+								delete(txnsToCancel, rtxn.txn.Id)
+								cancelApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
+							} else {
+								code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
+								// Bailout is necessary when a storage step fails.
+								// Those must be retried indefinitely until success.
+								// So... we force commit the offset to current and
+								// kill ourselves, and we'll pick up where we left
+								// off when we are restarted.
+								if code != Code_OK && rtxn.txn.UponError == UponError_BAILOUT {
 									log.Error().
-										Err(err).
+										Int("Code", int(code)).
+										Str("TxnId", rtxn.txn.Id).
+										Str("Txn", jsonNoErr(proto.Message(rtxn.txn))).
 										Str("Topic", fullTopic).
 										Int32("Partition", partition).
 										Int64("Offset", int64(msg.TopicPartition.Offset)).
-										Msgf("BAILOUT commit error")
-								}
+										Msgf("BAILOUT")
 
-								log.Fatal().
-									Int("Code", int(code)).
-									Str("TxnId", rtxn.txn.Id).
-									Str("Txn", protojson.Format(proto.Message(rtxn.txn))).
-									Str("Topic", fullTopic).
-									Int32("Partition", partition).
-									Int64("Offset", int64(msg.TopicPartition.Offset)).
-									Msgf("BAILOUT")
+									_, err := cons.CommitOffsets([]kafka.TopicPartition{
+										{
+											Topic:     &fullTopic,
+											Partition: partition,
+											Offset:    msg.TopicPartition.Offset,
+										},
+									})
+									if err != nil {
+										log.Error().
+											Err(err).
+											Str("Topic", fullTopic).
+											Int32("Partition", partition).
+											Int64("Offset", int64(msg.TopicPartition.Offset)).
+											Msgf("BAILOUT commit error")
+									}
+
+									bailoutCh <- true
+									return
+								}
 							}
 						}
 					}
@@ -569,10 +758,9 @@ func startApecsRunner(
 	ctx context.Context,
 	adminBrokers string,
 	consumerBrokers string,
-	platformName string,
-	environment string,
 	fullTopic string,
 	partition int32,
+	bailoutCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	tp, err := ParseFullTopicName(fullTopic)
@@ -581,6 +769,19 @@ func startApecsRunner(
 			Err(err).
 			Str("Topic", fullTopic).
 			Msg("startApecsRunner: failed to ParseFullTopicName")
+	}
+
+	if tp.System == System_NO_SYSTEM {
+		log.Fatal().
+			Str("Topic", fullTopic).
+			Msg("startApecsRunner: No system matches topic")
+	}
+	gSettings.System = tp.System
+
+	if gSettings.System != tp.System {
+		log.Fatal().
+			Str("Topic", fullTopic).
+			Msgf("Mismatched system with topic: %s != %s", gSettings.System.String(), tp.System.String())
 	}
 
 	if tp.ConcernType != Platform_Concern_APECS {
@@ -595,11 +796,61 @@ func startApecsRunner(
 		ctx,
 		adminBrokers,
 		consumerBrokers,
-		platformName,
-		environment,
 		fullTopic,
 		partition,
 		tp,
+		bailoutCh,
 		wg,
 	)
+}
+
+func cobraApecsConsumer(cmd *cobra.Command, args []string) {
+	log.Info().
+		Str("GitCommit", version.GitCommit).
+		Str("Topic", gSettings.Topic).
+		Int32("Partition", gSettings.Partition).
+		Msg("APECS Consumer Started")
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
+	defer func() {
+		signal.Stop(interruptCh)
+		cancel()
+	}()
+
+	bailoutCh := make(chan bool)
+
+	var wg sync.WaitGroup
+	go startApecsRunner(
+		ctx,
+		gSettings.AdminBrokers,
+		gSettings.ConsumerBrokers,
+		gSettings.Topic,
+		gSettings.Partition,
+		bailoutCh,
+		&wg,
+	)
+
+	select {
+	case <-interruptCh:
+		log.Warn().
+			Str("System", gSettings.System.String()).
+			Str("Topic", gSettings.Topic).
+			Int32("Partition", gSettings.Partition).
+			Msg("APECS Consumer Stopped, SIGINT")
+		cancel()
+		wg.Wait()
+		return
+	case <-bailoutCh:
+		log.Warn().
+			Str("System", gSettings.System.String()).
+			Str("Topic", gSettings.Topic).
+			Int32("Partition", gSettings.Partition).
+			Msg("APECS Consumer Stopped, BAILOUT")
+		cancel()
+		wg.Wait()
+		return
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -20,10 +21,11 @@ import (
 )
 
 const (
-	CREATE = "Create"
-	READ   = "Read"
-	UPDATE = "Update"
-	DELETE = "Delete"
+	CREATE       = "Create"
+	READ         = "Read"
+	UPDATE       = "Update"
+	UPDATE_ASYNC = "UpdateAsync"
+	DELETE       = "Delete"
 
 	VALIDATE_CREATE = "ValidateCreate"
 	VALIDATE_UPDATE = "ValidateUpdate"
@@ -35,46 +37,48 @@ const (
 	REFRESH_RELATED = "RefreshRelated"
 )
 
-var gReservedCommandNames map[string]bool
-var gTxnProhibitedCommandNames map[string]bool
+var gReservedCommands map[string]bool
+var gTxnProhibitedCommands map[string]bool
+var gSecondaryStorageCommands map[string]bool
 
-func IsReservedCommandName(s string) bool {
-	if gReservedCommandNames == nil {
-		gReservedCommandNames = make(map[string]bool)
-		gReservedCommandNames[CREATE] = true
-		gReservedCommandNames[READ] = true
-		gReservedCommandNames[UPDATE] = true
-		gReservedCommandNames[DELETE] = true
+func IsReservedCommand(cmd string) bool {
+	if gReservedCommands == nil {
+		gReservedCommands = make(map[string]bool)
+		gReservedCommands[CREATE] = true
+		gReservedCommands[READ] = true
+		gReservedCommands[UPDATE] = true
+		gReservedCommands[UPDATE_ASYNC] = true
+		gReservedCommands[DELETE] = true
 
-		gReservedCommandNames[VALIDATE_CREATE] = true
-		gReservedCommandNames[VALIDATE_UPDATE] = true
+		gReservedCommands[VALIDATE_CREATE] = true
+		gReservedCommands[VALIDATE_UPDATE] = true
 
-		gReservedCommandNames[REFRESH_INSTANCE] = true
-		gReservedCommandNames[FLUSH_INSTANCE] = true
+		gReservedCommands[REFRESH_INSTANCE] = true
+		gReservedCommands[FLUSH_INSTANCE] = true
 
-		gReservedCommandNames[REQUEST_RELATED] = true
-		gReservedCommandNames[REFRESH_RELATED] = true
+		gReservedCommands[REQUEST_RELATED] = true
+		gReservedCommands[REFRESH_RELATED] = true
 	}
-	if gReservedCommandNames[s] {
+	if gReservedCommands[cmd] {
 		return true
 	}
 	return false
 }
 
-func IsTxnProhibitedCommandName(s string) bool {
-	if gTxnProhibitedCommandNames == nil {
-		gTxnProhibitedCommandNames = make(map[string]bool)
+func IsTxnProhibitedCommand(cmd string) bool {
+	if gTxnProhibitedCommands == nil {
+		gTxnProhibitedCommands = make(map[string]bool)
 
-		gTxnProhibitedCommandNames[VALIDATE_CREATE] = true
-		gTxnProhibitedCommandNames[VALIDATE_UPDATE] = true
+		gTxnProhibitedCommands[VALIDATE_CREATE] = true
+		gTxnProhibitedCommands[VALIDATE_UPDATE] = true
 
-		gTxnProhibitedCommandNames[REFRESH_INSTANCE] = true
-		gTxnProhibitedCommandNames[FLUSH_INSTANCE] = true
+		gTxnProhibitedCommands[REFRESH_INSTANCE] = true
+		gTxnProhibitedCommands[FLUSH_INSTANCE] = true
 
-		gTxnProhibitedCommandNames[REQUEST_RELATED] = true
-		gTxnProhibitedCommandNames[REFRESH_RELATED] = true
+		gTxnProhibitedCommands[REQUEST_RELATED] = true
+		gTxnProhibitedCommands[REFRESH_RELATED] = true
 	}
-	if gTxnProhibitedCommandNames[s] {
+	if gTxnProhibitedCommands[cmd] {
 		return true
 	}
 	return false
@@ -82,9 +86,17 @@ func IsTxnProhibitedCommandName(s string) bool {
 
 var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
 
+type StorageTarget struct {
+	Name      string
+	Type      string
+	IsPrimary bool
+	Config    map[string]string
+	Init      StorageInit
+}
+
 type ConcernHandler interface {
 	ConcernName() string
-	HandleCommand(
+	HandleLogicCommand(
 		ctx context.Context,
 		system System,
 		command string,
@@ -92,7 +104,16 @@ type ConcernHandler interface {
 		args *StepArgs,
 		instanceStore *InstanceStore,
 		confRdr *ConfigRdr,
+	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
+	HandleCrudCommand(
+		ctx context.Context,
+		system System,
+		command string,
+		direction Direction,
+		args *StepArgs,
+		instanceStore *InstanceStore,
 		storageType string,
+		wg *sync.WaitGroup,
 	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
 	DecodeInstance(ctx context.Context, buffer []byte) (*ResultProto, error)
 	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
@@ -103,6 +124,7 @@ type ConcernHandler interface {
 	SetLogicHandler(commands interface{}) error
 	SetCrudHandler(storageType string, commands interface{}) error
 	ValidateHandlers() bool
+	SetStorageTargets(storageTargets map[string]*StorageTarget)
 }
 
 func validateConcernHandlers() bool {
@@ -410,6 +432,7 @@ func handleCommand(
 	direction Direction,
 	args *StepArgs,
 	confRdr *ConfigRdr,
+	wg *sync.WaitGroup,
 ) (*ApecsTxn_Step_Result, []*ApecsTxn_Step) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -431,16 +454,35 @@ func handleCommand(
 		return rslt, nil
 	}
 
-	return cncHdlr.HandleCommand(
-		ctx,
-		system,
-		command,
-		direction,
-		args,
-		gInstanceStore,
-		confRdr,
-		"postgresql",
-	)
+	switch system {
+	case System_PROCESS:
+		return cncHdlr.HandleLogicCommand(
+			ctx,
+			system,
+			command,
+			direction,
+			args,
+			gInstanceStore,
+			confRdr,
+		)
+	case System_STORAGE:
+		fallthrough
+	case System_STORAGE_SCND:
+		return cncHdlr.HandleCrudCommand(
+			ctx,
+			system,
+			command,
+			direction,
+			args,
+			gInstanceStore,
+			gSettings.StorageTarget,
+			wg,
+		)
+	default:
+		rslt := &ApecsTxn_Step_Result{}
+		rslt.SetResult(fmt.Errorf("Invalid system: %s", system.String()))
+		return rslt, nil
+	}
 }
 
 type StepArgs struct {
@@ -474,6 +516,10 @@ func (rslt *ApecsTxn_Step_Result) SetResult(err error) {
 	}
 }
 
+func IsStorageSystem(system System) bool {
+	return system == System_STORAGE || system == System_STORAGE_SCND
+}
+
 func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", Code_name[int32(e.Code)], e.Msg)
 }
@@ -489,10 +535,30 @@ type ConcernInstance interface {
 }
 
 func IsPackedPayload(payload []byte) bool {
-	return len(payload) > 4 && string(payload[:4]) == "rkcy"
+	return payload != nil && len(payload) > 4 && string(payload[:4]) == "rkcy"
+}
+
+func ParsePayload(payload []byte) ([]byte, []byte, error) {
+	var (
+		instBytes []byte
+		relBytes  []byte
+		err       error
+	)
+	if IsPackedPayload(payload) {
+		instBytes, relBytes, err = UnpackPayloads(payload)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		instBytes = payload
+	}
+	return instBytes, relBytes, nil
 }
 
 func PackPayloads(payload0 []byte, payload1 []byte) []byte {
+	if IsPackedPayload(payload0) || IsPackedPayload(payload1) {
+		panic(fmt.Sprintf("PackPayloads of already packed payload payload0=%s payload1=%s", base64.StdEncoding.EncodeToString(payload0), base64.StdEncoding.EncodeToString(payload1)))
+	}
 	packed := make([]byte, 8+len(payload0)+len(payload1))
 	copy(packed, "rkcy")
 	offset := 8 + len(payload0)

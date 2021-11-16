@@ -55,12 +55,15 @@ rpg: rpg-proto ## compile rpg example
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/rpg \
 	./examples/rpg
-	@cp ./examples/rpg/platform.json $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/config.json $(BUILD_BIN_DIR)
+
+	@cp ./examples/rpg/platform.json $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/init_db.sh $(BUILD_BIN_DIR)
+	@cp ./examples/rpg/run.sh $(BUILD_BIN_DIR)
+
+	@cp ./examples/rpg/platform_perfa.json $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/init_db_perfa.sh $(BUILD_BIN_DIR)
 	@cp ./examples/rpg/run_perfa.sh $(BUILD_BIN_DIR)
-	@cp ./examples/rpg/perfa_env.sh $(BUILD_BIN_DIR)
-	@cp ./examples/rpg/platform_perfa.json $(BUILD_BIN_DIR)
 
 .PHONY: rpg-proto
 rpg-proto: protoc-gen-rkcy ## generate rpg protocol buffers

@@ -12,12 +12,14 @@
           "current": {
             "partitionCount": 1
           },
-          "consumerProgram": {
-            "name": "./@platform",
-            "args": ["edge", "serve", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
-            "abbrev": "edge/@partition",
-            "tags": {"service.name": "rkcy.@platform.@concern"}
-          }
+          "consumerPrograms": [
+            {
+              "name": "./@platform",
+              "args": ["edge", "serve", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
+              "abbrev": "edge/@partition",
+              "tags": {"service.name": "rkcy.@platform.@concern"}
+            }
+          ]
         }
       ]
     },
@@ -64,7 +66,26 @@
   "clusters": [
     {
       "name": "local-dev",
-      "brokers": "localhost:9092"
+      "brokers": "localhost:9092",
+      "isAdmin": true
+    }
+  ],
+
+  "storageTargets": [
+    {
+      "name": "pg-0",
+      "type": "postgresql",
+      "isPrimary": true,
+      "config": {
+        "connString": "postgresql://postgres@127.0.0.1:5432/rpg"
+      }
+    },
+    {
+      "name": "pg-1",
+      "type": "postgresql",
+      "config": {
+        "connString": "postgresql://postgres@127.0.0.1:5433/rpg"
+      }
     }
   ]
 }

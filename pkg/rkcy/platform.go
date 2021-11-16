@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -29,7 +28,7 @@ const kUndefinedPlatformName string = "__UNDEFINED__"
 var gPlatformName string = kUndefinedPlatformName
 var gEnvironment string
 
-var nameRe = regexp.MustCompile(`^[a-zA-Z]{2,16}$`)
+var nameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z\-]{1,15}$`)
 
 func IsValidName(name string) bool {
 	return nameRe.MatchString(name)
@@ -59,11 +58,15 @@ func Environment() string {
 }
 
 // Platform pb, with some convenience lookup maps
+
 type rtPlatform struct {
-	Platform *Platform
-	Hash     string
-	Concerns map[string]*rtConcern
-	Clusters map[string]*Platform_Cluster
+	Platform             *Platform
+	Hash                 string
+	Concerns             map[string]*rtConcern
+	Clusters             map[string]*Platform_Cluster
+	AdminCluster         string
+	StorageTargets       map[string]*Platform_StorageTarget
+	PrimaryStorageTarget string
 }
 
 type rtConcern struct {
@@ -100,6 +103,10 @@ func newRtConcern(rtPlat *rtPlatform, concern *Platform_Concern) (*rtConcern, er
 	return &rtConc, nil
 }
 
+func isACETopic(topic string) bool {
+	return topic == string(ADMIN) || topic == string(ERROR) || topic == string(COMPLETE)
+}
+
 func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern_Topics) (*rtTopics, error) {
 	rtTops := rtTopics{
 		Topics: topics,
@@ -109,24 +116,31 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 	var ok bool
 
 	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
-	rtTops.CurrentTopicPartitionCount = topics.Current.PartitionCount
+	rtTops.CurrentTopicPartitionCount = maxi32(1, topics.Current.PartitionCount)
 	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.Cluster]
 	if !ok {
-		return nil, fmt.Errorf("Topic '%s' has invalid Current Cluster '%s'", topics.Name, topics.Current.Cluster)
+		return nil, fmt.Errorf("Topic '%s.%s' has invalid Current Cluster '%s'", rtConc.Concern.Name, topics.Name, topics.Current.Cluster)
 	}
 
 	if topics.Future != nil {
 		rtTops.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
-		rtTops.FutureTopicPartitionCount = topics.Future.PartitionCount
+		rtTops.FutureTopicPartitionCount = maxi32(1, topics.Future.PartitionCount)
 		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.Cluster]
 		if !ok {
-			return nil, fmt.Errorf("Topic '%s' has invalid Future Cluster '%s'", topics.Name, topics.Future.Cluster)
+			return nil, fmt.Errorf("Topic '%s.%s' has invalid Future Cluster '%s'", rtConc.Concern.Name, topics.Name, topics.Future.Cluster)
 		}
 	}
+
+	if isACETopic(rtTops.Topics.Name) {
+		if rtTops.CurrentTopicPartitionCount != 1 {
+			return nil, fmt.Errorf("Topic '%s.%s' has invalid partition count current=%d", rtConc.Concern.Name, topics.Name, rtTops.CurrentTopicPartitionCount)
+		}
+	}
+
 	return &rtTops, nil
 }
 
-func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_Concern_Topic {
+func initTopic(topic *Platform_Concern_Topic, adminCluster string) *Platform_Concern_Topic {
 	if topic == nil {
 		topic = &Platform_Concern_Topic{}
 	}
@@ -135,7 +149,7 @@ func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_C
 		topic.Generation = 1
 	}
 	if topic.Cluster == "" {
-		topic.Cluster = defaultCluster
+		topic.Cluster = adminCluster
 	}
 	if topic.PartitionCount <= 0 {
 		topic.PartitionCount = 1
@@ -146,30 +160,51 @@ func initTopic(topic *Platform_Concern_Topic, defaultCluster string) *Platform_C
 	return topic
 }
 
-func initTopics(topics *Platform_Concern_Topics, defaultCluster string, concernType Platform_Concern_Type) *Platform_Concern_Topics {
+func initTopics(
+	topics *Platform_Concern_Topics,
+	adminCluster string,
+	concernType Platform_Concern_Type,
+	storageTargets []*Platform_StorageTarget,
+) *Platform_Concern_Topics {
 	if topics == nil {
 		topics = &Platform_Concern_Topics{}
 	}
 
-	topics.Current = initTopic(topics.Current, defaultCluster)
+	topics.Current = initTopic(topics.Current, adminCluster)
 	if topics.Future != nil {
-		topics.Future = initTopic(topics.Future, defaultCluster)
+		topics.Future = initTopic(topics.Future, adminCluster)
 	}
 
 	if concernType == Platform_Concern_APECS {
-		if topics.ConsumerProgram == nil {
-			switch topics.Name {
-			case "process":
-				topics.ConsumerProgram = &Program{
-					Name:   "./@platform",
-					Args:   []string{"process", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "p/@concern/@partition",
+		topics.ConsumerPrograms = nil
+		switch topics.Name {
+		case "process":
+			prog := &Program{
+				Name:   "./@platform",
+				Args:   []string{"process", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
+				Abbrev: "p/@concern/@partition",
+			}
+			topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
+		case "storage":
+			for _, stgTgt := range storageTargets {
+				if stgTgt.IsPrimary {
+					prog := &Program{
+						Name: "./@platform",
+						Args: []string{"storage", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+					}
+					prog.Abbrev = fmt.Sprintf("s/*%s/@concern/@partition", stgTgt.Name)
+					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
 				}
-			case "storage":
-				topics.ConsumerProgram = &Program{
-					Name:   "./@platform",
-					Args:   []string{"storage", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
-					Abbrev: "s/@concern/@partition",
+			}
+		case "storage-scnd":
+			for _, stgTgt := range storageTargets {
+				if !stgTgt.IsPrimary {
+					prog := &Program{
+						Name: "./@platform",
+						Args: []string{"storage-scnd", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+					}
+					prog.Abbrev = fmt.Sprintf("s/%s/@concern/@partition", stgTgt.Name)
+					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
 				}
 			}
 		}
@@ -187,9 +222,10 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	}
 
 	rtPlat := rtPlatform{
-		Platform: platform,
-		Concerns: make(map[string]*rtConcern),
-		Clusters: make(map[string]*Platform_Cluster),
+		Platform:       platform,
+		Concerns:       make(map[string]*rtConcern),
+		Clusters:       make(map[string]*Platform_Cluster),
+		StorageTargets: make(map[string]*Platform_StorageTarget),
 	}
 
 	platJson := protojson.Format(proto.Message(rtPlat.Platform))
@@ -210,17 +246,52 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 		if cluster.Brokers == "" {
 			return nil, fmt.Errorf("Cluster '%s' missing brokers field", cluster.Name)
 		}
+		if cluster.IsAdmin {
+			if rtPlat.AdminCluster != "" {
+				return nil, fmt.Errorf("More than one admin cluster")
+			}
+			rtPlat.AdminCluster = cluster.Name
+		}
 		// verify clusters only appear once
 		if _, ok := rtPlat.Clusters[cluster.Name]; ok {
 			return nil, fmt.Errorf("Cluster '%s' appears more than once in Platform '%s' definition", cluster.Name, rtPlat.Platform.Name)
 		}
 		rtPlat.Clusters[cluster.Name] = cluster
 	}
+	if rtPlat.AdminCluster == "" {
+		return nil, fmt.Errorf("No admin cluster defined")
+	}
+
+	if len(rtPlat.Platform.StorageTargets) <= 0 {
+		return nil, fmt.Errorf("No storage targets defined")
+	}
+	for idx, sttg := range rtPlat.Platform.StorageTargets {
+		if sttg.Name == "" {
+			return nil, fmt.Errorf("Storage target %d missing name field", idx)
+		}
+		if sttg.Type == "" {
+			return nil, fmt.Errorf("Storage target '%s' missing type field", sttg.Name)
+		}
+		if sttg.IsPrimary {
+			if rtPlat.PrimaryStorageTarget != "" {
+				return nil, fmt.Errorf("More than one primary storage target")
+			}
+			rtPlat.PrimaryStorageTarget = sttg.Name
+		}
+		// verify clusters only appear once
+		if _, ok := rtPlat.StorageTargets[sttg.Name]; ok {
+			return nil, fmt.Errorf("Storage target '%s' appears more than once in Platform '%s' definition", sttg.Name, rtPlat.Platform.Name)
+		}
+		rtPlat.StorageTargets[sttg.Name] = sttg
+	}
+	if rtPlat.PrimaryStorageTarget == "" {
+		return nil, fmt.Errorf("No primary storage target defined")
+	}
 
 	requiredTopics := map[Platform_Concern_Type][]string{
 		Platform_Concern_GENERAL: {"admin", "error"},
 		Platform_Concern_BATCH:   {"admin", "error"},
-		Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage"},
+		Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage", "storage-scnd"},
 	}
 
 	for idx, concern := range rtPlat.Platform.Concerns {
@@ -228,19 +299,10 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 			return nil, fmt.Errorf("Concern %d missing name field", idx)
 		}
 
-		defaultCluster := ""
 		var topicNames []string
 		// build list of topicNames for validation steps below
 		for _, topics := range concern.Topics {
 			topicNames = append(topicNames, topics.Name)
-			if defaultCluster == "" && topics.Current != nil {
-				defaultCluster = topics.Current.Cluster
-			}
-		}
-
-		// if we still don't have a defaultCluster, choose the first one
-		if defaultCluster == "" {
-			defaultCluster = rtPlat.Platform.Clusters[0].Name
 		}
 
 		// validate our expected required topics are there, add any with defaults if not present
@@ -251,10 +313,18 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 			}
 		}
 
+		// ensure APECS concern only has required topics
+		if concern.Type == Platform_Concern_APECS {
+			// simple len check is adequate since we added all required above
+			if len(requiredTopics[concern.Type]) != len(concern.Topics) {
+				return nil, fmt.Errorf("ApecsConcern %d contains invalid command %+v required vs %+v total", idx, requiredTopics, concern.Topics)
+			}
+		}
+
 		// validate all topics definitions
 		for idx, _ := range concern.Topics {
-			concern.Topics[idx] = initTopics(concern.Topics[idx], defaultCluster, concern.Type)
-			if err := validateTopics(concern.Topics[idx], rtPlat.Clusters); err != nil {
+			concern.Topics[idx] = initTopics(concern.Topics[idx], rtPlat.AdminCluster, concern.Type, rtPlat.Platform.StorageTargets)
+			if err := validateTopics(concern, concern.Topics[idx], rtPlat.Clusters); err != nil {
 				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, concern.Topics[idx].Name, err.Error())
 			}
 		}
@@ -273,41 +343,50 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 	return &rtPlat, nil
 }
 
-func validateTopics(topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) error {
+var singlePartitionTopics = map[string]bool{
+	"admin":    true,
+	"error":    true,
+	"complete": true,
+}
+
+func validateTopics(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) error {
 	if topics.Name == "" {
-		return errors.New("Topics missing Name field")
+		return fmt.Errorf("Topics missing Name field: %s", topics.Name)
 	}
-	// admin topics are special and have stricter rules
-	if topics.Name == "admin" {
-		if topics.Current == nil || topics.Future != nil {
-			return fmt.Errorf("'admin' Topics only exist as current and not future")
+
+	if singlePartitionTopics[topics.Name] {
+		if topics.Current != nil && topics.Current.PartitionCount != 1 {
+			return fmt.Errorf("'%s' Topics must have exactly 1 partition", topics.Name)
 		}
-		if topics.Current.PartitionCount != 1 {
-			return fmt.Errorf("'admin' Topics must have exactly 1 current partition")
+		if topics.Future != nil && topics.Future.PartitionCount != 1 {
+			return fmt.Errorf("'%s' Topics must have exactly 1 partition", topics.Name)
 		}
+	}
+
+	if topics.Current == nil {
+		return fmt.Errorf("Topics missing Current Topic: %s", topics.Name)
 	} else {
-		if topics.Current == nil {
-			return errors.New("Topics missing Current Topic")
-		} else {
-			if err := validateTopic(topics.Current, clusters); err != nil {
-				return err
-			}
-		}
-		if topics.Future != nil {
-			if err := validateTopic(topics.Future, clusters); err != nil {
-				return err
-			}
-			if topics.Current.Generation != topics.Future.Generation+1 {
-				return errors.New("Future generation not Current + 1")
-			}
+		if err := validateTopic(topics.Current, clusters); err != nil {
+			return err
 		}
 	}
-	if topics.ConsumerProgram != nil {
-		if topics.ConsumerProgram.Name == "" {
-			return errors.New("Command cannot have blank Name")
+	if topics.Future != nil {
+		if err := validateTopic(topics.Future, clusters); err != nil {
+			return err
 		}
-		if topics.ConsumerProgram.Abbrev == "" {
-			return errors.New("Command cannot have blank Abbrev")
+		if topics.Current.Generation != topics.Future.Generation+1 {
+			return fmt.Errorf("Future generation not Current + 1")
+		}
+	}
+
+	for idx, consProg := range topics.ConsumerPrograms {
+		if consProg != nil {
+			if consProg.Name == "" {
+				return fmt.Errorf("Program cannot have blank Name: %d", idx)
+			}
+			if consProg.Abbrev == "" {
+				return fmt.Errorf("Program cannot have blank Abbrev: %s", consProg.Name)
+			}
 		}
 	}
 	return nil
@@ -315,10 +394,10 @@ func validateTopics(topics *Platform_Concern_Topics, clusters map[string]*Platfo
 
 func validateTopic(topic *Platform_Concern_Topic, clusters map[string]*Platform_Cluster) error {
 	if topic.Generation == 0 {
-		return errors.New("Topic missing Generation field")
+		return fmt.Errorf("Topic missing Generation field")
 	}
 	if topic.Cluster == "" {
-		return errors.New("Topic missing Cluster field")
+		return fmt.Errorf("Topic missing Cluster field")
 	}
 	if _, ok := clusters[topic.Cluster]; !ok {
 		return fmt.Errorf("Topic refers to non-existent cluster: '%s'", topic.Cluster)
@@ -423,7 +502,7 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := kafkaMessage(&platformTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
+	msg, err := newKafkaMessage(&platformTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
