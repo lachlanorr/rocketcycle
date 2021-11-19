@@ -84,3 +84,22 @@ Currently some stderr is happening on broker communication issues
 - Use subscribe
 - Use partition 0 as leader election
 - E.g. control (admin task)
+* instance store dead zones
+If there's ever a hard storage read caused by a cache miss, that
+instance in the instance store must record an offset dead zone,
+between the offset of the last storage write and the offset of the
+refresh_instance from storage that replaces the item in the cache.
+
+At the end of every APECS transaction, all instances that were updated
+are considered, much like we do with generating UPDATE_ASYNC
+commands. But instead of UPDATE_ASYNC we place a VALIDATE_INSTANCE
+step at the end of the transaction for every instance that was
+changed. VALIDATE_INSTANCE steps ensure that their offsets are not
+within the dead zone.
+
+After all VALIDATE_INSTANCE steps run, if any of them report an dead
+zone violation, the transaction is rolled back.
+
+During rollback, if any instance being rolled back violates the dead
+zone, that step is not rolled back since its changes were never
+applied to the instance store.
