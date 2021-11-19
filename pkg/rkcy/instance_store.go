@@ -66,7 +66,7 @@ func (instStore *InstanceStore) GetRelated(key string) []byte {
 func (instStore *InstanceStore) Set(key string, instance []byte, related []byte, cmpdOffset *CompoundOffset) {
 	rec, ok := instStore.instances[key]
 	if ok {
-		if !OffsetGTE(cmpdOffset, rec.CmpdOffset) {
+		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {
 			log.Error().
 				Str("Key", key).
 				Msgf("Out of order InstanceStore.Set: new (%+v), old (%+v)", cmpdOffset, rec.CmpdOffset)
@@ -84,7 +84,7 @@ func (instStore *InstanceStore) Set(key string, instance []byte, related []byte,
 func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOffset *CompoundOffset) {
 	rec, ok := instStore.instances[key]
 	if ok {
-		if !OffsetGTE(cmpdOffset, rec.CmpdOffset) {
+		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {
 			log.Error().
 				Str("Key", key).
 				Msgf("Out of order InstanceStore.Set: new (%+v), old (%+v)", cmpdOffset, rec.CmpdOffset)
@@ -101,7 +101,7 @@ func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOff
 func (instStore *InstanceStore) SetRelated(key string, related []byte, cmpdOffset *CompoundOffset) error {
 	rec, ok := instStore.instances[key]
 	if ok {
-		if !OffsetGTE(cmpdOffset, rec.CmpdOffset) {
+		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {
 			log.Error().
 				Str("Key", key).
 				Msgf("Out of order InstanceStore.Set: new (%+v), old (%+v)", cmpdOffset, rec.CmpdOffset)
