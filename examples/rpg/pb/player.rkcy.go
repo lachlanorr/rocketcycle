@@ -335,22 +335,22 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 		addSteps = append(
 			addSteps,
 			&rkcy.ApecsTxn_Step{
-				System:        rkcy.System_STORAGE,
-				Concern:       "Player",
-				Command:       command,
-				Key:           args.Key,
-				Payload:       payload,
+				System:  rkcy.System_STORAGE,
+				Concern: "Player",
+				Command: command,
+				Key:     args.Key,
+				Payload: payload,
 			},
 		)
 	case rkcy.DELETE:
 		addSteps = append(
 			addSteps,
 			&rkcy.ApecsTxn_Step{
-				System:        rkcy.System_STORAGE,
-				Concern:       "Player",
-				Command:       command,
-				Key:           args.Key,
-				Payload:       instanceStore.GetPacked(args.Key),
+				System:  rkcy.System_STORAGE,
+				Concern: "Player",
+				Command: command,
+				Key:     args.Key,
+				Payload: instanceStore.GetPacked(args.Key),
 			},
 		)
 	case rkcy.REFRESH_INSTANCE:
@@ -362,25 +362,27 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 		}
 		rel := &PlayerRelated{}
 		if relBytes != nil && len(relBytes) > 0 {
-            err := proto.Unmarshal(relBytes, rel)
-            if err != nil {
+			err := proto.Unmarshal(relBytes, rel)
+			if err != nil {
 				rslt.SetResult(err)
 				return rslt, nil
-            }
+			}
 		} else {
 			relBytes = instanceStore.GetRelated(args.Key)
 		}
-		// refresh related
-		relSteps, err := rel.RefreshRelatedSteps(args.Key, instBytes, relBytes)
-		if err != nil {
-			rslt.SetResult(err)
-			return rslt, nil
-		}
-		if relSteps != nil {
-			addSteps = append(addSteps, relSteps...)
+		if args.Instance != nil {
+			// refresh related
+			relSteps, err := rel.RefreshRelatedSteps(args.Key, instBytes, relBytes)
+			if err != nil {
+				rslt.SetResult(err)
+				return rslt, nil
+			}
+			if relSteps != nil {
+				addSteps = append(addSteps, relSteps...)
+			}
 		}
 		instanceStore.Set(args.Key, instBytes, relBytes, args.CmpdOffset)
-        // Re-Get in case Set didn't take due to offset violation
+		// Re-Get in case Set didn't take due to offset violation
 		rslt.Payload = instanceStore.GetPacked(args.Key)
 	case rkcy.FLUSH_INSTANCE:
 		// Same operation for both directions
