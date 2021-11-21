@@ -220,24 +220,32 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	var diffsStorage []*Difference
 	diffWait := time.Duration(settings.DiffWaitSecs) * time.Second
 	start := time.Now()
-	for {
-		diffsStorage = compareStorage(ctx, stateDb)
 
-		t := time.Now()
-		if t.Sub(start) > diffWait {
-			break
-		}
-
-		if len(diffsStorage) == 0 {
-			break
-		} else {
-			log.Warn().Msgf("%d STORAGE DIFFS %d, WAITING 10s", args.RunnerIdx, len(diffsStorage))
-			time.Sleep(10 * time.Second)
-		}
+	connStrs := []string{
+		"postgresql://postgres@127.0.0.1:5432/rpg",
+		"postgresql://postgres@127.0.0.1:5433/rpg",
 	}
 
-	for _, diff := range diffsStorage {
-		log.Error().Msgf("%d STORAGE DIFF: \n%s", args.RunnerIdx, diff2json(diff))
+	for _, connStr := range connStrs {
+		for {
+			diffsStorage = compareStorage(ctx, connStr, stateDb)
+
+			t := time.Now()
+			if t.Sub(start) > diffWait {
+				break
+			}
+
+			if len(diffsStorage) == 0 {
+				break
+			} else {
+				log.Warn().Msgf("%d STORAGE DIFFS %d, WAITING 10s", args.RunnerIdx, len(diffsStorage))
+				time.Sleep(10 * time.Second)
+			}
+		}
+
+		for _, diff := range diffsStorage {
+			log.Error().Msgf("%d STORAGE DIFF: \n%s", args.RunnerIdx, diff2json(diff))
+		}
 	}
 
 	log.Info().
@@ -292,12 +300,12 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	return diffs
 }
 
-func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
+func compareStorage(ctx context.Context, connStr string, stateDb *StateDb) []*Difference {
 	diffs := make([]*Difference, 0, 10)
 
 	wg := &sync.WaitGroup{}
 	dbConfig := map[string]string{
-		"connString": "postgresql://postgres@127.0.0.1:5432/rpg",
+		"connString": connStr,
 	}
 	store_pg.InitPostgresqlPool(ctx, dbConfig, wg)
 
