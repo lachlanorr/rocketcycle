@@ -7,6 +7,7 @@ CREATE OR REPLACE PROCEDURE rpg.sp_upsert_character(
   _player_id UUID,
   _fullname TEXT,
   _active BOOL,
+  _related TEXT,
 
   _mro_generation INT,
   _mro_partition INT,
@@ -40,6 +41,7 @@ BEGIN
        SET player_id = _player_id,
            fullname = _fullname,
            active = _active,
+           related = _related,
            mro_generation = _mro_generation,
            mro_partition = _mro_partition,
            mro_offset = _mro_offset
@@ -50,6 +52,7 @@ BEGIN
        player_id,
        fullname,
        active,
+       related,
        mro_generation,
        mro_partition,
        mro_offset)
@@ -58,6 +61,7 @@ BEGIN
        _player_id,
        _fullname,
        _active,
+       _related,
        _mro_generation,
        _mro_partition,
        _mro_offset);

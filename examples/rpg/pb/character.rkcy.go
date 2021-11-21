@@ -55,16 +55,16 @@ type CharacterLogicHandler interface {
 	ValidateCreate(ctx context.Context, inst *Character) (*Character, error)
 	ValidateUpdate(ctx context.Context, original *Character, updated *Character) (*Character, error)
 
-	Fund(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
-	DebitFunds(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
-	CreditFunds(ctx context.Context, inst *Character, related *CharacterRelated, payload *FundingRequest) (*Character, error)
+	Fund(ctx context.Context, inst *Character, rel *CharacterRelated, payload *FundingRequest) (*Character, error)
+	DebitFunds(ctx context.Context, inst *Character, rel *CharacterRelated, payload *FundingRequest) (*Character, error)
+	CreditFunds(ctx context.Context, inst *Character, rel *CharacterRelated, payload *FundingRequest) (*Character, error)
 }
 
 // CrudHandler Interface
 type CharacterCrudHandler interface {
 	Read(ctx context.Context, key string) (*Character, *CharacterRelated, *rkcy.CompoundOffset, error)
 	Create(ctx context.Context, inst *Character, cmpdOffset *rkcy.CompoundOffset) (*Character, error)
-	Update(ctx context.Context, inst *Character, related *CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error
+	Update(ctx context.Context, inst *Character, rel *CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
 }
 
@@ -268,10 +268,6 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 	switch command {
 	// process handlers
 	case rkcy.CREATE:
-		fallthrough
-	case rkcy.UPDATE:
-		fallthrough
-	case rkcy.DELETE:
 		rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
 		return rslt, nil
 	case rkcy.READ:
@@ -283,34 +279,60 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				Str("Command", command).
 				Msg("Invalid command to reverse, no-op")
 		}
+	case rkcy.UPDATE:
+		var payload []byte
+		related := instanceStore.GetRelated(args.Key)
+		payload = rkcy.PackPayloads(args.Payload, related)
+		addSteps = append(
+			addSteps,
+			&rkcy.ApecsTxn_Step{
+				System:        rkcy.System_STORAGE,
+				Concern:       "Character",
+				Command:       command,
+				Key:           args.Key,
+				Payload:       payload,
+			},
+		)
+	case rkcy.DELETE:
+		addSteps = append(
+			addSteps,
+			&rkcy.ApecsTxn_Step{
+				System:        rkcy.System_STORAGE,
+				Concern:       "Character",
+				Command:       command,
+				Key:           args.Key,
+				Payload:       instanceStore.GetPacked(args.Key),
+			},
+		)
 	case rkcy.REFRESH_INSTANCE:
 		// Same operation for both directions
-		instBytes, _, err := rkcy.ParsePayload(args.Payload)
+		instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 		if err != nil {
 			rslt.SetResult(err)
 			return rslt, nil
 		}
-		currInstBytes := instanceStore.GetInstance(args.Key)
-		if !bytes.Equal(instBytes, currInstBytes) {
-			var relBytes []byte
-			var rel *CharacterRelated
-			rel, relBytes, err = CharacterGetRelated(args.Key, instanceStore)
-			if err != nil {
+		rel := &CharacterRelated{}
+		if relBytes != nil && len(relBytes) > 0 {
+            err := proto.Unmarshal(relBytes, rel)
+            if err != nil {
 				rslt.SetResult(err)
 				return rslt, nil
-			}
-			instanceStore.Set(args.Key, instBytes, relBytes, args.CmpdOffset)
-			rslt.Payload = rkcy.PackPayloads(instBytes, relBytes)
-			// refresh related
-			relSteps, err := rel.RefreshRelatedSteps(args.Key, instBytes, relBytes)
-			if err != nil {
-				rslt.SetResult(err)
-				return rslt, nil
-			}
-			if relSteps != nil {
-				addSteps = append(addSteps, relSteps...)
-			}
+            }
+		} else {
+			relBytes = instanceStore.GetRelated(args.Key)
 		}
+		// refresh related
+		relSteps, err := rel.RefreshRelatedSteps(args.Key, instBytes, relBytes)
+		if err != nil {
+			rslt.SetResult(err)
+			return rslt, nil
+		}
+		if relSteps != nil {
+			addSteps = append(addSteps, relSteps...)
+		}
+		instanceStore.Set(args.Key, instBytes, relBytes, args.CmpdOffset)
+        // Re-Get in case Set didn't take due to offset violation
+		rslt.Payload = instanceStore.GetPacked(args.Key)
 	case rkcy.FLUSH_INSTANCE:
 		// Same operation for both directions
 		packed := instanceStore.GetPacked(args.Key)
@@ -429,6 +451,7 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				rslt.SetResult(err)
 				return rslt, nil
 			}
+			rslt.Payload = relRspBytes
 			addSteps = append(
 				addSteps,
 				&rkcy.ApecsTxn_Step{
@@ -436,11 +459,10 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 					Concern:       relReq.Concern,
 					Command:       rkcy.REFRESH_RELATED,
 					Key:           relReq.Key,
-					Payload:       relRspBytes,
+					Payload:       rslt.Payload,
 					EffectiveTime: timestamppb.Now(),
 				},
 			)
-			rslt.Payload = relRspBytes
 		} else {
 			log.Error().
 				Str("Command", command).
@@ -525,14 +547,13 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				return rslt, nil
 			}
 			if !bytes.Equal(instSer, args.Instance) {
-				rslt.Instance = instSer
-				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
+				// GetRelated again in case command handler has altered it
 				rel, relBytes, err := CharacterGetRelated(args.Key, instanceStore)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relSteps, err := rel.RefreshRelatedSteps(args.Key, rslt.Instance, relBytes)
+				relSteps, err := rel.RefreshRelatedSteps(args.Key, instSer, relBytes)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -540,6 +561,8 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				if relSteps != nil {
 					addSteps = append(addSteps, relSteps...)
 				}
+				rslt.Instance = instSer
+				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
 			}
 		} else {
 			rslt.SetResult(fmt.Errorf("Reverse not supported for concern command: %s", command))
@@ -586,14 +609,13 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				return rslt, nil
 			}
 			if !bytes.Equal(instSer, args.Instance) {
-				rslt.Instance = instSer
-				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
+				// GetRelated again in case command handler has altered it
 				rel, relBytes, err := CharacterGetRelated(args.Key, instanceStore)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relSteps, err := rel.RefreshRelatedSteps(args.Key, rslt.Instance, relBytes)
+				relSteps, err := rel.RefreshRelatedSteps(args.Key, instSer, relBytes)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -601,6 +623,8 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				if relSteps != nil {
 					addSteps = append(addSteps, relSteps...)
 				}
+				rslt.Instance = instSer
+				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
 			}
 		} else {
 			rslt.SetResult(fmt.Errorf("Reverse not supported for concern command: %s", command))
@@ -647,14 +671,13 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				return rslt, nil
 			}
 			if !bytes.Equal(instSer, args.Instance) {
-				rslt.Instance = instSer
-				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
+				// GetRelated again in case command handler has altered it
 				rel, relBytes, err := CharacterGetRelated(args.Key, instanceStore)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				relSteps, err := rel.RefreshRelatedSteps(args.Key, rslt.Instance, relBytes)
+				relSteps, err := rel.RefreshRelatedSteps(args.Key, instSer, relBytes)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -662,6 +685,8 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 				if relSteps != nil {
 					addSteps = append(addSteps, relSteps...)
 				}
+				rslt.Instance = instSer
+				instanceStore.SetInstance(args.Key, rslt.Instance, args.CmpdOffset)
 			}
 		} else {
 			rslt.SetResult(fmt.Errorf("Reverse not supported for concern command: %s", command))
@@ -684,7 +709,6 @@ func (cncHdlr *CharacterConcernHandler) HandleCrudCommand(
 	command string,
 	direction rkcy.Direction,
 	args *rkcy.StepArgs,
-	instanceStore *rkcy.InstanceStore,
 	storageTarget string,
 	wg *sync.WaitGroup,
 ) (*rkcy.ApecsTxn_Step_Result, []*rkcy.ApecsTxn_Step) {
@@ -842,8 +866,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCrudCommand(
 			fallthrough
 		case rkcy.UPDATE_ASYNC:
 			{
-				var relBytes []byte
-				instBytes, _, err := rkcy.ParsePayload(args.Payload)
+				instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 				if err != nil {
 					rslt.SetResult(err)
 					return rslt, nil
@@ -854,11 +877,13 @@ func (cncHdlr *CharacterConcernHandler) HandleCrudCommand(
 					rslt.SetResult(err)
 					return rslt, nil
 				}
-				var rel *CharacterRelated
-				rel, relBytes, err = CharacterGetRelated(inst.Key(), instanceStore)
-				if err != nil {
-					rslt.SetResult(err)
-					return rslt, nil
+				rel := &CharacterRelated{}
+				if relBytes != nil && len(relBytes) > 0 {
+					err = proto.Unmarshal(relBytes, rel)
+					if err != nil {
+						rslt.SetResult(err)
+						return rslt, nil
+					}
 				}
 				err = handler.Update(ctx, inst, rel, args.CmpdOffset)
 				if err != nil {
@@ -892,7 +917,6 @@ func (cncHdlr *CharacterConcernHandler) HandleCrudCommand(
 					return rslt, nil
 				}
 				rslt.Key = args.Key
-				rslt.Payload = instanceStore.GetPacked(args.Key)
 				addSteps = append(
 					addSteps,
 					&rkcy.ApecsTxn_Step{
@@ -960,7 +984,7 @@ func (cncHdlr *CharacterConcernHandler) HandleCrudCommand(
 					return rslt, nil
 				}
 				rel := &CharacterRelated{}
-				if relBytes != nil {
+				if relBytes != nil && len(relBytes) > 0 {
 					err = proto.Unmarshal(relBytes, rel)
 					if err != nil {
 						rslt.SetResult(err)
@@ -1053,6 +1077,8 @@ func (cncHdlr *CharacterConcernHandler) DecodeArg(
 		case rkcy.READ:
 			fallthrough
 		case rkcy.UPDATE:
+			fallthrough
+		case rkcy.UPDATE_ASYNC:
 			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return nil, fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
@@ -1134,6 +1160,8 @@ func (cncHdlr *CharacterConcernHandler) DecodeResult(
 		case rkcy.CREATE:
 			fallthrough
 		case rkcy.UPDATE:
+			fallthrough
+		case rkcy.UPDATE_ASYNC:
 			return cncHdlr.DecodeInstance(ctx, buffer)
 		default:
 			return nil, fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
@@ -1200,46 +1228,6 @@ func (cncHdlr *CharacterConcernHandler) DecodeRelatedRequest(
 ) (*rkcy.ResultProto, error) {
 	// No 'pure' reverse relations, so we should never be decoding
 	return nil, fmt.Errorf("DecodeRelatedRequest: Invalid concern")
-}
-
-func (cncHdlr *CharacterConcernHandler) DecodeRelatedResponse(
-	ctx context.Context,
-	relRsp *rkcy.RelatedResponse,
-) (*rkcy.ResultProto, error) {
-	resProto := &rkcy.ResultProto{}
-
-	switch relRsp.Field {
-	case "Player":
-		if relRsp.Concern == "Player" {
-			resProto.Type = "Player"
-
-			instBytes, relBytes, err := rkcy.UnpackPayloads(relRsp.Payload)
-			if err != nil {
-				return nil, err
-			}
-			inst := &Player{}
-			err = proto.Unmarshal(instBytes, inst)
-			if err != nil {
-				return nil, err
-			}
-			resProto.Instance = inst
-
-			if relBytes != nil {
-				rel := &PlayerRelated{}
-				err = proto.Unmarshal(relBytes, rel)
-				if err != nil {
-					return nil, err
-				}
-				resProto.Related = rel
-			}
-		} else {
-			return nil, fmt.Errorf("DecodeRelatedResponse: Invalid type '%s' for field Player, expecting 'Player'", relRsp.Concern)
-		}
-	default:
-		return nil, fmt.Errorf("DecodeRelatedResponse: Invalid field '%s''", relRsp.Field)
-	}
-
-	return resProto, nil
 }
 
 // -----------------------------------------------------------------------------

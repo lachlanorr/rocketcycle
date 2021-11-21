@@ -6,10 +6,12 @@ package postgresql
 
 import (
 	"context"
+	"encoding/base64"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
@@ -23,6 +25,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 	inst := &pb.Character{
 		Currency: &pb.Character_Currency{},
 	}
+	var relB64 string
 	cmpdOffset := rkcy.CompoundOffset{}
 	err := pool.QueryRow(
 		ctx,
@@ -30,6 +33,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
                 c.player_id,
                 c.fullname,
                 c.active,
+                c.related,
                 cc.gold,
                 cc.faction_0,
                 cc.faction_1,
@@ -46,6 +50,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 		&inst.PlayerId,
 		&inst.Fullname,
 		&inst.Active,
+		&relB64,
 		&inst.Currency.Gold,
 		&inst.Currency.Faction_0,
 		&inst.Currency.Faction_1,
@@ -62,11 +67,23 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 		return nil, nil, nil, err
 	}
 
+	rel := &pb.CharacterRelated{}
+	if relB64 != "" {
+		relBytes, err := base64.StdEncoding.DecodeString(relB64)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		err = proto.Unmarshal(relBytes, rel)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
 	inst.Items, err = c.readItems(ctx, inst.Id)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return inst, nil, &cmpdOffset, nil
+	return inst, rel, &cmpdOffset, nil
 }
 
 func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) (*pb.Character, error) {
@@ -80,8 +97,8 @@ func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *
 	return inst, nil
 }
 
-func (c *Character) Update(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
-	return c.upsert(ctx, inst, relCnc, cmpdOffset)
+func (c *Character) Update(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
+	return c.upsert(ctx, inst, rel, cmpdOffset)
 }
 
 func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
@@ -127,14 +144,24 @@ func (*Character) hasItem(id string, items []*pb.Character_Item) bool {
 	return false
 }
 
-func (c *Character) upsert(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
+func (c *Character) upsert(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
+	var relB64 string
+	if rel != nil {
+		relBytes, err := proto.Marshal(rel)
+		if err != nil {
+			return err
+		}
+		relB64 = base64.StdEncoding.EncodeToString(relBytes)
+	}
+
 	_, err := pool.Exec(
 		ctx,
-		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7)",
+		"CALL rpg.sp_upsert_character($1, $2, $3, $4, $5, $6, $7, $8)",
 		inst.Id,
 		inst.PlayerId,
 		inst.Fullname,
 		inst.Active,
+		relB64,
 		cmpdOffset.Generation,
 		cmpdOffset.Partition,
 		cmpdOffset.Offset,

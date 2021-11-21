@@ -65,6 +65,10 @@ func IsReservedCommand(cmd string) bool {
 	return false
 }
 
+func IsPlatformCommand(cmd string) bool {
+	return !IsReservedCommand(cmd)
+}
+
 func IsTxnProhibitedCommand(cmd string) bool {
 	if gTxnProhibitedCommands == nil {
 		gTxnProhibitedCommands = make(map[string]bool)
@@ -111,7 +115,6 @@ type ConcernHandler interface {
 		command string,
 		direction Direction,
 		args *StepArgs,
-		instanceStore *InstanceStore,
 		storageType string,
 		wg *sync.WaitGroup,
 	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
@@ -119,7 +122,6 @@ type ConcernHandler interface {
 	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
 	DecodeRelatedRequest(ctx context.Context, relReq *RelatedRequest) (*ResultProto, error)
-	DecodeRelatedResponse(ctx context.Context, relRsp *RelatedResponse) (*ResultProto, error)
 
 	SetLogicHandler(commands interface{}) error
 	SetCrudHandler(storageType string, commands interface{}) error
@@ -296,15 +298,16 @@ func resultProto2OrderedMap(
 			}
 			instOmap.SetAfter("payloadDec", relReqDecOmap, "payload")
 		case "RelatedResponse":
-			relRspDec, err := cncHdlr.DecodeRelatedResponse(ctx, resProto.Instance.(*RelatedResponse))
+			relRsp := resProto.Instance.(*RelatedResponse)
+			relRspInst, err := decodeInstance(ctx, relRsp.Concern, relRsp.Payload)
 			if err != nil {
 				return nil, err
 			}
-			relRspDecOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relRspDec)
+			relRspInstOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relRspInst)
 			if err != nil {
 				return nil, err
 			}
-			instOmap.SetAfter("payloadDec", relRspDecOmap, "payload")
+			instOmap.SetAfter("payloadDec", relRspInstOmap, "payload")
 		}
 	}
 
@@ -474,7 +477,6 @@ func handleCommand(
 			command,
 			direction,
 			args,
-			gInstanceStore,
 			gSettings.StorageTarget,
 			wg,
 		)

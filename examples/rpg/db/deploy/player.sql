@@ -9,6 +9,7 @@ CREATE TABLE rpg.player (
   id UUID PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   active BOOL NOT NULL,
+  related TEXT,
 
   -- rocketcyle annotations for "most recent offsets"
   mro_generation INT NOT NULL CHECK (mro_generation >= 1),

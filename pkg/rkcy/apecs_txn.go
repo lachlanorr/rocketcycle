@@ -64,11 +64,7 @@ func newApecsTxn(
 				Payload:       step.Payload,
 				EffectiveTime: step.EffectiveTime,
 			}
-			step.System = System_STORAGE // switch to storage UPDATE
 			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
-			txn.ForwardSteps = append(txn.ForwardSteps, step)
-		} else if step.System == System_PROCESS && step.Command == DELETE {
-			step.System = System_STORAGE // switch to storage DELETE
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
 		} else {
 			txn.ForwardSteps = append(txn.ForwardSteps, step)

@@ -10,6 +10,7 @@ CREATE TABLE rpg.character (
   player_id UUID REFERENCES rpg.player(id) NOT NULL,
   fullname TEXT NOT NULL,
   active BOOL NOT NULL,
+  related TEXT,
 
   -- rocketcyle annotations for "most recent offsets"
   mro_generation INT NOT NULL CHECK (mro_generation >= 1),

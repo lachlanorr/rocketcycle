@@ -76,7 +76,7 @@ func produceNextStep(
 	if rtxn.advanceStepIdx() {
 		nextStep := rtxn.currentStep()
 		// payload from last step should be passed to next step
-		if nextStep.Payload == nil {
+		if nextStep.Payload == nil && IsPlatformCommand(nextStep.Command) {
 			nextStep.Payload = step.Result.Payload
 		}
 		if nextStep.System == System_STORAGE && nextStep.CmpdOffset == nil {
@@ -143,16 +143,38 @@ func produceNextStep(
 			// Generate update steps for any changed instances
 			storageStepsMap := make(map[string]*ApecsTxn_Step)
 			for _, step := range rtxn.txn.ForwardSteps {
-				if step.System == System_PROCESS && step.Result.Instance != nil {
+				if step.System == System_PROCESS &&
+					(step.Result.Instance != nil || step.Command == REQUEST_RELATED || step.Command == REFRESH_RELATED) {
+					var stepInst []byte
 					stepKey := fmt.Sprintf("%s_%s", step.Concern, step.Key)
-					storageStepsMap[stepKey] = &ApecsTxn_Step{
-						System:        System_STORAGE,
-						Concern:       step.Concern,
-						Command:       UPDATE_ASYNC,
-						Key:           step.Key,
-						Payload:       step.Result.Instance,
-						CmpdOffset:    step.CmpdOffset,
-						EffectiveTime: step.EffectiveTime,
+					if step.Result.Instance != nil {
+						stepInst = PackPayloads(step.Result.Instance, gInstanceStore.GetRelated(step.Key))
+					} else if step.Command == REQUEST_RELATED {
+						relRsp := &RelatedResponse{}
+						err := proto.Unmarshal(step.Result.Payload, relRsp)
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msgf("UPDATE_ASYNC ERROR: failed to decode RelatedResponse")
+						} else {
+							stepInst = relRsp.Payload
+						}
+					} else if step.Command == REFRESH_RELATED {
+						stepInst = step.Result.Payload
+					}
+					if stepInst == nil {
+						log.Error().
+							Msgf("UPDATE_ASYNC ERROR: Empty stepInst, stepKey=%s", stepKey)
+					} else {
+						storageStepsMap[stepKey] = &ApecsTxn_Step{
+							System:        System_STORAGE,
+							Concern:       step.Concern,
+							Command:       UPDATE_ASYNC,
+							Key:           step.Key,
+							Payload:       stepInst,
+							CmpdOffset:    step.CmpdOffset,
+							EffectiveTime: step.EffectiveTime,
+						}
 					}
 				}
 			}

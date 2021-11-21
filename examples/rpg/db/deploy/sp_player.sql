@@ -4,6 +4,7 @@ CREATE OR REPLACE PROCEDURE rpg.sp_upsert_player(
   _id UUID,
   _username TEXT,
   _active BOOL,
+  _related TEXT,
 
   _mro_generation INT,
   _mro_partition INT,
@@ -36,6 +37,7 @@ BEGIN
     UPDATE rpg.player
        SET username = _username,
            active = _active,
+           related = _related,
            mro_generation = _mro_generation,
            mro_partition = _mro_partition,
            mro_offset = _mro_offset
@@ -45,6 +47,7 @@ BEGIN
       (id,
        username,
        active,
+       related,
        mro_generation,
        mro_partition,
        mro_offset)
@@ -52,6 +55,7 @@ BEGIN
       (_id,
        _username,
        _active,
+       _related,
        _mro_generation,
        _mro_partition,
        _mro_offset);
