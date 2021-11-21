@@ -16,11 +16,32 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/version"
 
 	store_pg "github.com/lachlanorr/rocketcycle/examples/rpg/crud_handlers/postgresql"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 )
+
+type StorageTarget struct {
+	Init   rkcy.StorageInit
+	Config map[string]string
+}
+
+var gStorageTargets = []*StorageTarget{
+	{
+		Init: store_pg.InitPostgresqlPool,
+		Config: map[string]string{
+			"connString": "postgresql://postgres@127.0.0.1:5432/rpg",
+		},
+	},
+	{
+		Init: store_pg.InitPostgresqlPool,
+		Config: map[string]string{
+			"connString": "postgresql://postgres@127.0.0.1:5433/rpg",
+		},
+	},
+}
 
 type CommandId int
 
@@ -221,14 +242,9 @@ func simRunner(ctx context.Context, args *RunnerArgs, wg *sync.WaitGroup) {
 	diffWait := time.Duration(settings.DiffWaitSecs) * time.Second
 	start := time.Now()
 
-	connStrs := []string{
-		"postgresql://postgres@127.0.0.1:5432/rpg",
-		"postgresql://postgres@127.0.0.1:5433/rpg",
-	}
-
-	for _, connStr := range connStrs {
+	for _, storageTarget := range gStorageTargets {
 		for {
-			diffsStorage = compareStorage(ctx, connStr, stateDb)
+			diffsStorage = compareStorage(ctx, storageTarget, stateDb)
 
 			t := time.Now()
 			if t.Sub(start) > diffWait {
@@ -300,14 +316,11 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	return diffs
 }
 
-func compareStorage(ctx context.Context, connStr string, stateDb *StateDb) []*Difference {
+func compareStorage(ctx context.Context, storageTarget *StorageTarget, stateDb *StateDb) []*Difference {
 	diffs := make([]*Difference, 0, 10)
 
 	wg := &sync.WaitGroup{}
-	dbConfig := map[string]string{
-		"connString": connStr,
-	}
-	store_pg.InitPostgresqlPool(ctx, dbConfig, wg)
+	storageTarget.Init(ctx, storageTarget.Config, wg)
 
 	playerPg := store_pg.Player{}
 	characterPg := store_pg.Character{}
