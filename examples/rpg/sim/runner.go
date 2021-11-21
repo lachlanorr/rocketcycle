@@ -248,30 +248,44 @@ func compareProcess(ctx context.Context, stateDb *StateDb, client edge.RpgServic
 	diffs := make([]*Difference, 0, 10)
 
 	for _, stateDbPlayer := range stateDb.Players {
-		rkcyPlayer, err := client.ReadPlayer(ctx, &edge.RpgRequest{Id: stateDbPlayer.Id})
+		rkcyPlayer, err := client.ReadPlayer(ctx, &edge.RpgRequest{Id: stateDbPlayer.Inst.Id})
 		if err != nil {
-			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer.Inst})
 		}
 
-		stateDbJson := protojson.Format(stateDbPlayer)
-		rkcyJson := protojson.Format(rkcyPlayer.Player)
+		stateDbInstJson := protojson.Format(stateDbPlayer.Inst)
+		rkcyInstJson := protojson.Format(rkcyPlayer.Player)
 
-		if stateDbJson != rkcyJson {
-			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbPlayer, Rkcy: rkcyPlayer})
+		stateDbRelJson := protojson.Format(stateDbPlayer.Rel)
+		rkcyRelJson := protojson.Format(rkcyPlayer.Related)
+
+		if stateDbInstJson != rkcyInstJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbPlayer.Inst, Rkcy: rkcyPlayer.Player})
+		}
+
+		if stateDbRelJson != rkcyRelJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbPlayer.Rel, Rkcy: rkcyPlayer.Related})
 		}
 	}
 
 	for _, stateDbCharacter := range stateDb.Characters {
-		rkcyCharacter, err := client.ReadCharacter(ctx, &edge.RpgRequest{Id: stateDbCharacter.Id})
+		rkcyCharacter, err := client.ReadCharacter(ctx, &edge.RpgRequest{Id: stateDbCharacter.Inst.Id})
 		if err != nil {
-			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter.Inst})
 		}
 
-		stateDbJson := protojson.Format(stateDbCharacter)
-		rkcyJson := protojson.Format(rkcyCharacter.Character)
+		stateDbInstJson := protojson.Format(stateDbCharacter.Inst)
+		rkcyInstJson := protojson.Format(rkcyCharacter.Character)
 
-		if stateDbJson != rkcyJson {
-			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})
+		stateDbRelJson := protojson.Format(stateDbCharacter.Rel)
+		rkcyRelJson := protojson.Format(rkcyCharacter.Related)
+
+		if stateDbInstJson != rkcyInstJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter.Inst, Rkcy: rkcyCharacter.Character})
+		}
+
+		if stateDbRelJson != rkcyRelJson {
+			diffs = append(diffs, &Difference{Type: Process, StateDb: stateDbCharacter.Rel, Rkcy: rkcyCharacter.Related})
 		}
 	}
 
@@ -291,30 +305,44 @@ func compareStorage(ctx context.Context, stateDb *StateDb) []*Difference {
 	characterPg := store_pg.Character{}
 
 	for _, stateDbPlayer := range stateDb.Players {
-		rkcyPlayer, _, _, err := playerPg.Read(ctx, stateDbPlayer.Id)
+		rkcyPlayerInst, rkcyPlayerRel, _, err := playerPg.Read(ctx, stateDbPlayer.Inst.Id)
 		if err != nil {
-			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer})
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbPlayer.Inst})
 		}
 
-		stateDbJson := protojson.Format(stateDbPlayer)
-		rkcyJson := protojson.Format(rkcyPlayer)
+		stateDbInstJson := protojson.Format(stateDbPlayer.Inst)
+		rkcyInstJson := protojson.Format(rkcyPlayerInst)
 
-		if stateDbJson != rkcyJson {
-			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbPlayer, Rkcy: rkcyPlayer})
+		stateDbRelJson := protojson.Format(stateDbPlayer.Rel)
+		rkcyRelJson := protojson.Format(rkcyPlayerRel)
+
+		if stateDbInstJson != rkcyInstJson {
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbPlayer.Inst, Rkcy: rkcyPlayerInst})
+		}
+
+		if stateDbRelJson != rkcyRelJson {
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbPlayer.Rel, Rkcy: rkcyPlayerRel})
 		}
 	}
 
 	for _, stateDbCharacter := range stateDb.Characters {
-		rkcyCharacter, _, _, err := characterPg.Read(ctx, stateDbCharacter.Id)
+		rkcyCharacterInst, rkcyCharacterRel, _, err := characterPg.Read(ctx, stateDbCharacter.Inst.Id)
 		if err != nil {
-			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter})
+			diffs = append(diffs, &Difference{Message: err.Error(), Type: Error, StateDb: stateDbCharacter.Inst})
 		}
 
-		stateDbJson := protojson.Format(stateDbCharacter)
-		rkcyJson := protojson.Format(rkcyCharacter)
+		stateDbJson := protojson.Format(stateDbCharacter.Inst)
+		rkcyJson := protojson.Format(rkcyCharacterInst)
+
+		stateDbRelJson := protojson.Format(stateDbCharacter.Rel)
+		rkcyRelJson := protojson.Format(rkcyCharacterRel)
 
 		if stateDbJson != rkcyJson {
-			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbCharacter, Rkcy: rkcyCharacter})
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbCharacter.Inst, Rkcy: rkcyCharacterInst})
+		}
+
+		if stateDbRelJson != rkcyRelJson {
+			diffs = append(diffs, &Difference{Type: Storage, StateDb: stateDbCharacter.Rel, Rkcy: rkcyCharacterRel})
 		}
 	}
 
