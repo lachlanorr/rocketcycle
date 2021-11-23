@@ -61,7 +61,7 @@ func init() {
 // Concern Player
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterConcernHandler(&PlayerConcernHandler{})
+	rkcy.RegisterGlobalConcernHandler(&PlayerConcernHandler{})
 }
 
 func (inst *Player) Key() string {
@@ -108,7 +108,7 @@ type PlayerCrudHandler interface {
 type PlayerConcernHandler struct {
 	logicHandler      PlayerLogicHandler
 	crudHandlers      map[string]PlayerCrudHandler
-	storageTargets    map[string]*rkcy.StorageTarget
+	storageTargets    map[string]*rkcy.StorageTargetInit
 	storageInitHasRun map[string]bool
 }
 
@@ -144,7 +144,7 @@ func (cncHdlr *PlayerConcernHandler) SetCrudHandler(storageType string, handler 
 	return nil
 }
 
-func (cncHdlr *PlayerConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTarget) {
+func (cncHdlr *PlayerConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTargetInit) {
 	cncHdlr.storageTargets = storageTargets
 	cncHdlr.storageInitHasRun = make(map[string]bool)
 }

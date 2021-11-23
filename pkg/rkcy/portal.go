@@ -30,7 +30,7 @@ import (
 //go:embed static/portal/docs
 var gDocsFiles embed.FS
 
-func cobraPortalServe(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraPortalServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("portal server started")
@@ -45,9 +45,9 @@ func cobraPortalServe(cmd *cobra.Command, args []string) {
 	}()
 
 	var wg sync.WaitGroup
-	go portalServe(ctx, gSettings.HttpAddr, gSettings.GrpcAddr, &wg)
+	go portalServe(ctx, plat, &wg)
 
-	go portalPlatform(ctx, PlatformName(), Environment(), &wg)
+	go plat.portalPlatform(ctx, &wg)
 
 	select {
 	case <-interruptCh:
@@ -59,14 +59,14 @@ func cobraPortalServe(cmd *cobra.Command, args []string) {
 	}
 }
 
-func cobraPortalReadPlatform(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraPortalReadPlatform(cmd *cobra.Command, args []string) {
 	path := "/v1/platform/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(gSettings.PortalAddr + path)
+	resp, err := http.Get(plat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -84,14 +84,14 @@ func cobraPortalReadPlatform(cmd *cobra.Command, args []string) {
 	fmt.Println(string(body))
 }
 
-func cobraPortalReadConfig(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraPortalReadConfig(cmd *cobra.Command, args []string) {
 	path := "/v1/config/read"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(gSettings.PortalAddr + path)
+	resp, err := http.Get(plat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -129,14 +129,14 @@ func cobraPortalReadConfig(cmd *cobra.Command, args []string) {
 	fmt.Printf("%s\n", string(prettyJson.Bytes()))
 }
 
-func cobraPortalReadProducers(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraPortalReadProducers(cmd *cobra.Command, args []string) {
 	path := "/v1/producers/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(gSettings.PortalAddr + path)
+	resp, err := http.Get(plat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -154,12 +154,12 @@ func cobraPortalReadProducers(cmd *cobra.Command, args []string) {
 	fmt.Println(string(body))
 }
 
-func cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
-	conn, err := grpc.Dial(gSettings.PortalAddr, grpc.WithInsecure())
+func (plat *Platform) cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
+	conn, err := grpc.Dial(plat.settings.PortalAddr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Str("PortalAddr", gSettings.PortalAddr).
+			Str("PortalAddr", plat.settings.PortalAddr).
 			Msg("Failed to grpc.Dial")
 	}
 	defer conn.Close()
@@ -177,7 +177,7 @@ func cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
 	}
 }
 
-func cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
 	path := "/v1/instance/decode"
 	slog := log.With().
 		Str("Path", path).
@@ -198,7 +198,7 @@ func cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
 	}
 
 	contentRdr := bytes.NewReader(rpcArgsSer)
-	resp, err := http.Post(gSettings.PortalAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(plat.settings.PortalAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -230,18 +230,15 @@ func cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
 type portalServer struct {
 	UnimplementedPortalServiceServer
 
-	httpAddr string
-	grpcAddr string
-
-	confMgr *ConfigMgr
+	plat *Platform
 }
 
 func (srv portalServer) HttpAddr() string {
-	return srv.httpAddr
+	return srv.plat.settings.HttpAddr
 }
 
 func (srv portalServer) GrpcAddr() string {
-	return srv.grpcAddr
+	return srv.plat.settings.GrpcAddr
 }
 
 func (portalServer) StaticFiles() http.FileSystem {
@@ -265,19 +262,19 @@ func (portalServer) RegisterHandlerFromEndpoint(
 	return RegisterPortalServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (portalServer) Platform(ctx context.Context, pa *Void) (*Platform, error) {
-	if gCurrentRtPlat != nil {
-		return gCurrentRtPlat.Platform, nil
+func (srv portalServer) PlatformDef(ctx context.Context, pa *Void) (*PlatformDef, error) {
+	if srv.plat.currentRtPlatDef != nil {
+		return srv.plat.currentRtPlatDef.PlatformDef, nil
 	}
 	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
 }
 
 func (srv portalServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
-	return srv.confMgr.BuildConfigResponse(), nil
+	return srv.plat.ConfigMgr().BuildConfigResponse(), nil
 }
 
-func (portalServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
-	jsonBytes, err := decodeInstance64Json(ctx, args.Concern, args.Payload64)
+func (srv portalServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
+	jsonBytes, err := srv.plat.concernHandlers.decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -309,24 +306,24 @@ func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) 
 	return decResp, nil
 }
 
-func (portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+func (srv portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+	resProto, _, err := srv.plat.concernHandlers.decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
 	return resultProto2DecodeResponse(resProto)
 }
 
-func (portalServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+func (srv portalServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+	resProto, _, err := srv.plat.concernHandlers.decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
 	return resultProto2DecodeResponse(resProto)
 }
 
-func (portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) (*Void, error) {
-	ctx, traceId, span := Telem().StartRequest(ctx)
+func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) (*Void, error) {
+	ctx, traceId, span := srv.plat.telem.StartRequest(ctx)
 	defer span.End()
 
 	log.Warn().Msgf("CancelTxn %s", cancelTxn.TxnId)
@@ -341,18 +338,18 @@ func (portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) 
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		gSettings.AdminBrokers,
-		gPlatformName,
-		gEnvironment,
+		srv.plat.settings.AdminBrokers,
+		srv.plat.name,
+		srv.plat.environment,
 		nil,
 		wg,
 	)
 
 	platMsg := <-platCh
-	rtPlat := platMsg.NewRtPlat
+	rtPlat := platMsg.NewRtPlatDef
 
 	for _, rtCnc := range rtPlat.Concerns {
-		if rtCnc.Concern.Type == Platform_Concern_APECS {
+		if rtCnc.Concern.Type == Concern_APECS {
 			adminRtTopics, ok := rtCnc.Topics[string(ADMIN)]
 			if !ok {
 				return nil, fmt.Errorf("No admin topic for concern: %s", rtCnc.Concern.Name)
@@ -363,7 +360,7 @@ func (portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) 
 			}
 			log.Info().Msgf("%s - %s", cluster.Brokers, adminRtTopics.CurrentTopic)
 
-			prodCh := getProducerCh(ctx, cluster.Brokers, wg)
+			prodCh := srv.plat.rawProducer.getProducerCh(ctx, cluster.Brokers, wg)
 			msg, err := newKafkaMessage(
 				&adminRtTopics.CurrentTopic,
 				0,
@@ -381,28 +378,25 @@ func (portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) 
 	return &Void{}, nil
 }
 
-func portalServe(ctx context.Context, httpAddr string, grpcAddr string, wg *sync.WaitGroup) {
+func portalServe(ctx context.Context, plat *Platform, wg *sync.WaitGroup) {
 	srv := portalServer{
-		httpAddr: httpAddr,
-		grpcAddr: grpcAddr,
-		confMgr:  NewConfigMgr(ctx, gSettings.AdminBrokers, PlatformName(), Environment(), wg),
+		plat: plat,
 	}
+	plat.InitConfigMgr(ctx, wg)
 	ServeGrpcGateway(ctx, srv)
 }
 
-func portalPlatform(
+func (plat *Platform) portalPlatform(
 	ctx context.Context,
-	platformName string,
-	environment string,
 	wg *sync.WaitGroup,
 ) {
 	platCh := make(chan *PlatformMessage)
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		gSettings.AdminBrokers,
-		platformName,
-		environment,
+		plat.settings.AdminBrokers,
+		plat.name,
+		plat.environment,
 		nil,
 		wg,
 	)
@@ -419,7 +413,7 @@ func portalPlatform(
 				continue
 			}
 
-			gCurrentRtPlat = platMsg.NewRtPlat
+			plat.currentRtPlatDef = platMsg.NewRtPlatDef
 		}
 	}
 }

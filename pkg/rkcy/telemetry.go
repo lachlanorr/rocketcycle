@@ -34,18 +34,18 @@ type Telemetry struct {
 	Pusher   *controller.Controller
 }
 
-func NewTelemetry(ctx context.Context) (*Telemetry, error) {
+func NewTelemetry(ctx context.Context, otelcolEndpoint string) (*Telemetry, error) {
 	var err error
 	telem := Telemetry{Ctx: ctx}
 
 	// Set different endpoints for the metrics and traces collectors
 	metricsDriver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint(gSettings.OtelcolEndpoint),
+		otlpgrpc.WithEndpoint(otelcolEndpoint),
 	)
 	tracesDriver := otlpgrpc.NewDriver(
 		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint(gSettings.OtelcolEndpoint),
+		otlpgrpc.WithEndpoint(otelcolEndpoint),
 	)
 	splitCfg := otlp.SplitConfig{
 		ForMetrics: metricsDriver,

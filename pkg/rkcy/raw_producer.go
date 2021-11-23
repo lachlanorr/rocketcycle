@@ -20,14 +20,25 @@ type ChanneledProducer struct {
 	Ch      ProducerCh
 }
 
-var gProducers = make(map[string]*ChanneledProducer)
-var gProducersMtx = &sync.Mutex{}
+type RawProducer struct {
+	producers    map[string]*ChanneledProducer
+	producersMtx *sync.Mutex
+	telem        *Telemetry
+}
 
-func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) ProducerCh {
-	gProducersMtx.Lock()
-	defer gProducersMtx.Unlock()
+func NewRawProducer(telem *Telemetry) *RawProducer {
+	return &RawProducer{
+		producers:    make(map[string]*ChanneledProducer),
+		producersMtx: &sync.Mutex{},
+		telem:        telem,
+	}
+}
 
-	cp, ok := gProducers[brokers]
+func (rawProd *RawProducer) getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) ProducerCh {
+	rawProd.producersMtx.Lock()
+	defer rawProd.producersMtx.Unlock()
+
+	cp, ok := rawProd.producers[brokers]
 	if ok {
 		return cp.Ch
 	}
@@ -59,7 +70,7 @@ func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) Prod
 				if ev.TopicPartition.Error != nil {
 					traceId := GetTraceId(ev)
 					if traceId != "" {
-						Telem().RecordProduceError(
+						rawProd.telem.RecordProduceError(
 							"Delivery",
 							traceId,
 							*ev.TopicPartition.Topic,
@@ -77,10 +88,10 @@ func getProducerCh(ctx context.Context, brokers string, wg *sync.WaitGroup) Prod
 	}()
 
 	cp.Ch = make(ProducerCh)
-	gProducers[brokers] = cp
+	rawProd.producers[brokers] = cp
 
 	wg.Add(1)
-	go runProducer(ctx, cp, wg)
+	go runProducer(ctx, cp, rawProd.telem, wg)
 	return cp.Ch
 }
 
@@ -100,7 +111,7 @@ func closeProducer(cp *ChanneledProducer) {
 		Msg("PRODUCER CLOSED")
 }
 
-func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup) {
+func runProducer(ctx context.Context, cp *ChanneledProducer, telem *Telemetry, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer closeProducer(cp)
 
@@ -113,7 +124,7 @@ func runProducer(ctx context.Context, cp *ChanneledProducer, wg *sync.WaitGroup)
 			if err != nil {
 				traceId := GetTraceId(msg)
 				if traceId != "" {
-					Telem().RecordProduceError(
+					telem.RecordProduceError(
 						"Produce",
 						traceId,
 						*msg.TopicPartition.Topic,

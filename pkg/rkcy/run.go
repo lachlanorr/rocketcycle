@@ -236,52 +236,78 @@ func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh c
 	}
 }
 
-func defaultArgs() []string {
+func defaultArgs(adminBrokers string, otelcolEndpoint string) []string {
 	return []string{
-		"--otelcol_endpoint=" + gSettings.OtelcolEndpoint,
-		"--admin_brokers=" + gSettings.AdminBrokers,
+		"--admin_brokers=" + adminBrokers,
+		"--otelcol_endpoint=" + otelcolEndpoint,
 	}
 }
 
-func startAdmin(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+func startAdmin(
+	ctx context.Context,
+	adminBrokers string,
+	otelcolEndpoint string,
+	platformName string,
+	environment string,
+	running map[string]*rtProgram,
+	printCh chan<- string,
+) {
 	updateRunning(
 		ctx,
 		running,
 		Directive_CONSUMER_START,
 		&ConsumerDirective{
 			Program: &Program{
-				Name:   "./" + gPlatformName,
-				Args:   append(defaultArgs(), "admin"),
+				Name:   "./" + platformName,
+				Args:   append([]string{"admin"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
 				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.admin", gPlatformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", platformName, environment)},
 			},
 		},
 		printCh,
 	)
 }
 
-func startPortalServer(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
+func startPortalServer(
+	ctx context.Context,
+	adminBrokers string,
+	otelcolEndpoint string,
+	platformName string,
+	environment string,
+	running map[string]*rtProgram,
+	printCh chan<- string,
+) {
 	updateRunning(
 		ctx,
 		running,
 		Directive_CONSUMER_START,
 		&ConsumerDirective{
 			Program: &Program{
-				Name:   "./" + gPlatformName,
-				Args:   append(defaultArgs(), "portal", "serve"),
+				Name:   "./" + platformName,
+				Args:   append([]string{"portal", "serve"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
 				Abbrev: "portal",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.portal", gPlatformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", platformName, environment)},
 			},
 		},
 		printCh,
 	)
 }
 
-func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
-	args := append(defaultArgs(), "watch")
-	if gSettings.WatchDecode {
+func startWatch(
+	ctx context.Context,
+	watchDecode bool,
+	adminBrokers string,
+	otelcolEndpoint string,
+	platformName string,
+	environment string,
+	running map[string]*rtProgram,
+	printCh chan<- string,
+) {
+	args := []string{"watch"}
+	if watchDecode {
 		args = append(args, "-d")
 	}
+	args = append(args, defaultArgs(adminBrokers, otelcolEndpoint)...)
 
 	updateRunning(
 		ctx,
@@ -289,25 +315,33 @@ func startWatch(ctx context.Context, running map[string]*rtProgram, printCh chan
 		Directive_CONSUMER_START,
 		&ConsumerDirective{
 			Program: &Program{
-				Name:   "./" + gPlatformName,
+				Name:   "./" + platformName,
 				Args:   args,
 				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.watch", gPlatformImpl.Name)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", platformName, environment)},
 			},
 		},
 		printCh,
 	)
 }
 
-func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
+func runConsumerPrograms(
+	ctx context.Context,
+	watchDecode bool,
+	adminBrokers string,
+	otelcolEndpoint string,
+	platformName string,
+	environment string,
+	wg *sync.WaitGroup,
+) {
 	consCh := make(chan *ConsumerMessage)
 
 	consumeConsumersTopic(
 		ctx,
 		consCh,
-		gSettings.AdminBrokers,
-		PlatformName(),
-		Environment(),
+		adminBrokers,
+		platformName,
+		environment,
 		nil,
 		wg,
 	)
@@ -317,9 +351,9 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, printCh, wg)
-	startAdmin(ctx, running, printCh)
-	startPortalServer(ctx, running, printCh)
-	startWatch(ctx, running, printCh)
+	startAdmin(ctx, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
+	startPortalServer(ctx, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
+	startWatch(ctx, watchDecode, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 
@@ -348,7 +382,7 @@ func runConsumerPrograms(ctx context.Context, wg *sync.WaitGroup) {
 	}
 }
 
-func cobraRun(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -359,7 +393,15 @@ func cobraRun(cmd *cobra.Command, args []string) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go runConsumerPrograms(ctx, &wg)
+	go runConsumerPrograms(
+		ctx,
+		plat.settings.WatchDecode,
+		plat.settings.AdminBrokers,
+		plat.settings.OtelcolEndpoint,
+		plat.name,
+		plat.environment,
+		&wg,
+	)
 	for {
 		select {
 		case <-interruptCh:

@@ -9,13 +9,21 @@ type platformDiff struct {
 	progsToStart []*Program
 }
 
-func (rtPlat *rtPlatform) getAllProgs() map[string]*Program {
+func (rtPlatDef *rtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint string) map[string]*Program {
 	progs := make(map[string]*Program)
-	if rtPlat != nil {
-		for _, concern := range rtPlat.Platform.Concerns {
+	if rtPlatDef != nil {
+		for _, concern := range rtPlatDef.PlatformDef.Concerns {
 			for _, topics := range concern.Topics {
 				if topics.ConsumerPrograms != nil {
-					exProgs := expandProgs(concern, topics, rtPlat.Clusters)
+					exProgs := expandProgs(
+						rtPlatDef.PlatformDef.Name,
+						rtPlatDef.PlatformDef.Environment,
+						adminBrokers,
+						otelcolEndpoint,
+						concern,
+						topics,
+						rtPlatDef.Clusters,
+					)
 					for _, p := range exProgs {
 						progs[progKey(p)] = p
 					}
@@ -26,14 +34,14 @@ func (rtPlat *rtPlatform) getAllProgs() map[string]*Program {
 	return progs
 }
 
-func (lhs *rtPlatform) diff(rhs *rtPlatform) *platformDiff {
+func (lhs *rtPlatformDef) diff(rhs *rtPlatformDef, adminBrokers string, otelcolEndpoint string) *platformDiff {
 	d := &platformDiff{
 		progsToStop:  nil,
 		progsToStart: nil,
 	}
 
-	newProgs := lhs.getAllProgs()
-	oldProgs := rhs.getAllProgs()
+	newProgs := lhs.getAllProgs(adminBrokers, otelcolEndpoint)
+	oldProgs := rhs.getAllProgs(adminBrokers, otelcolEndpoint)
 
 	for k, v := range newProgs {
 		if _, ok := oldProgs[k]; !ok {

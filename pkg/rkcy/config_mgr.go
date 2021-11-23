@@ -444,17 +444,17 @@ func config2json(conf *Config) (string, error) {
 	return string(jbytes), nil
 }
 
-func cobraConfigReplace(cmd *cobra.Command, args []string) {
-	ctx, span := Telem().StartFunc(context.Background())
+func (plat *Platform) cobraConfigReplace(cmd *cobra.Command, args []string) {
+	ctx, span := plat.telem.StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().
-		Str("Brokers", gSettings.AdminBrokers).
-		Str("ConfigPath", gSettings.ConfigFilePath).
+		Str("Brokers", plat.settings.AdminBrokers).
+		Str("ConfigPath", plat.settings.ConfigFilePath).
 		Logger()
 
 	// read config file and deserialize
-	data, err := ioutil.ReadFile(gSettings.ConfigFilePath)
+	data, err := ioutil.ReadFile(plat.settings.ConfigFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -471,16 +471,16 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 	}
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, PlatformName(), Environment())
+	err = createPlatformTopics(context.Background(), plat.settings.AdminBrokers, plat.name, plat.environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
-			Str("Platform", PlatformName()).
+			Str("Platform", plat.name).
 			Msg("Failed to create platform topics")
 	}
 
-	configTopic := ConfigTopic(PlatformName(), Environment())
+	configTopic := ConfigTopic(plat.name, plat.environment)
 	slog = slog.With().
 		Str("Topic", configTopic).
 		Logger()
@@ -492,7 +492,7 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 	go printKafkaLogs(ctx, kafkaLogCh)
 
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  gSettings.AdminBrokers,
+		"bootstrap.servers":  plat.settings.AdminBrokers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
 
@@ -507,11 +507,11 @@ func cobraConfigReplace(cmd *cobra.Command, args []string) {
 	}
 	defer func() {
 		log.Warn().
-			Str("Brokers", gSettings.AdminBrokers).
+			Str("Brokers", plat.settings.AdminBrokers).
 			Msg("Closing kafka producer")
 		prod.Close()
 		log.Warn().
-			Str("Brokers", gSettings.AdminBrokers).
+			Str("Brokers", plat.settings.AdminBrokers).
 			Msg("Closed kafka producer")
 	}()
 

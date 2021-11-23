@@ -35,7 +35,7 @@ func (wt *watchTopic) String() string {
 	return fmt.Sprintf("%s__%s", wt.clusterName, wt.topicName)
 }
 
-func (wt *watchTopic) consume(ctx context.Context) {
+func (wt *watchTopic) consume(ctx context.Context, watchDecode bool, concernHandlers ConcernHandlers) {
 	groupName := uncommittedGroupNameAllPartitions(wt.topicName)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
@@ -94,8 +94,8 @@ func (wt *watchTopic) consume(ctx context.Context) {
 				txn := &ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
-					if gSettings.WatchDecode {
-						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, &pjOpts)
+					if watchDecode {
+						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, concernHandlers, &pjOpts)
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -115,9 +115,9 @@ func (wt *watchTopic) consume(ctx context.Context) {
 	}
 }
 
-func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
+func getAllWatchTopics(rtPlatDef *rtPlatformDef) []*watchTopic {
 	var wts []*watchTopic
-	for _, concern := range rtPlat.Concerns {
+	for _, concern := range rtPlatDef.Concerns {
 		for _, topic := range concern.Topics {
 			tp, err := ParseFullTopicName(topic.CurrentTopic)
 			if err == nil {
@@ -141,7 +141,7 @@ func getAllWatchTopics(rtPlat *rtPlatform) []*watchTopic {
 	return wts
 }
 
-func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.MarshalOptions) ([]byte, error) {
+func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, concernHandlers ConcernHandlers, pjOpts *protojson.MarshalOptions) ([]byte, error) {
 	txnJson, err := pjOpts.Marshal(txn)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 					if ok {
 						b64, ok := iB64.(string)
 						if ok && b64 != "" {
-							argJson, err := decodeArgPayload64Json(ctx, concern, system, command, b64)
+							argJson, err := concernHandlers.decodeArgPayload64Json(ctx, concern, system, command, b64)
 							var argOmap *jsonutils.OrderedMap
 							err = jsonutils.UnmarshalOrdered(argJson, &argOmap)
 							if err == nil {
@@ -210,7 +210,7 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 					if ok {
 						b64, ok := iB64.(string)
 						if ok && b64 != "" {
-							argJson, err := decodeInstance64Json(ctx, concern, b64)
+							argJson, err := concernHandlers.decodeInstance64Json(ctx, concern, b64)
 							var argOmap *jsonutils.OrderedMap
 							err = jsonutils.UnmarshalOrdered(argJson, &argOmap)
 							if err == nil {
@@ -229,7 +229,7 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 							if ok {
 								b64, ok := iB64.(string)
 								if ok && b64 != "" {
-									resJson, err := decodeResultPayload64Json(ctx, concern, system, command, b64)
+									resJson, err := concernHandlers.decodeResultPayload64Json(ctx, concern, system, command, b64)
 									var resOmap *jsonutils.OrderedMap
 									err = jsonutils.UnmarshalOrdered(resJson, &resOmap)
 									if err == nil {
@@ -244,7 +244,7 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 							if ok {
 								b64, ok := iB64.(string)
 								if ok && b64 != "" {
-									instJson, err := decodeInstance64Json(ctx, concern, b64)
+									instJson, err := concernHandlers.decodeInstance64Json(ctx, concern, b64)
 									var instOmap *jsonutils.OrderedMap
 									err = jsonutils.UnmarshalOrdered(instJson, &instOmap)
 									if err == nil {
@@ -278,7 +278,15 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, pjOpts *protojson.Mars
 	return jsonSer, nil
 }
 
-func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGroup) {
+func watchResultTopics(
+	ctx context.Context,
+	watchDecode bool,
+	adminBrokers string,
+	platformName string,
+	environment string,
+	concernHandlers ConcernHandlers,
+	wg *sync.WaitGroup,
+) {
 	defer wg.Done()
 
 	wtMap := make(map[string]bool)
@@ -288,8 +296,8 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 		ctx,
 		platformCh,
 		adminBrokers,
-		PlatformName(),
-		Environment(),
+		platformName,
+		environment,
 		nil,
 		wg,
 	)
@@ -306,20 +314,20 @@ func watchResultTopics(ctx context.Context, adminBrokers string, wg *sync.WaitGr
 				continue
 			}
 
-			wts := getAllWatchTopics(platMsg.NewRtPlat)
+			wts := getAllWatchTopics(platMsg.NewRtPlatDef)
 
 			for _, wt := range wts {
 				_, ok := wtMap[wt.String()]
 				if !ok {
 					wtMap[wt.String()] = true
-					go wt.consume(ctx)
+					go wt.consume(ctx, watchDecode, concernHandlers)
 				}
 			}
 		}
 	}
 }
 
-func cobraWatch(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraWatch(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("APECS WATCH started")
@@ -335,7 +343,15 @@ func cobraWatch(cmd *cobra.Command, args []string) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go watchResultTopics(ctx, gSettings.AdminBrokers, &wg)
+	go watchResultTopics(
+		ctx,
+		plat.settings.WatchDecode,
+		plat.settings.AdminBrokers,
+		plat.name,
+		plat.environment,
+		plat.concernHandlers,
+		&wg,
+	)
 
 	select {
 	case <-interruptCh:

@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -23,68 +24,183 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-const kUndefinedPlatformName string = "__UNDEFINED__"
-
-var gPlatformName string = kUndefinedPlatformName
-var gEnvironment string
-
 var nameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z\-]{1,15}$`)
 
 func IsValidName(name string) bool {
 	return nameRe.MatchString(name)
 }
 
-func initPlatformName(name string) {
-	if gPlatformName != kUndefinedPlatformName {
-		panic("Platform can be initialized only once, current name: " + gPlatformName)
-	}
-	gPlatformName = name
-	if !IsValidName(gPlatformName) {
-		log.Fatal().Msgf("Invalid platform name: %s", gPlatformName)
-	}
+type Settings struct {
+	PlatformFilePath string
+	ConfigFilePath   string
 
-	gEnvironment = os.Getenv("RKCY_ENVIRONMENT")
-	if !IsValidName(gEnvironment) {
-		log.Fatal().Msgf("Invalid RKCY_ENVIRONMENT: %s", gEnvironment)
-	}
+	OtelcolEndpoint string
+
+	AdminBrokers    string
+	ConsumerBrokers string
+
+	HttpAddr   string
+	GrpcAddr   string
+	PortalAddr string
+
+	System    System
+	Topic     string
+	Partition int32
+
+	AdminPingIntervalSecs uint
+
+	StorageTarget string
+
+	WatchDecode bool
 }
 
-func PlatformName() string {
-	return gPlatformName
+type ConcernHandlers map[string]ConcernHandler
+
+type Platform struct {
+	name          string
+	environment   string
+	cobraCommands []*cobra.Command
+	storageInits  map[string]StorageInit
+
+	settings  Settings
+	telem     *Telemetry
+	configMgr *ConfigMgr
+
+	adminPingInterval time.Duration
+
+	concernHandlers ConcernHandlers
+	rawProducer     *RawProducer
+
+	producerTracker  *ProducerTracker
+	currentRtPlatDef *rtPlatformDef
 }
 
-func Environment() string {
-	return gEnvironment
+func NewPlatform(
+	name string,
+	environment string,
+) (*Platform, error) {
+	if !IsValidName(name) {
+		return nil, fmt.Errorf("Invalid name: %s", name)
+	}
+	environment = os.Getenv("RKCY_ENVIRONMENT")
+	if !IsValidName(environment) {
+		return nil, fmt.Errorf("Invalid RKCY_ENVIRONMENT: %s", environment)
+	}
+
+	environment = os.Getenv("RKCY_ENVIRONMENT")
+	if !IsValidName(environment) {
+		return nil, fmt.Errorf("Invalid RKCY_ENVIRONMENT: %s", environment)
+	}
+
+	plat := &Platform{
+		name:          name,
+		environment:   environment,
+		cobraCommands: make([]*cobra.Command, 0),
+		storageInits:  make(map[string]StorageInit),
+
+		settings: Settings{Partition: -1},
+
+		concernHandlers: gConcernHandlerRegistry,
+	}
+
+	return plat, nil
 }
 
-// Platform pb, with some convenience lookup maps
+func (plat *Platform) AdminPingInterval() time.Duration {
+	if plat.adminPingInterval == 0 {
+		plat.adminPingInterval = time.Duration(plat.settings.AdminPingIntervalSecs) * time.Second
+	}
+	return plat.adminPingInterval
+}
 
-type rtPlatform struct {
-	Platform             *Platform
+func (plat *Platform) Start() {
+	prepLogging(plat.name)
+	// validate all command handlers exist for each concern
+	if !plat.concernHandlers.validateConcernHandlers() {
+		log.Fatal().
+			Msg("validateConcernHandlers failed")
+	}
+	plat.runCobra()
+}
+
+func (plat *Platform) Name() string {
+	return plat.name
+}
+
+func (plat *Platform) Environment() string {
+	return plat.environment
+}
+
+func (plat *Platform) Telem() *Telemetry {
+	return plat.telem
+}
+
+func (plat *Platform) Settings() Settings {
+	return plat.settings
+}
+
+func (plat *Platform) AppendCobraCommand(cmd *cobra.Command) {
+	plat.cobraCommands = append(plat.cobraCommands, cmd)
+}
+
+func (plat *Platform) SetStorageInit(name string, storageInit StorageInit) {
+	plat.storageInits[name] = storageInit
+}
+
+func (plat *Platform) RegisterLogicHandler(concern string, handler interface{}) {
+	plat.concernHandlers.RegisterLogicHandler(concern, handler)
+}
+
+func (plat *Platform) RegisterCrudHandler(storageType string, concern string, handler interface{}) {
+	plat.concernHandlers.RegisterCrudHandler(storageType, concern, handler)
+}
+
+func (plat *Platform) ConfigMgr() *ConfigMgr {
+	if plat.configMgr == nil {
+		log.Fatal().Msg("InitConfigMgr has not been called")
+	}
+	return plat.configMgr
+}
+
+func (plat *Platform) InitConfigMgr(ctx context.Context, wg *sync.WaitGroup) {
+	if plat.configMgr != nil {
+		log.Fatal().Msg("InitConfigMgr called twice")
+	}
+	plat.configMgr = NewConfigMgr(
+		ctx,
+		plat.settings.AdminBrokers,
+		plat.name,
+		plat.environment,
+		wg,
+	)
+}
+
+type rtPlatformDef struct {
+	PlatformDef          *PlatformDef
 	Hash                 string
 	Concerns             map[string]*rtConcern
-	Clusters             map[string]*Platform_Cluster
+	Clusters             map[string]*Cluster
 	AdminCluster         string
-	StorageTargets       map[string]*Platform_StorageTarget
+	StorageTargets       map[string]*StorageTarget
 	PrimaryStorageTarget string
 }
 
 type rtConcern struct {
-	Concern *Platform_Concern
+	Concern *Concern
 	Topics  map[string]*rtTopics
 }
 
 type rtTopics struct {
-	Topics                     *Platform_Concern_Topics
+	Topics                     *Concern_Topics
 	CurrentTopic               string
 	CurrentTopicPartitionCount int32
-	CurrentCluster             *Platform_Cluster
+	CurrentCluster             *Cluster
 	FutureTopic                string
 	FutureTopicPartitionCount  int32
-	FutureCluster              *Platform_Cluster
+	FutureCluster              *Cluster
 }
 
-func newRtConcern(rtPlat *rtPlatform, concern *Platform_Concern) (*rtConcern, error) {
+func newRtConcern(rtPlatDef *rtPlatformDef, concern *Concern) (*rtConcern, error) {
 	rtConc := rtConcern{
 		Concern: concern,
 		Topics:  make(map[string]*rtTopics),
@@ -94,7 +210,7 @@ func newRtConcern(rtPlat *rtPlatform, concern *Platform_Concern) (*rtConcern, er
 		if _, ok := rtConc.Topics[topics.Name]; ok {
 			return nil, fmt.Errorf("Topic '%s' appears more than once in Concern '%s' definition", topics.Name, rtConc.Concern.Name)
 		}
-		rtTops, err := newRtTopics(rtPlat, &rtConc, topics)
+		rtTops, err := newRtTopics(rtPlatDef, &rtConc, topics)
 		if err != nil {
 			return nil, err
 		}
@@ -107,17 +223,17 @@ func isACETopic(topic string) bool {
 	return topic == string(ADMIN) || topic == string(ERROR) || topic == string(COMPLETE)
 }
 
-func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern_Topics) (*rtTopics, error) {
+func newRtTopics(rtPlatDef *rtPlatformDef, rtConc *rtConcern, topics *Concern_Topics) (*rtTopics, error) {
 	rtTops := rtTopics{
 		Topics: topics,
 	}
 
-	pref := BuildTopicNamePrefix(rtPlat.Platform.Name, rtPlat.Platform.Environment, rtConc.Concern.Name, rtConc.Concern.Type)
+	pref := BuildTopicNamePrefix(rtPlatDef.PlatformDef.Name, rtPlatDef.PlatformDef.Environment, rtConc.Concern.Name, rtConc.Concern.Type)
 	var ok bool
 
 	rtTops.CurrentTopic = BuildTopicName(pref, topics.Name, topics.Current.Generation)
 	rtTops.CurrentTopicPartitionCount = maxi32(1, topics.Current.PartitionCount)
-	rtTops.CurrentCluster, ok = rtPlat.Clusters[topics.Current.Cluster]
+	rtTops.CurrentCluster, ok = rtPlatDef.Clusters[topics.Current.Cluster]
 	if !ok {
 		return nil, fmt.Errorf("Topic '%s.%s' has invalid Current Cluster '%s'", rtConc.Concern.Name, topics.Name, topics.Current.Cluster)
 	}
@@ -125,7 +241,7 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 	if topics.Future != nil {
 		rtTops.FutureTopic = BuildTopicName(pref, topics.Name, topics.Future.Generation)
 		rtTops.FutureTopicPartitionCount = maxi32(1, topics.Future.PartitionCount)
-		rtTops.FutureCluster, ok = rtPlat.Clusters[topics.Future.Cluster]
+		rtTops.FutureCluster, ok = rtPlatDef.Clusters[topics.Future.Cluster]
 		if !ok {
 			return nil, fmt.Errorf("Topic '%s.%s' has invalid Future Cluster '%s'", rtConc.Concern.Name, topics.Name, topics.Future.Cluster)
 		}
@@ -140,9 +256,9 @@ func newRtTopics(rtPlat *rtPlatform, rtConc *rtConcern, topics *Platform_Concern
 	return &rtTops, nil
 }
 
-func initTopic(topic *Platform_Concern_Topic, adminCluster string) *Platform_Concern_Topic {
+func initTopic(topic *Concern_Topic, adminCluster string) *Concern_Topic {
 	if topic == nil {
-		topic = &Platform_Concern_Topic{}
+		topic = &Concern_Topic{}
 	}
 
 	if topic.Generation <= 0 {
@@ -161,13 +277,13 @@ func initTopic(topic *Platform_Concern_Topic, adminCluster string) *Platform_Con
 }
 
 func initTopics(
-	topics *Platform_Concern_Topics,
+	topics *Concern_Topics,
 	adminCluster string,
-	concernType Platform_Concern_Type,
-	storageTargets []*Platform_StorageTarget,
-) *Platform_Concern_Topics {
+	concernType Concern_Type,
+	storageTargets []*StorageTarget,
+) *Concern_Topics {
 	if topics == nil {
-		topics = &Platform_Concern_Topics{}
+		topics = &Concern_Topics{}
 	}
 
 	topics.Current = initTopic(topics.Current, adminCluster)
@@ -175,7 +291,7 @@ func initTopics(
 		topics.Future = initTopic(topics.Future, adminCluster)
 	}
 
-	if concernType == Platform_Concern_APECS {
+	if concernType == Concern_APECS {
 		topics.ConsumerPrograms = nil
 		switch topics.Name {
 		case "process":
@@ -213,33 +329,33 @@ func initTopics(
 	return topics
 }
 
-func newRtPlatform(platform *Platform) (*rtPlatform, error) {
-	if platform.Name != PlatformName() {
-		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platform.Name, PlatformName())
+func newRtPlatformDef(platDef *PlatformDef, platformName string, environment string) (*rtPlatformDef, error) {
+	if platDef.Name != platformName {
+		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platDef.Name, platformName)
 	}
-	if platform.Environment != Environment() {
-		return nil, fmt.Errorf("Environment mismatch, '%s' != '%s'", platform.Environment, Environment())
+	if platDef.Environment != environment {
+		return nil, fmt.Errorf("Environment mismatch, '%s' != '%s'", platDef.Environment, environment)
 	}
 
-	rtPlat := rtPlatform{
-		Platform:       platform,
+	rtPlatDef := rtPlatformDef{
+		PlatformDef:    platDef,
 		Concerns:       make(map[string]*rtConcern),
-		Clusters:       make(map[string]*Platform_Cluster),
-		StorageTargets: make(map[string]*Platform_StorageTarget),
+		Clusters:       make(map[string]*Cluster),
+		StorageTargets: make(map[string]*StorageTarget),
 	}
 
-	platJson := protojson.Format(proto.Message(rtPlat.Platform))
+	platJson := protojson.Format(proto.Message(rtPlatDef.PlatformDef))
 	sha256Bytes := sha256.Sum256([]byte(platJson))
-	rtPlat.Hash = hex.EncodeToString(sha256Bytes[:])
+	rtPlatDef.Hash = hex.EncodeToString(sha256Bytes[:])
 
-	if !rtPlat.Platform.UpdateTime.IsValid() {
-		return nil, fmt.Errorf("Invalid UpdateTime: %s", rtPlat.Platform.UpdateTime.AsTime())
+	if !rtPlatDef.PlatformDef.UpdateTime.IsValid() {
+		return nil, fmt.Errorf("Invalid UpdateTime: %s", rtPlatDef.PlatformDef.UpdateTime.AsTime())
 	}
 
-	if len(rtPlat.Platform.Clusters) <= 0 {
+	if len(rtPlatDef.PlatformDef.Clusters) <= 0 {
 		return nil, fmt.Errorf("No clusters defined")
 	}
-	for idx, cluster := range rtPlat.Platform.Clusters {
+	for idx, cluster := range rtPlatDef.PlatformDef.Clusters {
 		if cluster.Name == "" {
 			return nil, fmt.Errorf("Cluster %d missing name field", idx)
 		}
@@ -247,25 +363,25 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 			return nil, fmt.Errorf("Cluster '%s' missing brokers field", cluster.Name)
 		}
 		if cluster.IsAdmin {
-			if rtPlat.AdminCluster != "" {
+			if rtPlatDef.AdminCluster != "" {
 				return nil, fmt.Errorf("More than one admin cluster")
 			}
-			rtPlat.AdminCluster = cluster.Name
+			rtPlatDef.AdminCluster = cluster.Name
 		}
 		// verify clusters only appear once
-		if _, ok := rtPlat.Clusters[cluster.Name]; ok {
-			return nil, fmt.Errorf("Cluster '%s' appears more than once in Platform '%s' definition", cluster.Name, rtPlat.Platform.Name)
+		if _, ok := rtPlatDef.Clusters[cluster.Name]; ok {
+			return nil, fmt.Errorf("Cluster '%s' appears more than once in Platform '%s' definition", cluster.Name, rtPlatDef.PlatformDef.Name)
 		}
-		rtPlat.Clusters[cluster.Name] = cluster
+		rtPlatDef.Clusters[cluster.Name] = cluster
 	}
-	if rtPlat.AdminCluster == "" {
+	if rtPlatDef.AdminCluster == "" {
 		return nil, fmt.Errorf("No admin cluster defined")
 	}
 
-	if len(rtPlat.Platform.StorageTargets) <= 0 {
+	if len(rtPlatDef.PlatformDef.StorageTargets) <= 0 {
 		return nil, fmt.Errorf("No storage targets defined")
 	}
-	for idx, sttg := range rtPlat.Platform.StorageTargets {
+	for idx, sttg := range rtPlatDef.PlatformDef.StorageTargets {
 		if sttg.Name == "" {
 			return nil, fmt.Errorf("Storage target %d missing name field", idx)
 		}
@@ -273,28 +389,28 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 			return nil, fmt.Errorf("Storage target '%s' missing type field", sttg.Name)
 		}
 		if sttg.IsPrimary {
-			if rtPlat.PrimaryStorageTarget != "" {
+			if rtPlatDef.PrimaryStorageTarget != "" {
 				return nil, fmt.Errorf("More than one primary storage target")
 			}
-			rtPlat.PrimaryStorageTarget = sttg.Name
+			rtPlatDef.PrimaryStorageTarget = sttg.Name
 		}
 		// verify clusters only appear once
-		if _, ok := rtPlat.StorageTargets[sttg.Name]; ok {
-			return nil, fmt.Errorf("Storage target '%s' appears more than once in Platform '%s' definition", sttg.Name, rtPlat.Platform.Name)
+		if _, ok := rtPlatDef.StorageTargets[sttg.Name]; ok {
+			return nil, fmt.Errorf("Storage target '%s' appears more than once in Platform '%s' definition", sttg.Name, rtPlatDef.PlatformDef.Name)
 		}
-		rtPlat.StorageTargets[sttg.Name] = sttg
+		rtPlatDef.StorageTargets[sttg.Name] = sttg
 	}
-	if rtPlat.PrimaryStorageTarget == "" {
+	if rtPlatDef.PrimaryStorageTarget == "" {
 		return nil, fmt.Errorf("No primary storage target defined")
 	}
 
-	requiredTopics := map[Platform_Concern_Type][]string{
-		Platform_Concern_GENERAL: {"admin", "error"},
-		Platform_Concern_BATCH:   {"admin", "error"},
-		Platform_Concern_APECS:   {"admin", "process", "error", "complete", "storage", "storage-scnd"},
+	requiredTopics := map[Concern_Type][]string{
+		Concern_GENERAL: {"admin", "error"},
+		Concern_BATCH:   {"admin", "error"},
+		Concern_APECS:   {"admin", "process", "error", "complete", "storage", "storage-scnd"},
 	}
 
-	for idx, concern := range rtPlat.Platform.Concerns {
+	for idx, concern := range rtPlatDef.PlatformDef.Concerns {
 		if concern.Name == "" {
 			return nil, fmt.Errorf("Concern %d missing name field", idx)
 		}
@@ -309,12 +425,12 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 		for _, req := range requiredTopics[concern.Type] {
 			if !contains(topicNames, req) {
 				// conern.Topics will get initialized with reasonable defaults during topic validation below
-				concern.Topics = append(concern.Topics, &Platform_Concern_Topics{Name: req})
+				concern.Topics = append(concern.Topics, &Concern_Topics{Name: req})
 			}
 		}
 
 		// ensure APECS concern only has required topics
-		if concern.Type == Platform_Concern_APECS {
+		if concern.Type == Concern_APECS {
 			// simple len check is adequate since we added all required above
 			if len(requiredTopics[concern.Type]) != len(concern.Topics) {
 				return nil, fmt.Errorf("ApecsConcern %d contains invalid command %+v required vs %+v total", idx, requiredTopics, concern.Topics)
@@ -323,24 +439,24 @@ func newRtPlatform(platform *Platform) (*rtPlatform, error) {
 
 		// validate all topics definitions
 		for idx, _ := range concern.Topics {
-			concern.Topics[idx] = initTopics(concern.Topics[idx], rtPlat.AdminCluster, concern.Type, rtPlat.Platform.StorageTargets)
-			if err := validateTopics(concern, concern.Topics[idx], rtPlat.Clusters); err != nil {
+			concern.Topics[idx] = initTopics(concern.Topics[idx], rtPlatDef.AdminCluster, concern.Type, rtPlatDef.PlatformDef.StorageTargets)
+			if err := validateTopics(concern, concern.Topics[idx], rtPlatDef.Clusters); err != nil {
 				return nil, fmt.Errorf("Concern '%s' has invalid '%s' Topics: %s", concern.Name, concern.Topics[idx].Name, err.Error())
 			}
 		}
 
 		// verify concerns only appear once
-		if _, ok := rtPlat.Concerns[concern.Name]; ok {
-			return nil, fmt.Errorf("Concern '%s' appears more than once in Platform '%s' definition", concern.Name, rtPlat.Platform.Name)
+		if _, ok := rtPlatDef.Concerns[concern.Name]; ok {
+			return nil, fmt.Errorf("Concern '%s' appears more than once in Platform '%s' definition", concern.Name, rtPlatDef.PlatformDef.Name)
 		}
-		rtConc, err := newRtConcern(&rtPlat, concern)
+		rtConc, err := newRtConcern(&rtPlatDef, concern)
 		if err != nil {
 			return nil, err
 		}
-		rtPlat.Concerns[concern.Name] = rtConc
+		rtPlatDef.Concerns[concern.Name] = rtConc
 	}
 
-	return &rtPlat, nil
+	return &rtPlatDef, nil
 }
 
 var singlePartitionTopics = map[string]bool{
@@ -349,7 +465,7 @@ var singlePartitionTopics = map[string]bool{
 	"complete": true,
 }
 
-func validateTopics(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) error {
+func validateTopics(concern *Concern, topics *Concern_Topics, clusters map[string]*Cluster) error {
 	if topics.Name == "" {
 		return fmt.Errorf("Topics missing Name field: %s", topics.Name)
 	}
@@ -392,7 +508,7 @@ func validateTopics(concern *Platform_Concern, topics *Platform_Concern_Topics, 
 	return nil
 }
 
-func validateTopic(topic *Platform_Concern_Topic, clusters map[string]*Platform_Cluster) error {
+func validateTopic(topic *Concern_Topic, clusters map[string]*Cluster) error {
 	if topic.Generation == 0 {
 		return fmt.Errorf("Topic missing Generation field")
 	}
@@ -416,25 +532,25 @@ func uncommittedGroupNameAllPartitions(topic string) string {
 	return fmt.Sprintf("__%s_ALL__non_comitted_group", topic)
 }
 
-func cobraPlatReplace(cmd *cobra.Command, args []string) {
-	ctx, span := Telem().StartFunc(context.Background())
+func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
+	ctx, span := plat.telem.StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().
-		Str("Brokers", gSettings.AdminBrokers).
-		Str("PlatformPath", gSettings.PlatformFilePath).
+		Str("Brokers", plat.settings.AdminBrokers).
+		Str("PlatformPath", plat.settings.PlatformFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(gSettings.PlatformFilePath)
+	conf, err := ioutil.ReadFile(plat.settings.PlatformFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
-	plat := Platform{}
-	err = protojson.Unmarshal(conf, proto.Message(&plat))
+	platDef := PlatformDef{}
+	err = protojson.Unmarshal(conf, proto.Message(&platDef))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -442,32 +558,32 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 			Msg("Failed to unmarshal platform")
 	}
 
-	plat.UpdateTime = timestamppb.Now()
+	platDef.UpdateTime = timestamppb.Now()
 
-	// create an rtPlatform so we run the validations that involves
-	rtPlat, err := newRtPlatform(&plat)
+	// create an rtPlatformDef so we run the validations that involves
+	rtPlatDef, err := newRtPlatformDef(&platDef, plat.name, plat.environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
 			Msg("Failed to newRtPlatform")
 	}
-	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlat.Platform))
+	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlatDef.PlatformDef))
 	log.Info().
 		Str("PlatformJson", string(jsonBytes)).
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), gSettings.AdminBrokers, plat.Name, plat.Environment)
+	err = createPlatformTopics(context.Background(), plat.settings.AdminBrokers, platDef.Name, platDef.Environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
-			Str("Platform", plat.Name).
+			Str("Platform", platDef.Name).
 			Msg("Failed to create platform topics")
 	}
 
-	platformTopic := PlatformTopic(plat.Name, plat.Environment)
+	platformTopic := PlatformTopic(platDef.Name, platDef.Environment)
 	slog = slog.With().
 		Str("Topic", platformTopic).
 		Logger()
@@ -479,7 +595,7 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 	go printKafkaLogs(ctx, kafkaLogCh)
 
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  gSettings.AdminBrokers,
+		"bootstrap.servers":  plat.settings.AdminBrokers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
 
@@ -494,15 +610,15 @@ func cobraPlatReplace(cmd *cobra.Command, args []string) {
 	}
 	defer func() {
 		log.Warn().
-			Str("Brokers", gSettings.AdminBrokers).
+			Str("Brokers", plat.settings.AdminBrokers).
 			Msg("Closing kafka producer")
 		prod.Close()
 		log.Warn().
-			Str("Brokers", gSettings.AdminBrokers).
+			Str("Brokers", plat.settings.AdminBrokers).
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := newKafkaMessage(&platformTopic, 0, &plat, Directive_PLATFORM, ExtractTraceParent(ctx))
+	msg, err := newKafkaMessage(&platformTopic, 0, &platDef, Directive_PLATFORM, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

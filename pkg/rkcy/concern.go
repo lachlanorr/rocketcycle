@@ -20,6 +20,13 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
 )
 
+var gConcernHandlerRegistry = make(map[string]ConcernHandler)
+
+type StorageTargetInit struct {
+	*StorageTarget
+	Init StorageInit
+}
+
 const (
 	CREATE       = "Create"
 	READ         = "Read"
@@ -88,16 +95,6 @@ func IsTxnProhibitedCommand(cmd string) bool {
 	return false
 }
 
-var gConcernHandlers map[string]ConcernHandler = make(map[string]ConcernHandler)
-
-type StorageTarget struct {
-	Name      string
-	Type      string
-	IsPrimary bool
-	Config    map[string]string
-	Init      StorageInit
-}
-
 type ConcernHandler interface {
 	ConcernName() string
 	HandleLogicCommand(
@@ -126,12 +123,12 @@ type ConcernHandler interface {
 	SetLogicHandler(commands interface{}) error
 	SetCrudHandler(storageType string, commands interface{}) error
 	ValidateHandlers() bool
-	SetStorageTargets(storageTargets map[string]*StorageTarget)
+	SetStorageTargets(storageTargets map[string]*StorageTargetInit)
 }
 
-func validateConcernHandlers() bool {
+func (concernHandlers ConcernHandlers) validateConcernHandlers() bool {
 	retval := true
-	for concern, cncHdlr := range gConcernHandlers {
+	for concern, cncHdlr := range concernHandlers {
 		if !cncHdlr.ValidateHandlers() {
 			log.Error().
 				Str("Concern", concern).
@@ -142,8 +139,16 @@ func validateConcernHandlers() bool {
 	return retval
 }
 
-func RegisterLogicHandler(concern string, handler interface{}) {
-	cncHdlr, ok := gConcernHandlers[concern]
+func RegisterGlobalConcernHandler(cncHandler ConcernHandler) {
+	_, ok := gConcernHandlerRegistry[cncHandler.ConcernName()]
+	if ok {
+		panic(fmt.Sprintf("%s concern handler already registered", cncHandler.ConcernName()))
+	}
+	gConcernHandlerRegistry[cncHandler.ConcernName()] = cncHandler
+}
+
+func (concernHandlers ConcernHandlers) RegisterLogicHandler(concern string, handler interface{}) {
+	cncHdlr, ok := concernHandlers[concern]
 	if !ok {
 		panic(fmt.Sprintf("%s concern handler not registered", concern))
 	}
@@ -153,8 +158,8 @@ func RegisterLogicHandler(concern string, handler interface{}) {
 	}
 }
 
-func RegisterCrudHandler(storageType string, concern string, handler interface{}) {
-	cncHdlr, ok := gConcernHandlers[concern]
+func (concernHandlers ConcernHandlers) RegisterCrudHandler(storageType string, concern string, handler interface{}) {
+	cncHdlr, ok := concernHandlers[concern]
 	if !ok {
 		panic(fmt.Sprintf("%s concern handler not registered", concern))
 	}
@@ -164,32 +169,24 @@ func RegisterCrudHandler(storageType string, concern string, handler interface{}
 	}
 }
 
-func RegisterConcernHandler(cncHandler ConcernHandler) {
-	_, ok := gConcernHandlers[cncHandler.ConcernName()]
-	if ok {
-		panic(fmt.Sprintf("%s concern handler already registered", cncHandler.ConcernName()))
-	}
-	gConcernHandlers[cncHandler.ConcernName()] = cncHandler
-}
-
-func decodeInstance(ctx context.Context, concern string, buffer []byte) (*ResultProto, error) {
-	concernHandler, ok := gConcernHandlers[concern]
+func (concernHandlers ConcernHandlers) decodeInstance(ctx context.Context, concern string, buffer []byte) (*ResultProto, error) {
+	concernHandler, ok := concernHandlers[concern]
 	if !ok {
 		return nil, fmt.Errorf("decodeInstance invalid concern: %s", concern)
 	}
 	return concernHandler.DecodeInstance(ctx, buffer)
 }
 
-func decodeInstance64(ctx context.Context, concern string, buffer64 string) (*ResultProto, error) {
+func (concernHandlers ConcernHandlers) decodeInstance64(ctx context.Context, concern string, buffer64 string) (*ResultProto, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
 	}
-	return decodeInstance(ctx, concern, buffer)
+	return concernHandlers.decodeInstance(ctx, concern, buffer)
 }
 
-func decodeInstanceJson(ctx context.Context, concern string, buffer []byte) ([]byte, error) {
-	resProto, err := decodeInstance(ctx, concern, buffer)
+func (concernHandlers ConcernHandlers) decodeInstanceJson(ctx context.Context, concern string, buffer []byte) ([]byte, error) {
+	resProto, err := concernHandlers.decodeInstance(ctx, concern, buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -231,22 +228,22 @@ func decodeInstanceJson(ctx context.Context, concern string, buffer []byte) ([]b
 	return jsonBytes, nil
 }
 
-func decodeInstance64Json(ctx context.Context, concern string, buffer64 string) ([]byte, error) {
+func (concernHandlers ConcernHandlers) decodeInstance64Json(ctx context.Context, concern string, buffer64 string) ([]byte, error) {
 	buffer, err := base64.StdEncoding.DecodeString(buffer64)
 	if err != nil {
 		return nil, err
 	}
-	return decodeInstanceJson(ctx, concern, buffer)
+	return concernHandlers.decodeInstanceJson(ctx, concern, buffer)
 }
 
-func decodeArgPayload(
+func (concernHandlers ConcernHandlers) decodeArgPayload(
 	ctx context.Context,
 	concern string,
 	system System,
 	command string,
 	buffer []byte,
 ) (*ResultProto, ConcernHandler, error) {
-	cncHdlr, ok := gConcernHandlers[concern]
+	cncHdlr, ok := concernHandlers[concern]
 	if !ok {
 		return nil, nil, fmt.Errorf("decodeArgPayload invalid concern: %s", concern)
 	}
@@ -254,7 +251,7 @@ func decodeArgPayload(
 	return resProto, cncHdlr, err
 }
 
-func decodeArgPayload64(
+func (concernHandlers ConcernHandlers) decodeArgPayload64(
 	ctx context.Context,
 	concern string,
 	system System,
@@ -265,10 +262,10 @@ func decodeArgPayload64(
 	if err != nil {
 		return nil, nil, err
 	}
-	return decodeArgPayload(ctx, concern, system, command, buffer)
+	return concernHandlers.decodeArgPayload(ctx, concern, system, command, buffer)
 }
 
-func resultProto2OrderedMap(
+func (concernHandlers ConcernHandlers) resultProto2OrderedMap(
 	ctx context.Context,
 	cncHdlr ConcernHandler,
 	resProto *ResultProto,
@@ -292,18 +289,18 @@ func resultProto2OrderedMap(
 			if err != nil {
 				return nil, err
 			}
-			relReqDecOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relReqDec)
+			relReqDecOmap, err := concernHandlers.resultProto2OrderedMap(ctx, cncHdlr, relReqDec)
 			if err != nil {
 				return nil, err
 			}
 			instOmap.SetAfter("payloadDec", relReqDecOmap, "payload")
 		case "RelatedResponse":
 			relRsp := resProto.Instance.(*RelatedResponse)
-			relRspInst, err := decodeInstance(ctx, relRsp.Concern, relRsp.Payload)
+			relRspInst, err := concernHandlers.decodeInstance(ctx, relRsp.Concern, relRsp.Payload)
 			if err != nil {
 				return nil, err
 			}
-			relRspInstOmap, err := resultProto2OrderedMap(ctx, cncHdlr, relRspInst)
+			relRspInstOmap, err := concernHandlers.resultProto2OrderedMap(ctx, cncHdlr, relRspInst)
 			if err != nil {
 				return nil, err
 			}
@@ -334,29 +331,29 @@ func resultProto2OrderedMap(
 	return resOmap, nil
 }
 
-func resultProto2Json(ctx context.Context, cncHdlr ConcernHandler, resProto *ResultProto) ([]byte, error) {
-	resOmap, err := resultProto2OrderedMap(ctx, cncHdlr, resProto)
+func (concernHandlers ConcernHandlers) resultProto2Json(ctx context.Context, cncHdlr ConcernHandler, resProto *ResultProto) ([]byte, error) {
+	resOmap, err := concernHandlers.resultProto2OrderedMap(ctx, cncHdlr, resProto)
 	if err != nil {
 		return nil, err
 	}
 	return jsonutils.MarshalOrdered(resOmap)
 }
 
-func decodeArgPayloadJson(
+func (concernHandlers ConcernHandlers) decodeArgPayloadJson(
 	ctx context.Context,
 	concern string,
 	system System,
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
-	resProto, cncHdlr, err := decodeArgPayload(ctx, concern, system, command, buffer)
+	resProto, cncHdlr, err := concernHandlers.decodeArgPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return resultProto2Json(ctx, cncHdlr, resProto)
+	return concernHandlers.resultProto2Json(ctx, cncHdlr, resProto)
 }
 
-func decodeArgPayload64Json(
+func (concernHandlers ConcernHandlers) decodeArgPayload64Json(
 	ctx context.Context,
 	concern string,
 	system System,
@@ -367,17 +364,17 @@ func decodeArgPayload64Json(
 	if err != nil {
 		return nil, err
 	}
-	return decodeArgPayloadJson(ctx, concern, system, command, buffer)
+	return concernHandlers.decodeArgPayloadJson(ctx, concern, system, command, buffer)
 }
 
-func decodeResultPayload(
+func (concernHandlers ConcernHandlers) decodeResultPayload(
 	ctx context.Context,
 	concern string,
 	system System,
 	command string,
 	buffer []byte,
 ) (*ResultProto, ConcernHandler, error) {
-	cncHdlr, ok := gConcernHandlers[concern]
+	cncHdlr, ok := concernHandlers[concern]
 	if !ok {
 		return nil, nil, fmt.Errorf("decodeResultPayload invalid concern: %s", concern)
 	}
@@ -385,7 +382,7 @@ func decodeResultPayload(
 	return resProto, cncHdlr, err
 }
 
-func decodeResultPayload64(
+func (concernHandlers ConcernHandlers) decodeResultPayload64(
 	ctx context.Context,
 	concern string,
 	system System,
@@ -396,24 +393,24 @@ func decodeResultPayload64(
 	if err != nil {
 		return nil, nil, err
 	}
-	return decodeResultPayload(ctx, concern, system, command, buffer)
+	return concernHandlers.decodeResultPayload(ctx, concern, system, command, buffer)
 }
 
-func decodeResultPayloadJson(
+func (concernHandlers ConcernHandlers) decodeResultPayloadJson(
 	ctx context.Context,
 	concern string,
 	system System,
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
-	resProto, cncHdlr, err := decodeResultPayload(ctx, concern, system, command, buffer)
+	resProto, cncHdlr, err := concernHandlers.decodeResultPayload(ctx, concern, system, command, buffer)
 	if err != nil {
 		return nil, err
 	}
-	return resultProto2Json(ctx, cncHdlr, resProto)
+	return concernHandlers.resultProto2Json(ctx, cncHdlr, resProto)
 }
 
-func decodeResultPayload64Json(
+func (concernHandlers ConcernHandlers) decodeResultPayload64Json(
 	ctx context.Context,
 	concern string,
 	system System,
@@ -424,10 +421,10 @@ func decodeResultPayload64Json(
 	if err != nil {
 		return nil, err
 	}
-	return decodeResultPayloadJson(ctx, concern, system, command, buffer)
+	return concernHandlers.decodeResultPayloadJson(ctx, concern, system, command, buffer)
 }
 
-func handleCommand(
+func (plat *Platform) handleCommand(
 	ctx context.Context,
 	concern string,
 	system System,
@@ -450,7 +447,7 @@ func handleCommand(
 		}
 	}()
 
-	cncHdlr, ok := gConcernHandlers[concern]
+	cncHdlr, ok := plat.concernHandlers[concern]
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
@@ -477,7 +474,7 @@ func handleCommand(
 			command,
 			direction,
 			args,
-			gSettings.StorageTarget,
+			plat.settings.StorageTarget,
 			wg,
 		)
 	default:

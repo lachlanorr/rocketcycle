@@ -82,7 +82,7 @@ func init() {
 // Concern {{ $cnc.Name }}
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterConcernHandler(&{{ $cnc.Name }}ConcernHandler{})
+	rkcy.RegisterGlobalConcernHandler(&{{ $cnc.Name }}ConcernHandler{})
 }
 
 func (inst *{{ $cnc.Name }}) Key() string {
@@ -134,7 +134,7 @@ type {{ $cnc.Name }}CrudHandler interface {
 type {{ $cnc.Name }}ConcernHandler struct {
 	logicHandler      {{ $cnc.Name }}LogicHandler
 	crudHandlers      map[string]{{ $cnc.Name }}CrudHandler
-	storageTargets    map[string]*rkcy.StorageTarget
+	storageTargets    map[string]*rkcy.StorageTargetInit
 	storageInitHasRun map[string]bool
 }
 
@@ -170,7 +170,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) SetCrudHandler(storageType string,
 	return nil
 }
 
-func (cncHdlr *{{ $cnc.Name }}ConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTarget) {
+func (cncHdlr *{{ $cnc.Name }}ConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTargetInit) {
 	cncHdlr.storageTargets = storageTargets
 	cncHdlr.storageInitHasRun = make(map[string]bool)
 }

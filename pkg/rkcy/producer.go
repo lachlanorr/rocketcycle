@@ -19,6 +19,8 @@ import (
 )
 
 type Producer struct {
+	rawProducer *RawProducer
+
 	id string
 
 	constlog zerolog.Logger
@@ -28,6 +30,8 @@ type Producer struct {
 	concernName  string
 	concern      *rtConcern
 	topicName    string
+
+	adminPingInterval time.Duration
 
 	brokers string
 	prodCh  ProducerCh
@@ -74,22 +78,26 @@ func newKafkaMessage(
 
 func NewProducer(
 	ctx context.Context,
+	rawProducer *RawProducer,
 	adminBrokers string,
 	platformName string,
 	environment string,
 	concernName string,
 	topicName string,
+	adminPingInterval time.Duration,
 	wg *sync.WaitGroup,
 ) *Producer {
 	prod := Producer{
-		id: uuid.NewString(),
+		rawProducer: rawProducer,
+		id:          uuid.NewString(),
 		constlog: log.With().
 			Str("Concern", concernName).
 			Logger(),
-		platformName: platformName,
-		concernName:  concernName,
-		topicName:    topicName,
-		fnv64:        fnv.New64(),
+		platformName:      platformName,
+		concernName:       concernName,
+		topicName:         topicName,
+		adminPingInterval: adminPingInterval,
+		fnv64:             fnv.New64(),
 	}
 
 	prod.slog = prod.constlog.With().Logger()
@@ -99,7 +107,7 @@ func NewProducer(
 	prod.produceCh = make(chan *message)
 
 	prod.producersTopic = ProducersTopic(platformName, environment)
-	prod.adminProdCh = getProducerCh(ctx, adminBrokers, wg)
+	prod.adminProdCh = prod.rawProducer.getProducerCh(ctx, adminBrokers, wg)
 
 	consumePlatformTopic(
 		ctx,
@@ -112,7 +120,7 @@ func NewProducer(
 	)
 
 	platMsg := <-prod.platformCh
-	prod.updatePlatform(ctx, platMsg.NewRtPlat, wg)
+	prod.updatePlatform(ctx, platMsg.NewRtPlatDef, wg)
 
 	go prod.run(ctx, wg)
 
@@ -121,11 +129,11 @@ func NewProducer(
 
 func (prod *Producer) updatePlatform(
 	ctx context.Context,
-	rtPlat *rtPlatform,
+	rtPlatDef *rtPlatformDef,
 	wg *sync.WaitGroup,
 ) {
 	var ok bool
-	prod.concern, ok = rtPlat.Concerns[prod.concernName]
+	prod.concern, ok = rtPlatDef.Concerns[prod.concernName]
 	if !ok {
 		prod.slog.Error().
 			Msg("updatePlatform: Failed to find Concern")
@@ -145,7 +153,7 @@ func (prod *Producer) updatePlatform(
 	// update producer if necessary
 	if prod.brokers != prod.topics.CurrentCluster.Brokers {
 		prod.brokers = prod.topics.CurrentCluster.Brokers
-		prod.prodCh = getProducerCh(ctx, prod.brokers, wg)
+		prod.prodCh = prod.rawProducer.getProducerCh(ctx, prod.brokers, wg)
 		prod.slog = prod.slog.With().
 			Str("Brokers", prod.brokers).
 			Logger()
@@ -183,7 +191,7 @@ func (prod *Producer) Close() {
 }
 
 func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
-	pingAdminTicker := time.NewTicker(gAdminPingInterval)
+	pingAdminTicker := time.NewTicker(prod.adminPingInterval)
 	pingMsg, err := newKafkaMessage(
 		&prod.producersTopic,
 		0,
@@ -230,7 +238,7 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 				log.Info().Msgf("pause produce %+v", msg)
 				prod.adminProdCh <- msg
 			case platformMsg := <-prod.platformCh:
-				prod.updatePlatform(ctx, platformMsg.NewRtPlat, wg)
+				prod.updatePlatform(ctx, platformMsg.NewRtPlatDef, wg)
 			case msg := <-prod.produceCh:
 				if prod.prodCh == nil {
 					prod.slog.Error().
@@ -267,7 +275,7 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 			case paused = <-prod.pauseCh:
 				continue
 			case platMsg := <-prod.platformCh:
-				prod.updatePlatform(ctx, platMsg.NewRtPlat, wg)
+				prod.updatePlatform(ctx, platMsg.NewRtPlatDef, wg)
 			}
 		}
 	}

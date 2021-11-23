@@ -295,11 +295,11 @@ func consumeMgmtTopic(
 }
 
 type PlatformMessage struct {
-	Directive Directive
-	Timestamp time.Time
-	Offset    int64
-	NewRtPlat *rtPlatform
-	OldRtPlat *rtPlatform
+	Directive    Directive
+	Timestamp    time.Time
+	Offset       int64
+	NewRtPlatDef *rtPlatformDef
+	OldRtPlatDef *rtPlatformDef
 }
 
 func consumePlatformTopic(
@@ -311,7 +311,7 @@ func consumePlatformTopic(
 	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
-	var currRtPlat *rtPlatform
+	var currRtPlatDef *rtPlatformDef
 
 	wg.Add(1)
 	go consumeMgmtTopic(
@@ -321,8 +321,8 @@ func consumePlatformTopic(
 		Directive_PLATFORM,
 		kAtLastMatch,
 		func(rawMsg *RawMessage) {
-			plat := &Platform{}
-			err := proto.Unmarshal(rawMsg.Value, plat)
+			platDef := &PlatformDef{}
+			err := proto.Unmarshal(rawMsg.Value, platDef)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -330,7 +330,7 @@ func consumePlatformTopic(
 				return
 			}
 
-			rtPlat, err := newRtPlatform(plat)
+			rtPlatDef, err := newRtPlatformDef(platDef, platformName, environment)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -338,24 +338,24 @@ func consumePlatformTopic(
 				return
 			}
 
-			if currRtPlat != nil {
-				if rtPlat.Hash == currRtPlat.Hash {
+			if currRtPlatDef != nil {
+				if rtPlatDef.Hash == currRtPlatDef.Hash {
 					// this happens frequently when admin replublishes
 					return
 				}
-				if !rtPlat.Platform.UpdateTime.AsTime().After(currRtPlat.Platform.UpdateTime.AsTime()) {
+				if !rtPlatDef.PlatformDef.UpdateTime.AsTime().After(currRtPlatDef.PlatformDef.UpdateTime.AsTime()) {
 					log.Info().
-						Msgf("Platform not newer: old(%s) vs new(%s)", currRtPlat.Platform.UpdateTime.AsTime(), rtPlat.Platform.UpdateTime.AsTime())
+						Msgf("Platform not newer: old(%s) vs new(%s)", currRtPlatDef.PlatformDef.UpdateTime.AsTime(), rtPlatDef.PlatformDef.UpdateTime.AsTime())
 					return
 				}
 			}
 
 			ch <- &PlatformMessage{
-				Directive: rawMsg.Directive,
-				Timestamp: rawMsg.Timestamp,
-				Offset:    rawMsg.Offset,
-				NewRtPlat: rtPlat,
-				OldRtPlat: currRtPlat,
+				Directive:    rawMsg.Directive,
+				Timestamp:    rawMsg.Timestamp,
+				Offset:       rawMsg.Offset,
+				NewRtPlatDef: rtPlatDef,
+				OldRtPlatDef: currRtPlatDef,
 			}
 		},
 		readyCh,
@@ -539,7 +539,7 @@ func consumeACETopic(
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		gSettings.AdminBrokers,
+		adminBrokers,
 		platformName,
 		environment,
 		nil,
@@ -560,8 +560,8 @@ func consumeACETopic(
 				continue
 			}
 
-			rtPlat := platMsg.NewRtPlat
-			rtCnc, ok := rtPlat.Concerns[concern]
+			rtPlatDef := platMsg.NewRtPlatDef
+			rtCnc, ok := rtPlatDef.Concerns[concern]
 			if !ok {
 				log.Error().Msgf("Concern not found in platform: %s", concern)
 				continue

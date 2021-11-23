@@ -69,9 +69,7 @@ func ValidateTxn(txn *Txn) error {
 
 type ApecsProducer struct {
 	ctx               context.Context
-	adminBrokers      string
-	platformName      string
-	environment       string
+	plat              *Platform
 	respTarget        *TopicTarget
 	producers         map[string]map[StandardTopicName]*Producer
 	producersMtx      sync.Mutex
@@ -87,18 +85,14 @@ type RespChan struct {
 
 func NewApecsProducer(
 	ctx context.Context,
-	adminBrokers string,
-	platformName string,
-	environment string,
+	plat *Platform,
 	respTarget *TopicTarget,
 	wg *sync.WaitGroup,
 ) *ApecsProducer {
 	aprod := &ApecsProducer{
-		ctx:          ctx,
-		adminBrokers: adminBrokers,
-		platformName: platformName,
-		environment:  environment,
-		respTarget:   respTarget,
+		ctx:        ctx,
+		plat:       plat,
+		respTarget: respTarget,
 
 		producers:      make(map[string]map[StandardTopicName]*Producer),
 		respRegisterCh: make(chan *RespChan, 10),
@@ -145,13 +139,23 @@ func (aprod *ApecsProducer) getProducer(
 	}
 	pdc, ok := concernProds[topicName]
 	if !ok {
-		pdc = NewProducer(aprod.ctx, aprod.adminBrokers, aprod.platformName, aprod.environment, concernName, string(topicName), wg)
+		pdc = NewProducer(
+			aprod.ctx,
+			aprod.plat.rawProducer,
+			aprod.plat.settings.AdminBrokers,
+			aprod.plat.name,
+			aprod.plat.environment,
+			concernName,
+			string(topicName),
+			aprod.plat.AdminPingInterval(),
+			wg,
+		)
 
 		if pdc == nil {
 			return nil, fmt.Errorf(
 				"ApecsProducer.getProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
-				aprod.adminBrokers,
-				aprod.platformName,
+				aprod.plat.settings.AdminBrokers,
+				aprod.plat.name,
 				concernName,
 				topicName,
 			)
@@ -177,7 +181,7 @@ func (aprod *ApecsProducer) produceResponse(
 		return err
 	}
 
-	prodCh := getProducerCh(ctx, respTgt.Brokers, wg)
+	prodCh := aprod.plat.rawProducer.getProducerCh(ctx, respTgt.Brokers, wg)
 	prodCh <- kMsg
 
 	return nil
@@ -439,7 +443,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 	timeout time.Duration,
 	wg *sync.WaitGroup,
 ) (*ResultProto, error) {
-	ctx, span := Telem().StartFunc(ctx)
+	ctx, span := aprod.plat.telem.StartFunc(ctx)
 	defer span.End()
 
 	if err := ValidateTxn(txn); err != nil {
@@ -479,7 +483,7 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 		return nil, errors.New("nil txn received")
 	}
 
-	success, resProto, result := ApecsTxnResult(ctx, txnResp)
+	success, resProto, result := aprod.plat.ApecsTxnResult(ctx, txnResp)
 	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)
@@ -505,7 +509,7 @@ func (aprod *ApecsProducer) ExecuteTxnAsync(
 	txn *Txn,
 	wg *sync.WaitGroup,
 ) error {
-	ctx, span := Telem().StartFunc(ctx)
+	ctx, span := aprod.plat.telem.StartFunc(ctx)
 	defer span.End()
 
 	if err := ValidateTxn(txn); err != nil {

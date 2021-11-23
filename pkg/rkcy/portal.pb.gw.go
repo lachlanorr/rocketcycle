@@ -31,20 +31,20 @@ var _ = runtime.String
 var _ = utilities.NewDoubleArray
 var _ = metadata.Join
 
-func request_PortalService_Platform_0(ctx context.Context, marshaler runtime.Marshaler, client PortalServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_PortalService_PlatformDef_0(ctx context.Context, marshaler runtime.Marshaler, client PortalServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq Void
 	var metadata runtime.ServerMetadata
 
-	msg, err := client.Platform(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.PlatformDef(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_PortalService_Platform_0(ctx context.Context, marshaler runtime.Marshaler, server PortalServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_PortalService_PlatformDef_0(ctx context.Context, marshaler runtime.Marshaler, server PortalServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq Void
 	var metadata runtime.ServerMetadata
 
-	msg, err := server.Platform(ctx, &protoReq)
+	msg, err := server.PlatformDef(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -209,18 +209,18 @@ func local_request_PortalService_CancelTxn_0(ctx context.Context, marshaler runt
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterPortalServiceHandlerFromEndpoint instead.
 func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server PortalServiceServer) error {
 
-	mux.Handle("GET", pattern_PortalService_Platform_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_PortalService_PlatformDef_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/Platform")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_PortalService_Platform_0(rctx, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_PortalService_PlatformDef_0(rctx, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
@@ -228,7 +228,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 			return
 		}
 
-		forward_PortalService_Platform_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_PortalService_PlatformDef_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -388,23 +388,23 @@ func RegisterPortalServiceHandler(ctx context.Context, mux *runtime.ServeMux, co
 // "PortalServiceClient" to call the correct interceptors.
 func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client PortalServiceClient) error {
 
-	mux.Handle("GET", pattern_PortalService_Platform_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_PortalService_PlatformDef_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/Platform")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef")
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_PortalService_Platform_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_PortalService_PlatformDef_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_PortalService_Platform_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_PortalService_PlatformDef_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -512,7 +512,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_PortalService_Platform_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "platform", "read"}, ""))
+	pattern_PortalService_PlatformDef_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "platformDef", "read"}, ""))
 
 	pattern_PortalService_ConfigRead_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "config", "read"}, ""))
 
@@ -526,7 +526,7 @@ var (
 )
 
 var (
-	forward_PortalService_Platform_0 = runtime.ForwardResponseMessage
+	forward_PortalService_PlatformDef_0 = runtime.ForwardResponseMessage
 
 	forward_PortalService_ConfigRead_0 = runtime.ForwardResponseMessage
 

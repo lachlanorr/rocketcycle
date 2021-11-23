@@ -17,7 +17,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PortalServiceClient interface {
-	Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error)
+	PlatformDef(ctx context.Context, in *Void, opts ...grpc.CallOption) (*PlatformDef, error)
 	ConfigRead(ctx context.Context, in *Void, opts ...grpc.CallOption) (*ConfigReadResponse, error)
 	DecodeInstance(ctx context.Context, in *DecodeInstanceArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
 	DecodeArgPayload(ctx context.Context, in *DecodePayloadArgs, opts ...grpc.CallOption) (*DecodeResponse, error)
@@ -33,9 +33,9 @@ func NewPortalServiceClient(cc grpc.ClientConnInterface) PortalServiceClient {
 	return &portalServiceClient{cc}
 }
 
-func (c *portalServiceClient) Platform(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Platform, error) {
-	out := new(Platform)
-	err := c.cc.Invoke(ctx, "/rkcy.PortalService/Platform", in, out, opts...)
+func (c *portalServiceClient) PlatformDef(ctx context.Context, in *Void, opts ...grpc.CallOption) (*PlatformDef, error) {
+	out := new(PlatformDef)
+	err := c.cc.Invoke(ctx, "/rkcy.PortalService/PlatformDef", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (c *portalServiceClient) CancelTxn(ctx context.Context, in *CancelTxnReques
 // All implementations must embed UnimplementedPortalServiceServer
 // for forward compatibility
 type PortalServiceServer interface {
-	Platform(context.Context, *Void) (*Platform, error)
+	PlatformDef(context.Context, *Void) (*PlatformDef, error)
 	ConfigRead(context.Context, *Void) (*ConfigReadResponse, error)
 	DecodeInstance(context.Context, *DecodeInstanceArgs) (*DecodeResponse, error)
 	DecodeArgPayload(context.Context, *DecodePayloadArgs) (*DecodeResponse, error)
@@ -104,8 +104,8 @@ type PortalServiceServer interface {
 type UnimplementedPortalServiceServer struct {
 }
 
-func (UnimplementedPortalServiceServer) Platform(context.Context, *Void) (*Platform, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Platform not implemented")
+func (UnimplementedPortalServiceServer) PlatformDef(context.Context, *Void) (*PlatformDef, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlatformDef not implemented")
 }
 func (UnimplementedPortalServiceServer) ConfigRead(context.Context, *Void) (*ConfigReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConfigRead not implemented")
@@ -135,20 +135,20 @@ func RegisterPortalServiceServer(s grpc.ServiceRegistrar, srv PortalServiceServe
 	s.RegisterService(&_PortalService_serviceDesc, srv)
 }
 
-func _PortalService_Platform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PortalService_PlatformDef_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Void)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PortalServiceServer).Platform(ctx, in)
+		return srv.(PortalServiceServer).PlatformDef(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rkcy.PortalService/Platform",
+		FullMethod: "/rkcy.PortalService/PlatformDef",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PortalServiceServer).Platform(ctx, req.(*Void))
+		return srv.(PortalServiceServer).PlatformDef(ctx, req.(*Void))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -248,8 +248,8 @@ var _PortalService_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*PortalServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Platform",
-			Handler:    _PortalService_Platform_Handler,
+			MethodName: "PlatformDef",
+			Handler:    _PortalService_PlatformDef_Handler,
 		},
 		{
 			MethodName: "ConfigRead",

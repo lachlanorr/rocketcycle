@@ -15,7 +15,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,18 +36,16 @@ var (
 type server struct {
 	UnimplementedRpgServiceServer
 
-	httpAddr string
-	grpcAddr string
-
-	wg *sync.WaitGroup
+	plat *rkcy.Platform
+	wg   *sync.WaitGroup
 }
 
-func (srv server) HttpAddr() string {
-	return srv.httpAddr
+func (server) HttpAddr() string {
+	return settings.HttpAddr
 }
 
-func (srv server) GrpcAddr() string {
-	return srv.grpcAddr
+func (server) GrpcAddr() string {
+	return settings.GrpcAddr
 }
 
 func (server) StaticFiles() http.FileSystem {
@@ -77,7 +74,7 @@ func timeout() time.Duration {
 }
 
 func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerResponse, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -94,7 +91,7 @@ func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerRespo
 }
 
 func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -111,7 +108,7 @@ func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 }
 
 func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -128,7 +125,7 @@ func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 }
 
 func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -145,7 +142,7 @@ func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player
 }
 
 func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*CharacterResponse, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -162,7 +159,7 @@ func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*Characte
 }
 
 func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -179,7 +176,7 @@ func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 }
 
 func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.Character, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -196,7 +193,7 @@ func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 }
 
 func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Character, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -213,7 +210,7 @@ func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Cha
 }
 
 func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb.Character, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	resProto, err := aprod.ExecuteTxnSync(
@@ -230,7 +227,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb
 }
 
 func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.Void, error) {
-	ctx, span := rkcy.Telem().StartFunc(ctx)
+	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
 	_, err := aprod.ExecuteTxnSync(
@@ -246,22 +243,19 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.
 	return &rkcy.Void{}, nil
 }
 
-func serve(
+func runServer(
 	ctx context.Context,
-	httpAddr string,
-	grpcAddr string,
-	platformName string,
+	plat *rkcy.Platform,
 	wg *sync.WaitGroup,
 ) {
 	srv := server{
-		httpAddr: httpAddr,
-		grpcAddr: grpcAddr,
-		wg:       wg,
+		plat: plat,
+		wg:   wg,
 	}
 	rkcy.ServeGrpcGateway(ctx, srv)
 }
 
-func cobraServe(cmd *cobra.Command, args []string) {
+func serve(plat *rkcy.Platform) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("edge server started")
@@ -278,9 +272,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 	var wg sync.WaitGroup
 	aprod = rkcy.NewApecsProducer(
 		ctx,
-		settings.AdminBrokers,
-		rkcy.PlatformName(),
-		rkcy.Environment(),
+		plat,
 		&rkcy.TopicTarget{
 			Brokers:   settings.ConsumerBrokers,
 			Topic:     settings.Topic,
@@ -294,7 +286,7 @@ func cobraServe(cmd *cobra.Command, args []string) {
 			Msg("Failed to NewApecsProducer")
 	}
 
-	go serve(ctx, settings.HttpAddr, settings.GrpcAddr, rkcy.PlatformName(), &wg)
+	go runServer(ctx, plat, &wg)
 
 	select {
 	case <-interruptCh:

@@ -91,7 +91,7 @@ func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
 	return &rtxn, nil
 }
 
-func ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, *ResultProto, *ApecsTxn_Step_Result) {
+func (plat *Platform) ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, *ResultProto, *ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
 	success := txn.Direction == Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
@@ -100,7 +100,7 @@ func ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, *ResultProto, *Ap
 	var resProto *ResultProto
 	if step.Result != nil && step.Result.Payload != nil {
 		var err error
-		resProto, _, err = decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
+		resProto, _, err = plat.concernHandlers.decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
 		if err != nil {
 			log.Error().
 				Err(err).

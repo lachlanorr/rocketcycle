@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -41,17 +40,7 @@ const (
 
 type StorageInit func(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error
 
-type PlatformImpl struct {
-	Name          string
-	CobraCommands []*cobra.Command
-	StorageInits  map[string]StorageInit
-}
-
-func StartPlatform(impl *PlatformImpl) {
-	runCobra(impl)
-}
-
-func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType Platform_Concern_Type) string {
+func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType Concern_Type) string {
 	if !IsValidName(platformName) {
 		log.Fatal().Msgf("Invalid platformName: %s", platformName)
 	}
@@ -77,7 +66,7 @@ func BuildTopicName(topicNamePrefix string, name string, generation int32) strin
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func BuildFullTopicName(platformName string, environment string, concernName string, concernType Platform_Concern_Type, name string, generation int32) string {
+func BuildFullTopicName(platformName string, environment string, concernName string, concernType Concern_Type, name string, generation int32) string {
 	if !IsValidName(platformName) {
 		log.Fatal().Msgf("Invalid platformName: %s", platformName)
 	}
@@ -106,7 +95,7 @@ type TopicParts struct {
 	Concern     string
 	Topic       string
 	System      System
-	ConcernType Platform_Concern_Type
+	ConcernType Concern_Type
 	Generation  int32
 }
 
@@ -146,11 +135,11 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 		tp.System = System_NO_SYSTEM
 	}
 
-	concernType, ok := Platform_Concern_Type_value[parts[4]]
+	concernType, ok := Concern_Type_value[parts[4]]
 	if !ok {
 		return nil, fmt.Errorf("Invalid rkcy topic, unable to parse ConcernType: %s", fullTopic)
 	}
-	tp.ConcernType = Platform_Concern_Type(concernType)
+	tp.ConcernType = Concern_Type(concernType)
 
 	generation, err := strconv.Atoi(parts[6])
 	if err != nil {

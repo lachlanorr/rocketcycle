@@ -21,7 +21,7 @@ import (
 // Concern Character
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterConcernHandler(&CharacterConcernHandler{})
+	rkcy.RegisterGlobalConcernHandler(&CharacterConcernHandler{})
 }
 
 func (inst *Character) Key() string {
@@ -72,7 +72,7 @@ type CharacterCrudHandler interface {
 type CharacterConcernHandler struct {
 	logicHandler      CharacterLogicHandler
 	crudHandlers      map[string]CharacterCrudHandler
-	storageTargets    map[string]*rkcy.StorageTarget
+	storageTargets    map[string]*rkcy.StorageTargetInit
 	storageInitHasRun map[string]bool
 }
 
@@ -108,7 +108,7 @@ func (cncHdlr *CharacterConcernHandler) SetCrudHandler(storageType string, handl
 	return nil
 }
 
-func (cncHdlr *CharacterConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTarget) {
+func (cncHdlr *CharacterConcernHandler) SetStorageTargets(storageTargets map[string]*rkcy.StorageTargetInit) {
 	cncHdlr.storageTargets = storageTargets
 	cncHdlr.storageInitHasRun = make(map[string]bool)
 }

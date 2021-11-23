@@ -64,7 +64,7 @@ func produceApecsTxnError(
 	}
 }
 
-func produceNextStep(
+func (plat *Platform) produceNextStep(
 	ctx context.Context,
 	span trace.Span,
 	rtxn *rtApecsTxn,
@@ -101,7 +101,7 @@ func produceNextStep(
 	} else {
 		// search for instance updates and create new storage txn to update storage
 		if rtxn.txn.Direction == Direction_FORWARD {
-			if gSettings.System == System_PROCESS {
+			if plat.settings.System == System_PROCESS {
 				for _, step := range rtxn.txn.ForwardSteps {
 					if step.System == System_STORAGE {
 						// generate secondary storage steps
@@ -255,7 +255,7 @@ func jsonNoErr(msg proto.Message) string {
 	return string(j)
 }
 
-func cancelApecsTxn(
+func (plat *Platform) cancelApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
@@ -265,13 +265,13 @@ func cancelApecsTxn(
 	wg *sync.WaitGroup,
 ) {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
-	ctx, span, step := Telem().StartStep(ctx, rtxn)
+	ctx, span, step := plat.telem.StartStep(ctx, rtxn)
 	defer span.End()
 
 	produceApecsTxnError(ctx, span, rtxn, step, aprod, Code_CANCELLED, true, wg, "Txn Cancelled")
 }
 
-func advanceApecsTxn(
+func (plat *Platform) advanceApecsTxn(
 	ctx context.Context,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
@@ -281,7 +281,7 @@ func advanceApecsTxn(
 	wg *sync.WaitGroup,
 ) Code {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
-	ctx, span, step := Telem().StartStep(ctx, rtxn)
+	ctx, span, step := plat.telem.StartStep(ctx, rtxn)
 	defer span.End()
 
 	log.Debug().
@@ -396,7 +396,7 @@ func advanceApecsTxn(
 	}
 
 	var addSteps []*ApecsTxn_Step
-	step.Result, addSteps = handleCommand(
+	step.Result, addSteps = plat.handleCommand(
 		ctx,
 		step.Concern,
 		step.System,
@@ -476,44 +476,41 @@ func advanceApecsTxn(
 		}
 	}
 
-	produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
+	plat.produceNextStep(ctx, span, rtxn, step, cmpdOffset, aprod, wg)
 	return step.Result.Code
 }
 
-func updateStorageTargets(platMsg *PlatformMessage) {
+func (plat *Platform) updateStorageTargets(platMsg *PlatformMessage) {
 	if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
 		log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 		return
 	}
 
-	if IsStorageSystem(gSettings.System) {
-		stgTgts := make(map[string]*StorageTarget)
-		for _, platStgTgt := range platMsg.NewRtPlat.StorageTargets {
-			tgt := &StorageTarget{
-				Name:      platStgTgt.Name,
-				Type:      platStgTgt.Type,
-				IsPrimary: platStgTgt.IsPrimary,
-				Config:    platStgTgt.Config,
+	if IsStorageSystem(plat.settings.System) {
+		stgTgtInits := make(map[string]*StorageTargetInit)
+		for _, platStgTgt := range platMsg.NewRtPlatDef.StorageTargets {
+			tgt := &StorageTargetInit{
+				StorageTarget: platStgTgt,
 			}
 			if tgt.Config == nil {
 				tgt.Config = make(map[string]string)
 			}
 			var ok bool
-			tgt.Init, ok = gPlatformImpl.StorageInits[platStgTgt.Type]
+			tgt.Init, ok = plat.storageInits[platStgTgt.Type]
 			if !ok {
 				log.Warn().
 					Str("StorageTarget", platStgTgt.Name).
 					Msgf("No StorageInit for target")
 			}
-			stgTgts[platStgTgt.Name] = tgt
+			stgTgtInits[platStgTgt.Name] = tgt
 		}
-		for _, cncHdlr := range gConcernHandlers {
-			cncHdlr.SetStorageTargets(stgTgts)
+		for _, cncHdlr := range plat.concernHandlers {
+			cncHdlr.SetStorageTargets(stgTgtInits)
 		}
 	}
 }
 
-func consumeApecsTopic(
+func (plat *Platform) consumeApecsTopic(
 	ctx context.Context,
 	adminBrokers string,
 	consumerBrokers string,
@@ -529,21 +526,21 @@ func consumeApecsTopic(
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		gSettings.AdminBrokers,
+		plat.settings.AdminBrokers,
 		tp.Platform,
 		tp.Environment,
 		nil,
 		wg,
 	)
 	platMsg := <-platCh
-	updateStorageTargets(platMsg)
+	plat.updateStorageTargets(platMsg)
 
 	cncAdminReadyCh := make(chan bool)
 	cncAdminCh := make(chan *ConcernAdminMessage)
 	consumeConcernAdminTopic(
 		ctx,
 		cncAdminCh,
-		gSettings.AdminBrokers,
+		plat.settings.AdminBrokers,
 		tp.Platform,
 		tp.Environment,
 		tp.Concern,
@@ -554,11 +551,11 @@ func consumeApecsTopic(
 	confMgr := NewConfigMgr(ctx, adminBrokers, tp.Platform, tp.Environment, wg)
 	confRdr := NewConfigRdr(confMgr)
 
-	aprod := NewApecsProducer(ctx, adminBrokers, tp.Platform, tp.Environment, nil, wg)
+	aprod := NewApecsProducer(ctx, plat, nil, wg)
 
 	var groupName string
-	if gSettings.System == System_STORAGE {
-		groupName = fmt.Sprintf("rkcy_apecs_%s_%s", fullTopic, gSettings.StorageTarget)
+	if plat.settings.System == System_STORAGE {
+		groupName = fmt.Sprintf("rkcy_apecs_%s_%s", fullTopic, plat.settings.StorageTarget)
 	} else {
 		groupName = fmt.Sprintf("rkcy_apecs_%s", fullTopic)
 	}
@@ -635,7 +632,7 @@ func consumeApecsTopic(
 				}
 			}
 		case platMsg := <-platCh:
-			updateStorageTargets(platMsg)
+			plat.updateStorageTargets(platMsg)
 		case <-cncAdminReadyCh:
 			//			cncAdminReady = true
 		case cncAdminMsg := <-cncAdminCh:
@@ -710,9 +707,9 @@ func consumeApecsTopic(
 							_, shouldCancel := txnsToCancel[rtxn.txn.Id]
 							if shouldCancel {
 								delete(txnsToCancel, rtxn.txn.Id)
-								cancelApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
+								plat.cancelApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
 							} else {
-								code := advanceApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
+								code := plat.advanceApecsTxn(ctx, rtxn, tp, offset, aprod, confRdr, wg)
 								// Bailout is necessary when a storage step fails.
 								// Those must be retried indefinitely until success.
 								// So... we force commit the offset to current and
@@ -774,7 +771,7 @@ func consumeApecsTopic(
 	}
 }
 
-func startApecsRunner(
+func (plat *Platform) startApecsRunner(
 	ctx context.Context,
 	adminBrokers string,
 	consumerBrokers string,
@@ -796,15 +793,15 @@ func startApecsRunner(
 			Str("Topic", fullTopic).
 			Msg("startApecsRunner: No system matches topic")
 	}
-	gSettings.System = tp.System
+	plat.settings.System = tp.System
 
-	if gSettings.System != tp.System {
+	if plat.settings.System != tp.System {
 		log.Fatal().
 			Str("Topic", fullTopic).
-			Msgf("Mismatched system with topic: %s != %s", gSettings.System.String(), tp.System.String())
+			Msgf("Mismatched system with topic: %s != %s", plat.settings.System.String(), tp.System.String())
 	}
 
-	if tp.ConcernType != Platform_Concern_APECS {
+	if tp.ConcernType != Concern_APECS {
 		log.Fatal().
 			Err(err).
 			Str("Topic", fullTopic).
@@ -812,7 +809,7 @@ func startApecsRunner(
 	}
 
 	wg.Add(1)
-	go consumeApecsTopic(
+	go plat.consumeApecsTopic(
 		ctx,
 		adminBrokers,
 		consumerBrokers,
@@ -824,11 +821,11 @@ func startApecsRunner(
 	)
 }
 
-func cobraApecsConsumer(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraApecsConsumer(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
-		Str("Topic", gSettings.Topic).
-		Int32("Partition", gSettings.Partition).
+		Str("Topic", plat.settings.Topic).
+		Int32("Partition", plat.settings.Partition).
 		Msg("APECS Consumer Started")
 
 	ctx := context.Background()
@@ -843,12 +840,12 @@ func cobraApecsConsumer(cmd *cobra.Command, args []string) {
 	bailoutCh := make(chan bool)
 
 	var wg sync.WaitGroup
-	go startApecsRunner(
+	go plat.startApecsRunner(
 		ctx,
-		gSettings.AdminBrokers,
-		gSettings.ConsumerBrokers,
-		gSettings.Topic,
-		gSettings.Partition,
+		plat.settings.AdminBrokers,
+		plat.settings.ConsumerBrokers,
+		plat.settings.Topic,
+		plat.settings.Partition,
 		bailoutCh,
 		&wg,
 	)
@@ -856,18 +853,18 @@ func cobraApecsConsumer(cmd *cobra.Command, args []string) {
 	select {
 	case <-interruptCh:
 		log.Warn().
-			Str("System", gSettings.System.String()).
-			Str("Topic", gSettings.Topic).
-			Int32("Partition", gSettings.Partition).
+			Str("System", plat.settings.System.String()).
+			Str("Topic", plat.settings.Topic).
+			Int32("Partition", plat.settings.Partition).
 			Msg("APECS Consumer Stopped, SIGINT")
 		cancel()
 		wg.Wait()
 		return
 	case <-bailoutCh:
 		log.Warn().
-			Str("System", gSettings.System.String()).
-			Str("Topic", gSettings.Topic).
-			Int32("Partition", gSettings.Partition).
+			Str("System", plat.settings.System.String()).
+			Str("Topic", plat.settings.Topic).
+			Int32("Partition", plat.settings.Partition).
 			Msg("APECS Consumer Stopped, BAILOUT")
 		cancel()
 		wg.Wait()

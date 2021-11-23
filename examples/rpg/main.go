@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
+	"os"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
@@ -18,24 +18,24 @@ import (
 )
 
 func main() {
-	rkcy.RegisterLogicHandler("Player", &logic.Player{})
-	rkcy.RegisterCrudHandler("postgresql", "Player", &postgresql.Player{})
-
-	rkcy.RegisterLogicHandler("Character", &logic.Character{})
-	rkcy.RegisterCrudHandler("postgresql", "Character", &postgresql.Character{})
-
-	impl := rkcy.PlatformImpl{
-		Name: consts.Platform,
-
-		CobraCommands: []*cobra.Command{
-			edge.CobraCommand(),
-			sim.CobraCommand(),
-		},
-
-		StorageInits: map[string]rkcy.StorageInit{
-			"postgresql": postgresql.InitPostgresqlPool,
-		},
+	plat, err := rkcy.NewPlatform(
+		consts.Platform,
+		os.Getenv("RKCY_ENVIRONMENT"),
+	)
+	if err != nil {
+		panic(err.Error())
 	}
 
-	rkcy.StartPlatform(&impl)
+	plat.AppendCobraCommand(edge.CobraCommand(plat))
+	plat.AppendCobraCommand(sim.CobraCommand())
+
+	plat.SetStorageInit("postgresql", postgresql.InitPostgresqlPool)
+
+	plat.RegisterLogicHandler("Player", &logic.Player{})
+	plat.RegisterCrudHandler("postgresql", "Player", &postgresql.Player{})
+
+	plat.RegisterLogicHandler("Character", &logic.Character{})
+	plat.RegisterCrudHandler("postgresql", "Character", &postgresql.Character{})
+
+	plat.Start()
 }

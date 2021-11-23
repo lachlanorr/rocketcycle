@@ -25,18 +25,12 @@ import (
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
-var gAdminPingInterval = 1 * time.Second
-
-var gCurrentRtPlat *rtPlatform
-
 type ProducerTracker struct {
 	platformName  string
 	environment   string
 	topicProds    map[string]map[string]time.Time
 	topicProdsMtx *sync.Mutex
 }
-
-var gProducerTracker *ProducerTracker
 
 func NewProducerTracker(platformName string, environment string) *ProducerTracker {
 	pt := &ProducerTracker{
@@ -116,7 +110,7 @@ func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
 	return tp
 }
 
-func cobraAdminServe(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("admin started")
@@ -130,10 +124,10 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 		cancel()
 	}()
 
-	gProducerTracker = NewProducerTracker(PlatformName(), Environment())
+	plat.producerTracker = NewProducerTracker(plat.name, plat.environment)
 
 	var wg sync.WaitGroup
-	go managePlatform(ctx, PlatformName(), Environment(), &wg)
+	go plat.managePlatform(ctx, &wg)
 
 	select {
 	case <-interruptCh:
@@ -146,7 +140,7 @@ func cobraAdminServe(cmd *cobra.Command, args []string) {
 }
 
 type clusterInfo struct {
-	cluster        *Platform_Cluster
+	cluster        *Cluster
 	admin          *kafka.AdminClient
 	existingTopics map[string]struct{}
 	brokerCount    int
@@ -195,7 +189,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
+func newClusterInfo(cluster *Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
@@ -235,7 +229,7 @@ func newClusterInfo(cluster *Platform_Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func createMissingTopic(topicName string, topic *Platform_Concern_Topic, clusterInfos map[string]*clusterInfo) {
+func createMissingTopic(topicName string, topic *Concern_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.Cluster]
 	if !ok {
 		log.Error().
@@ -259,7 +253,7 @@ func createMissingTopic(topicName string, topic *Platform_Concern_Topic, cluster
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *Platform_Concern_Topics, clusterInfos map[string]*clusterInfo) {
+func createMissingTopics(topicNamePrefix string, topics *Concern_Topics, clusterInfos map[string]*clusterInfo) {
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
@@ -276,10 +270,10 @@ func createMissingTopics(topicNamePrefix string, topics *Platform_Concern_Topics
 	}
 }
 
-func updateTopics(rtPlat *rtPlatform) {
+func updateTopics(rtPlatDef *rtPlatformDef) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
-	for _, cluster := range rtPlat.Platform.Clusters {
+	for _, cluster := range rtPlatDef.PlatformDef.Clusters {
 		ci, err := newClusterInfo(cluster)
 
 		if err != nil {
@@ -297,11 +291,11 @@ func updateTopics(rtPlat *rtPlatform) {
 
 	var concernTypesAutoCreate = []string{"GENERAL", "APECS"}
 
-	for _, concern := range rtPlat.Platform.Concerns {
-		if contains(concernTypesAutoCreate, Platform_Concern_Type_name[int32(concern.Type)]) {
+	for _, concern := range rtPlatDef.PlatformDef.Concerns {
+		if contains(concernTypesAutoCreate, Concern_Type_name[int32(concern.Type)]) {
 			for _, topics := range concern.Topics {
 				createMissingTopics(
-					BuildTopicNamePrefix(rtPlat.Platform.Name, rtPlat.Platform.Environment, concern.Name, concern.Type),
+					BuildTopicNamePrefix(rtPlatDef.PlatformDef.Name, rtPlatDef.PlatformDef.Environment, concern.Name, concern.Type),
 					topics,
 					clusterInfos)
 			}
@@ -309,22 +303,20 @@ func updateTopics(rtPlat *rtPlatform) {
 	}
 }
 
-func managePlatform(
+func (plat *Platform) managePlatform(
 	ctx context.Context,
-	platformName string,
-	environment string,
 	wg *sync.WaitGroup,
 ) {
-	consumersTopic := ConsumersTopic(platformName, environment)
-	adminProdCh := getProducerCh(ctx, gSettings.AdminBrokers, wg)
+	consumersTopic := ConsumersTopic(plat.name, plat.environment)
+	adminProdCh := plat.rawProducer.getProducerCh(ctx, plat.settings.AdminBrokers, wg)
 
 	platCh := make(chan *PlatformMessage)
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		gSettings.AdminBrokers,
-		platformName,
-		environment,
+		plat.settings.AdminBrokers,
+		plat.name,
+		plat.environment,
 		nil,
 		wg,
 	)
@@ -333,14 +325,14 @@ func managePlatform(
 	consumeProducersTopic(
 		ctx,
 		prodCh,
-		gSettings.AdminBrokers,
-		platformName,
-		environment,
+		plat.settings.AdminBrokers,
+		plat.name,
+		plat.environment,
 		nil,
 		wg,
 	)
 
-	cullInterval := gAdminPingInterval * 10
+	cullInterval := plat.AdminPingInterval() * 10
 	cullTicker := time.NewTicker(cullInterval)
 
 	for {
@@ -349,36 +341,36 @@ func managePlatform(
 			return
 		case <-cullTicker.C:
 			// cull stale producers
-			gProducerTracker.cull(cullInterval)
+			plat.producerTracker.cull(cullInterval)
 		case platMsg := <-platCh:
 			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}
 
-			gCurrentRtPlat = platMsg.NewRtPlat
+			plat.currentRtPlatDef = platMsg.NewRtPlatDef
 
-			jsonBytes, _ := protojson.Marshal(proto.Message(gCurrentRtPlat.Platform))
+			jsonBytes, _ := protojson.Marshal(proto.Message(plat.currentRtPlatDef.PlatformDef))
 			log.Info().
 				Str("PlatformJson", string(jsonBytes)).
 				Msg("Platform Replaced")
 
-			platDiff := gCurrentRtPlat.diff(platMsg.OldRtPlat)
-			updateTopics(gCurrentRtPlat)
-			updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
+			platDiff := plat.currentRtPlatDef.diff(platMsg.OldRtPlatDef, plat.settings.AdminBrokers, plat.settings.OtelcolEndpoint)
+			updateTopics(plat.currentRtPlatDef)
+			plat.updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
 		case prodMsg := <-prodCh:
 			if (prodMsg.Directive & Directive_PRODUCER_STATUS) != Directive_PRODUCER_STATUS {
 				log.Error().Msgf("Invalid directive for ProducerTopic: %s", prodMsg.Directive.String())
 				continue
 			}
 
-			gProducerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, gAdminPingInterval*2)
+			plat.producerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, plat.AdminPingInterval()*2)
 		}
 	}
 }
 
-func updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic string, platDiff *platformDiff) {
-	ctx, span := Telem().StartFunc(ctx)
+func (plat *Platform) updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic string, platDiff *platformDiff) {
+	ctx, span := plat.telem.StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
 
@@ -415,48 +407,66 @@ func updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic st
 	}
 }
 
-func substStr(s string, concernName string, consumerBrokers string, shortTopicName string, fullTopicName string, partition int32) string {
-	s = strings.ReplaceAll(s, "@platform", gPlatformName)
-	s = strings.ReplaceAll(s, "@otelcol_endpoint", gSettings.OtelcolEndpoint)
-	s = strings.ReplaceAll(s, "@admin_brokers", gSettings.AdminBrokers)
-	s = strings.ReplaceAll(s, "@consumer_brokers", consumerBrokers)
-	s = strings.ReplaceAll(s, "@concern", concernName)
-	s = strings.ReplaceAll(s, "@system", shortTopicName)
-	s = strings.ReplaceAll(s, "@topic", fullTopicName)
-	s = strings.ReplaceAll(s, "@partition", strconv.Itoa(int(partition)))
+func substStr(
+	s string,
+	substMap map[string]string,
+) string {
+	for k, v := range substMap {
+		s = strings.ReplaceAll(s, k, v)
+	}
 	return s
 }
 
 var gStdTags map[string]string = map[string]string{
-	"service.name":   "rkcy.@platform.@concern.@system",
+	"service.name":   "rkcy.@platform.@environment.@concern.@system",
 	"rkcy.concern":   "@concern",
 	"rkcy.system":    "@system",
 	"rkcy.topic":     "@topic",
 	"rkcy.partition": "@partition",
 }
 
-func expandProgs(concern *Platform_Concern, topics *Platform_Concern_Topics, clusters map[string]*Platform_Cluster) []*Program {
+func expandProgs(
+	platformName string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
+	concern *Concern,
+	topics *Concern_Topics,
+	clusters map[string]*Cluster,
+) []*Program {
+
+	substMap := map[string]string{
+		"@platform":         platformName,
+		"@environment":      environment,
+		"@admin_brokers":    adminBrokers,
+		"@otelcol_endpoint": otelcolEndpoint,
+		"@concern":          concern.Name,
+	}
+
 	progs := make([]*Program, 0, topics.Current.PartitionCount)
 	for _, consProg := range topics.ConsumerPrograms {
 		for i := int32(0); i < topics.Current.PartitionCount; i++ {
-			topicName := BuildFullTopicName(PlatformName(), Environment(), concern.Name, concern.Type, topics.Name, topics.Current.Generation)
-			cluster := clusters[topics.Current.Cluster]
+			substMap["@consumer_brokers"] = clusters[topics.Current.Cluster].Brokers
+			substMap["@system"] = topics.Name
+			substMap["@topic"] = BuildFullTopicName(platformName, environment, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
+			substMap["@partition"] = strconv.Itoa(int(i))
+
 			prog := &Program{
-				Name:   substStr(consProg.Name, concern.Name, cluster.Brokers, topics.Name, topicName, i),
+				Name:   substStr(consProg.Name, substMap),
 				Args:   make([]string, len(consProg.Args)),
-				Abbrev: substStr(consProg.Abbrev, concern.Name, cluster.Brokers, topics.Name, topicName, i),
+				Abbrev: substStr(consProg.Abbrev, substMap),
 				Tags:   make(map[string]string),
 			}
 			for j := 0; j < len(consProg.Args); j++ {
-				prog.Args[j] = substStr(consProg.Args[j], concern.Name, cluster.Brokers, topics.Name, topicName, i)
+				prog.Args[j] = substStr(consProg.Args[j], substMap)
 			}
 
 			for k, v := range gStdTags {
-				prog.Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
+				prog.Tags[k] = substStr(v, substMap)
 			}
 			if consProg.Tags != nil {
 				for k, v := range consProg.Tags {
-					prog.Tags[k] = substStr(v, concern.Name, cluster.Brokers, topics.Name, topicName, i)
+					prog.Tags[k] = substStr(v, substMap)
 				}
 			}
 			progs = append(progs, prog)

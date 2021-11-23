@@ -6,6 +6,8 @@ package edge
 
 import (
 	"github.com/spf13/cobra"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
 // Cobra sets these values based on command parsing
@@ -27,7 +29,7 @@ var (
 	settings Settings = Settings{Partition: -1}
 )
 
-func CobraCommand() *cobra.Command {
+func CobraCommand(plat *rkcy.Platform) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "edge",
 		Short: "RPG Edge Rest Api",
@@ -84,7 +86,9 @@ func CobraCommand() *cobra.Command {
 		Use:   "serve",
 		Short: "Rocketcycle Edge Api Server",
 		Long:  "Provides rest entrypoints into application",
-		Run:   cobraServe,
+		Run: func(cmd *cobra.Command, args []string) {
+			serve(plat)
+		},
 	}
 
 	serveCmd.PersistentFlags().StringVar(&settings.AdminBrokers, "admin_brokers", "localhost", "Kafka brokers for admin messages like platform updates")

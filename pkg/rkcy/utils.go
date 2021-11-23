@@ -336,13 +336,13 @@ func OffsetGTE(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 	}
 }
 
-func cobraDecodeInstance(cmd *cobra.Command, args []string) {
+func (plat *Platform) cobraDecodeInstance(cmd *cobra.Command, args []string) {
 	concern := args[0]
 	instance64 := args[1]
 
 	ctx := context.Background()
 
-	jsonBytes, err := decodeInstance64Json(ctx, concern, instance64)
+	jsonBytes, err := plat.concernHandlers.decodeInstance64Json(ctx, concern, instance64)
 	if err != nil {
 		fmt.Printf("Failed to decode: %s\n", err.Error())
 		os.Stderr.WriteString(fmt.Sprintf("Failed to decode: %s\n", err.Error()))

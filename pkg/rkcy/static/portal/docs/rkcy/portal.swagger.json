@@ -97,14 +97,14 @@
         ]
       }
     },
-    "/v1/platform/read": {
+    "/v1/platformDef/read": {
       "get": {
-        "operationId": "PortalService_Platform",
+        "operationId": "PortalService_PlatformDef",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/rkcy.Platform"
+              "$ref": "#/definitions/rkcy.PlatformDef"
             }
           },
           "default": {
@@ -223,6 +223,127 @@
         }
       }
     },
+    "rkcy.Cluster": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "unique name of cluster"
+        },
+        "brokers": {
+          "type": "string",
+          "title": "kafka brokers for the cluster"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "title": "brokers used for admin topics, only one cluster can have this set"
+        }
+      }
+    },
+    "rkcy.Concern": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/rkcy.Concern.Type"
+        },
+        "name": {
+          "type": "string"
+        },
+        "logLevel": {
+          "$ref": "#/definitions/rkcy.Severity"
+        },
+        "topics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.Concern.Topics"
+          }
+        }
+      }
+    },
+    "rkcy.Concern.PartitionStrategy": {
+      "type": "string",
+      "enum": [
+        "FNV64_MOD"
+      ],
+      "default": "FNV64_MOD",
+      "description": "- FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count",
+      "title": "Different types of partitioning mechanisms"
+    },
+    "rkcy.Concern.Topic": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "format": "int32",
+          "title": "incrementing generation id, +1 every time we migrate a logical topic"
+        },
+        "cluster": {
+          "type": "string",
+          "title": "kafka cluster topic exists within"
+        },
+        "partitionCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "partitionStrat": {
+          "$ref": "#/definitions/rkcy.Concern.PartitionStrategy",
+          "title": "How to determine which partiton messages are produced to"
+        }
+      }
+    },
+    "rkcy.Concern.Topics": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "base name, it will get decorated with additional dot notated pieces"
+        },
+        "state": {
+          "$ref": "#/definitions/rkcy.Concern.Topics.State",
+          "title": "current vs future transition state"
+        },
+        "current": {
+          "$ref": "#/definitions/rkcy.Concern.Topic",
+          "title": "current physical topic"
+        },
+        "future": {
+          "$ref": "#/definitions/rkcy.Concern.Topic",
+          "title": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
+        },
+        "consumerPrograms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rkcy.Program"
+          }
+        }
+      }
+    },
+    "rkcy.Concern.Topics.State": {
+      "type": "string",
+      "enum": [
+        "CURRENT",
+        "FUTURE_INIT",
+        "PRODUCER_PAUSE",
+        "CONSUMER_SHUTDOWN",
+        "CONSUMER_FUTURE_START",
+        "PRODUCER_FUTURE_START",
+        "FUTURE_TO_CURRENT"
+      ],
+      "default": "CURRENT",
+      "description": "- CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - PRODUCER_PAUSE: producers all pause\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT",
+      "title": "States surrounding current vs future topics and current to future transition"
+    },
+    "rkcy.Concern.Type": {
+      "type": "string",
+      "enum": [
+        "GENERAL",
+        "BATCH",
+        "APECS"
+      ],
+      "default": "GENERAL",
+      "description": "- GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer",
+      "title": "Type implies what topics will be present"
+    },
     "rkcy.Config": {
       "type": "object",
       "properties": {
@@ -328,7 +449,7 @@
         }
       }
     },
-    "rkcy.Platform": {
+    "rkcy.PlatformDef": {
       "type": "object",
       "properties": {
         "name": {
@@ -340,165 +461,24 @@
         "concerns": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.Platform.Concern"
+            "$ref": "#/definitions/rkcy.Concern"
           }
         },
         "clusters": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.Platform.Cluster"
+            "$ref": "#/definitions/rkcy.Cluster"
           }
         },
         "storageTargets": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/rkcy.Platform.StorageTarget"
+            "$ref": "#/definitions/rkcy.StorageTarget"
           }
         },
         "updateTime": {
           "type": "string",
           "format": "date-time"
-        }
-      }
-    },
-    "rkcy.Platform.Cluster": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "title": "unique name of cluster"
-        },
-        "brokers": {
-          "type": "string",
-          "title": "kafka brokers for the cluster"
-        },
-        "isAdmin": {
-          "type": "boolean",
-          "title": "brokers used for admin topics, only one cluster can have this set"
-        }
-      }
-    },
-    "rkcy.Platform.Concern": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "$ref": "#/definitions/rkcy.Platform.Concern.Type"
-        },
-        "name": {
-          "type": "string"
-        },
-        "logLevel": {
-          "$ref": "#/definitions/rkcy.Severity"
-        },
-        "topics": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/rkcy.Platform.Concern.Topics"
-          }
-        }
-      }
-    },
-    "rkcy.Platform.Concern.Topic": {
-      "type": "object",
-      "properties": {
-        "generation": {
-          "type": "integer",
-          "format": "int32",
-          "title": "incrementing generation id, +1 every time we migrate a logical topic"
-        },
-        "cluster": {
-          "type": "string",
-          "title": "kafka cluster topic exists within"
-        },
-        "partitionCount": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "partitionStrat": {
-          "$ref": "#/definitions/rkcy.Platform.PartitionStrategy",
-          "title": "How to determine which partiton messages are produced to"
-        }
-      }
-    },
-    "rkcy.Platform.Concern.Topics": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "title": "base name, it will get decorated with additional dot notated pieces"
-        },
-        "state": {
-          "$ref": "#/definitions/rkcy.Platform.Concern.Topics.State",
-          "title": "current vs future transition state"
-        },
-        "current": {
-          "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
-          "title": "current physical topic"
-        },
-        "future": {
-          "$ref": "#/definitions/rkcy.Platform.Concern.Topic",
-          "title": "topic we're in the process of migrating to, will be\nnull unless an active migration is taking place"
-        },
-        "consumerPrograms": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/rkcy.Program"
-          }
-        }
-      }
-    },
-    "rkcy.Platform.Concern.Topics.State": {
-      "type": "string",
-      "enum": [
-        "CURRENT",
-        "FUTURE_INIT",
-        "PRODUCER_PAUSE",
-        "CONSUMER_SHUTDOWN",
-        "CONSUMER_FUTURE_START",
-        "PRODUCER_FUTURE_START",
-        "FUTURE_TO_CURRENT"
-      ],
-      "default": "CURRENT",
-      "description": "- CURRENT: no future topic exists, everyting using current\n - FUTURE_INIT: future topic added to concern and gets created\n - PRODUCER_PAUSE: producers all pause\n - CONSUMER_SHUTDOWN: consumers read until end and shutdown\n - CONSUMER_FUTURE_START: new consumers start on future, advanced passed newest\n - PRODUCER_FUTURE_START: producers unpause and produce to future\n - FUTURE_TO_CURRENT: future becomes current, future is nulled, state set to CURRENT",
-      "title": "States surrounding current vs future topics and current to future transition"
-    },
-    "rkcy.Platform.Concern.Type": {
-      "type": "string",
-      "enum": [
-        "GENERAL",
-        "BATCH",
-        "APECS"
-      ],
-      "default": "GENERAL",
-      "description": "- GENERAL: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics\n - BATCH: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * error - errors encountered during processing written here\n    * ... - additional concern specific topics for stages of batch processing\nFor telemetry purposes, stage topics are assumed to be in alphabetical order.\nBatch jobs topics aren't created by default, but on demand with the timestamp\nincluded in the names.\n - APECS: Required topics:\n    * admin - handles control messages to coordinate distributed tasks\n    * process - handles messages that affect internal state of models\n    * error - errors encountered during processing written here\n    * complete - completed transactions written here for post processing\n    * storage - handles messages sent to the persistence layer",
-      "title": "Type implies what topics will be present"
-    },
-    "rkcy.Platform.PartitionStrategy": {
-      "type": "string",
-      "enum": [
-        "FNV64_MOD"
-      ],
-      "default": "FNV64_MOD",
-      "description": "- FNV64_MOD: FNV-1 64 bit has followed by modulus of partition count",
-      "title": "Different types of partitioning mechanisms"
-    },
-    "rkcy.Platform.StorageTarget": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "isPrimary": {
-          "type": "boolean"
-        },
-        "config": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
         }
       }
     },
@@ -534,6 +514,26 @@
         "ERR"
       ],
       "default": "DBG"
+    },
+    "rkcy.StorageTarget": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "isPrimary": {
+          "type": "boolean"
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
     },
     "rkcy.System": {
       "type": "string",
