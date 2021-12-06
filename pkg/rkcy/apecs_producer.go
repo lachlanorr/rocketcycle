@@ -67,14 +67,26 @@ func ValidateTxn(txn *Txn) error {
 	return nil
 }
 
-type ApecsProducer struct {
+type ApecsKafkaProducer struct {
 	ctx               context.Context
-	plat              *Platform
+	plat              Platform
 	respTarget        *TopicTarget
-	producers         map[string]map[StandardTopicName]*Producer
+	producers         map[string]map[StandardTopicName]Producer
 	producersMtx      sync.Mutex
 	respRegisterCh    chan *RespChan
 	respConsumerClose context.CancelFunc
+}
+
+func (akprod *ApecsKafkaProducer) Platform() Platform {
+	return akprod.plat
+}
+
+func (akprod *ApecsKafkaProducer) ResponseTarget() *TopicTarget {
+	return akprod.respTarget
+}
+
+func (akprod *ApecsKafkaProducer) RegisterResponseChannel(respCh *RespChan) {
+	akprod.respRegisterCh <- respCh
 }
 
 type RespChan struct {
@@ -83,90 +95,87 @@ type RespChan struct {
 	StartTime time.Time
 }
 
-func NewApecsProducer(
+func NewApecsKafkaProducer(
 	ctx context.Context,
-	plat *Platform,
+	plat Platform,
 	respTarget *TopicTarget,
 	wg *sync.WaitGroup,
-) *ApecsProducer {
-	aprod := &ApecsProducer{
+) *ApecsKafkaProducer {
+	akprod := &ApecsKafkaProducer{
 		ctx:        ctx,
 		plat:       plat,
 		respTarget: respTarget,
 
-		producers:      make(map[string]map[StandardTopicName]*Producer),
+		producers:      make(map[string]map[StandardTopicName]Producer),
 		respRegisterCh: make(chan *RespChan, 10),
 	}
 
-	if aprod.respTarget != nil {
+	if respTarget != nil {
 		var respConsumerCtx context.Context
-		respConsumerCtx, aprod.respConsumerClose = context.WithCancel(aprod.ctx)
+		respConsumerCtx, akprod.respConsumerClose = context.WithCancel(akprod.ctx)
 		wg.Add(1)
-		go aprod.consumeResponseTopic(respConsumerCtx, aprod.respTarget, wg)
+		go akprod.consumeResponseTopic(respConsumerCtx, wg)
 	}
 
-	return aprod
+	return akprod
 }
 
-func (aprod *ApecsProducer) Close() {
-	if aprod.respTarget != nil {
-		aprod.respConsumerClose()
+func (akprod *ApecsKafkaProducer) Close() {
+	if akprod.respTarget != nil {
+		akprod.respConsumerClose()
 	}
 
-	aprod.producersMtx.Lock()
-	defer aprod.producersMtx.Unlock()
-	for _, concernProds := range aprod.producers {
+	akprod.producersMtx.Lock()
+	defer akprod.producersMtx.Unlock()
+	for _, concernProds := range akprod.producers {
 		for _, pdc := range concernProds {
 			pdc.Close()
 		}
 	}
 
-	aprod.producers = make(map[string]map[StandardTopicName]*Producer)
+	akprod.producers = make(map[string]map[StandardTopicName]Producer)
 }
 
-func (aprod *ApecsProducer) getProducer(
+func (akprod *ApecsKafkaProducer) GetProducer(
 	concernName string,
 	topicName StandardTopicName,
 	wg *sync.WaitGroup,
-) (*Producer, error) {
-	aprod.producersMtx.Lock()
-	defer aprod.producersMtx.Unlock()
+) (Producer, error) {
+	akprod.producersMtx.Lock()
+	defer akprod.producersMtx.Unlock()
 
-	concernProds, ok := aprod.producers[concernName]
+	concernProds, ok := akprod.producers[concernName]
 	if !ok {
-		concernProds = make(map[StandardTopicName]*Producer)
-		aprod.producers[concernName] = concernProds
+		concernProds = make(map[StandardTopicName]Producer)
+		akprod.producers[concernName] = concernProds
 	}
 	pdc, ok := concernProds[topicName]
 	if !ok {
-		pdc = NewProducer(
-			aprod.ctx,
-			aprod.plat.rawProducer,
-			aprod.plat.settings.AdminBrokers,
-			aprod.plat.name,
-			aprod.plat.environment,
+		pdc = akprod.plat.NewProducer(
+			akprod.ctx,
 			concernName,
 			string(topicName),
-			aprod.plat.AdminPingInterval(),
 			wg,
 		)
 
 		if pdc == nil {
 			return nil, fmt.Errorf(
-				"ApecsProducer.getProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
-				aprod.plat.settings.AdminBrokers,
-				aprod.plat.name,
+				"ApecsKafkaProducer.GetProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
+				akprod.plat.AdminBrokers(),
+				akprod.plat.Name(),
 				concernName,
 				topicName,
 			)
 		}
 		concernProds[topicName] = pdc
 	}
-	return pdc, nil
+	return Producer(pdc), nil
 }
 
-func (aprod *ApecsProducer) produceResponse(
+func produceResponse(
 	ctx context.Context,
+	plat Platform,
+	respBrokers string,
 	rtxn *rtApecsTxn,
 	wg *sync.WaitGroup,
 ) error {
@@ -181,7 +190,7 @@ func (aprod *ApecsProducer) produceResponse(
 		return err
 	}
 
-	prodCh := aprod.plat.rawProducer.getProducerCh(ctx, respTgt.Brokers, wg)
+	prodCh := plat.GetProducerCh(ctx, respBrokers, wg)
 	prodCh <- kMsg
 
 	return nil
@@ -198,22 +207,21 @@ func respondThroughChannel(txnId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
 	respCh <- txn
 }
 
-func (aprod *ApecsProducer) consumeResponseTopic(
+func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 	ctx context.Context,
-	respTarget *TopicTarget,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
 
 	reqMap := make(map[string]*RespChan)
 
-	groupName := fmt.Sprintf("rkcy_response_%s", respTarget.Topic)
+	groupName := fmt.Sprintf("rkcy_response_%s", akprod.respTarget.Topic)
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go printKafkaLogs(ctx, kafkaLogCh)
 
 	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        respTarget.Brokers,
+		"bootstrap.servers":        akprod.respTarget.Brokers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       false,
 		"enable.auto.offset.store": false,
@@ -224,14 +232,14 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Str("BoostrapServers", respTarget.Brokers).
+			Str("BoostrapServers", akprod.respTarget.Brokers).
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 	}
 	shouldCommit := false
 	defer func() {
 		log.Warn().
-			Str("Topic", respTarget.Topic).
+			Str("Topic", akprod.respTarget.Topic).
 			Msgf("CONSUMER Closing...")
 		if shouldCommit {
 			_, err = cons.Commit()
@@ -244,14 +252,14 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 		}
 		cons.Close()
 		log.Warn().
-			Str("Topic", respTarget.Topic).
+			Str("Topic", akprod.respTarget.Topic).
 			Msgf("CONSUMER CLOSED")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
-			Topic:     &respTarget.Topic,
-			Partition: respTarget.Partition,
+			Topic:     &akprod.respTarget.Topic,
+			Partition: akprod.respTarget.Partition,
 			Offset:    kafka.OffsetStored,
 		},
 	})
@@ -298,7 +306,7 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 			moreRegistrations := true
 			for moreRegistrations {
 				select {
-				case rch := <-aprod.respRegisterCh:
+				case rch := <-akprod.respRegisterCh:
 					_, ok := reqMap[rch.TxnId]
 					if ok {
 						log.Error().
@@ -324,29 +332,29 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 				if firstMessage {
 					firstMessage = false
 					log.Debug().
-						Str("Topic", respTarget.Topic).
-						Int32("Partition", respTarget.Partition).
+						Str("Topic", akprod.respTarget.Topic).
+						Int32("Partition", akprod.respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
 						Msg("Initial commit to current offset")
 
 					comOffs, err := cons.CommitOffsets([]kafka.TopicPartition{
 						{
-							Topic:     &respTarget.Topic,
-							Partition: respTarget.Partition,
+							Topic:     &akprod.respTarget.Topic,
+							Partition: akprod.respTarget.Partition,
 							Offset:    msg.TopicPartition.Offset,
 						},
 					})
 					if err != nil {
 						log.Fatal().
 							Err(err).
-							Str("Topic", respTarget.Topic).
-							Int32("Partition", respTarget.Partition).
+							Str("Topic", akprod.respTarget.Topic).
+							Int32("Partition", akprod.respTarget.Partition).
 							Int64("Offset", int64(msg.TopicPartition.Offset)).
 							Msgf("Unable to commit initial offset")
 					}
 					log.Debug().
-						Str("Topic", respTarget.Topic).
-						Int32("Partition", respTarget.Partition).
+						Str("Topic", akprod.respTarget.Topic).
+						Int32("Partition", akprod.respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
 						Msgf("Initial offset committed: %+v", comOffs)
 				}
@@ -380,15 +388,15 @@ func (aprod *ApecsProducer) consumeResponseTopic(
 
 				_, err = cons.StoreOffsets([]kafka.TopicPartition{
 					{
-						Topic:     &respTarget.Topic,
-						Partition: respTarget.Partition,
+						Topic:     &akprod.respTarget.Topic,
+						Partition: akprod.respTarget.Partition,
 						Offset:    msg.TopicPartition.Offset + 1,
 					},
 				})
 				if err != nil {
 					log.Fatal().
 						Err(err).
-						Msgf("Unable to store offsets %s/%d/%d", respTarget.Topic, respTarget.Partition, msg.TopicPartition.Offset+1)
+						Msgf("Unable to store offsets %s/%d/%d", akprod.respTarget.Topic, akprod.respTarget.Partition, msg.TopicPartition.Offset+1)
 				}
 				shouldCommit = true
 			}
@@ -437,53 +445,124 @@ func CodeTranslate(code Code) codes.Code {
 	}
 }
 
-func (aprod *ApecsProducer) ExecuteTxnSync(
+type preparedApecsSteps struct {
+	traceParent string
+	txnId       string
+	uponError   UponError
+	steps       []*ApecsTxn_Step
+}
+
+func prepareApecsSteps(
 	ctx context.Context,
+	txn *Txn,
+	telem *Telemetry,
+	wg *sync.WaitGroup,
+) (*preparedApecsSteps, error) {
+	if err := ValidateTxn(txn); err != nil {
+		return nil, err
+	}
+
+	prepSteps := &preparedApecsSteps{}
+
+	prepSteps.traceParent = ExtractTraceParent(ctx)
+	if prepSteps.traceParent == "" {
+		return nil, fmt.Errorf("No SpanContext present in ctx")
+	}
+	prepSteps.txnId = TraceIdFromTraceParent(prepSteps.traceParent)
+
+	if txn.Revert == Revertable {
+		prepSteps.uponError = UponError_REVERT
+	} else {
+		prepSteps.uponError = UponError_REPORT
+	}
+
+	prepSteps.steps = make([]*ApecsTxn_Step, len(txn.Steps))
+	for i, step := range txn.Steps {
+		payloadBytes, err := proto.Marshal(step.Payload)
+		if err != nil {
+			return nil, err
+		}
+
+		if step.EffectiveTime.IsZero() {
+			step.EffectiveTime = time.Now()
+		}
+
+		prepSteps.steps[i] = &ApecsTxn_Step{
+			System:        System_PROCESS,
+			Concern:       step.Concern,
+			Command:       step.Command,
+			Key:           step.Key,
+			Payload:       payloadBytes,
+			EffectiveTime: timestamppb.New(step.EffectiveTime),
+		}
+	}
+
+	return prepSteps, nil
+}
+
+func ExecuteTxnSync(
+	ctx context.Context,
+	plat Platform,
+	aprod ApecsProducer,
 	txn *Txn,
 	timeout time.Duration,
 	wg *sync.WaitGroup,
 ) (*ResultProto, error) {
-	ctx, span := aprod.plat.telem.StartFunc(ctx)
+	ctx, span := plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	if err := ValidateTxn(txn); err != nil {
+	if aprod.ResponseTarget() == nil {
+		err := errors.New("No ResponseTarget in ApecsProducer")
 		RecordSpanError(span, err)
 		return nil, err
 	}
 
-	txnId := span.SpanContext().TraceID().String()
-
-	if aprod.respConsumerClose == nil {
-		return nil, errors.New("ExecuteTxnSync failure, no TopicTarget provided")
+	prepSteps, err := prepareApecsSteps(
+		ctx,
+		txn,
+		plat.Telem(),
+		wg,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	respCh := RespChan{
-		TxnId:     txnId,
+		TxnId:     prepSteps.txnId,
 		RespCh:    make(chan *ApecsTxn),
 		StartTime: time.Now(),
 	}
 	defer close(respCh.RespCh)
-	aprod.respRegisterCh <- &respCh
 
-	err := aprod.ExecuteTxnAsync(
-		ctx,
-		txn,
+	aprod.RegisterResponseChannel(&respCh)
+
+	err = executeTxn(
+		aprod,
+		prepSteps.txnId,
+		nil,
+		prepSteps.traceParent,
+		prepSteps.uponError,
+		prepSteps.steps,
 		wg,
 	)
 
 	if err != nil {
+		RecordSpanError(span, err)
 		return nil, err
 	}
 
 	txnResp, err := waitForResponse(ctx, respCh.RespCh, timeout)
 	if err != nil {
+		RecordSpanError(span, err)
 		return nil, err
 	}
 	if txnResp == nil {
-		return nil, errors.New("nil txn received")
+		err := errors.New("nil txn received")
+		RecordSpanError(span, err)
+		return nil, err
 	}
 
-	success, resProto, result := aprod.plat.ApecsTxnResult(ctx, txnResp)
+	success, resProto, result := ApecsTxnResult(ctx, plat, txnResp)
 	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)
@@ -498,70 +577,47 @@ func (aprod *ApecsProducer) ExecuteTxnSync(
 			Details: details,
 		}
 		errProto := status.ErrorProto(&stat)
+		RecordSpanError(span, errProto)
 		return nil, errProto
 	}
 
 	return resProto, nil
 }
 
-func (aprod *ApecsProducer) ExecuteTxnAsync(
+func ExecuteTxnAsync(
 	ctx context.Context,
+	aprod ApecsProducer,
 	txn *Txn,
+	telem *Telemetry,
 	wg *sync.WaitGroup,
 ) error {
-	ctx, span := aprod.plat.telem.StartFunc(ctx)
+	ctx, span := telem.StartFunc(ctx)
 	defer span.End()
 
-	if err := ValidateTxn(txn); err != nil {
+	prepSteps, err := prepareApecsSteps(
+		ctx,
+		txn,
+		telem,
+		wg,
+	)
+	if err != nil {
 		RecordSpanError(span, err)
 		return err
 	}
 
-	stepsPb := make([]*ApecsTxn_Step, len(txn.Steps))
-	for i, step := range txn.Steps {
-		payloadBytes, err := proto.Marshal(step.Payload)
-		if err != nil {
-			return err
-		}
-
-		if step.EffectiveTime.IsZero() {
-			step.EffectiveTime = time.Now()
-		}
-
-		stepsPb[i] = &ApecsTxn_Step{
-			System:        System_PROCESS,
-			Concern:       step.Concern,
-			Command:       step.Command,
-			Key:           step.Key,
-			Payload:       payloadBytes,
-			EffectiveTime: timestamppb.New(step.EffectiveTime),
-		}
-	}
-
-	traceParent := ExtractTraceParent(ctx)
-	if traceParent == "" {
-		return fmt.Errorf("No SpanContext present in ctx")
-	}
-	txnId := TraceIdFromTraceParent(traceParent)
-
-	var uponError UponError
-	if txn.Revert == Revertable {
-		uponError = UponError_REVERT
-	} else {
-		uponError = UponError_REPORT
-	}
-
-	return aprod.executeTxn(
-		txnId,
+	return executeTxn(
+		aprod,
+		prepSteps.txnId,
 		nil,
-		traceParent,
-		uponError,
-		stepsPb,
+		prepSteps.traceParent,
+		prepSteps.uponError,
+		prepSteps.steps,
 		wg,
 	)
 }
 
-func (aprod *ApecsProducer) executeTxn(
+func executeTxn(
+	aprod ApecsProducer,
 	txnId string,
 	assocTxn *AssocTxn,
 	traceParent string,
@@ -569,12 +625,12 @@ func (aprod *ApecsProducer) executeTxn(
 	steps []*ApecsTxn_Step,
 	wg *sync.WaitGroup,
 ) error {
-	txn, err := newApecsTxn(txnId, assocTxn, aprod.respTarget, uponError, steps)
+	txn, err := newApecsTxn(txnId, assocTxn, aprod.ResponseTarget(), uponError, steps)
 	if err != nil {
 		return err
 	}
 
-	return aprod.produceCurrentStep(txn, traceParent, wg)
+	return produceCurrentStep(aprod, txn, traceParent, wg)
 }
 
 var gSystemToTopic = map[System]StandardTopicName{
@@ -583,8 +639,9 @@ var gSystemToTopic = map[System]StandardTopicName{
 	System_STORAGE_SCND: STORAGE_SCND,
 }
 
-func (aprod *ApecsProducer) produceError(
+func produceError(
 	ctx context.Context,
+	aprod ApecsProducer,
 	rtxn *rtApecsTxn,
 	step *ApecsTxn_Step,
 	code Code,
@@ -595,7 +652,7 @@ func (aprod *ApecsProducer) produceError(
 	if step == nil {
 		step = rtxn.firstForwardStep()
 		if step == nil {
-			return fmt.Errorf("ApecsProducer.error TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
+			return fmt.Errorf("ApecsKafkaProducer.error TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
 		}
 		msg = "DEFAULTING TO FIRST FORWARD STEP FOR LOGGING!!! - " + msg
 	}
@@ -618,7 +675,7 @@ func (aprod *ApecsProducer) produceError(
 		)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, ERROR, wg)
+	prd, err := aprod.GetProducer(step.Concern, ERROR, wg)
 	if err != nil {
 		return err
 	}
@@ -630,16 +687,19 @@ func (aprod *ApecsProducer) produceError(
 
 	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(ctx, rtxn, wg)
-	if err != nil {
-		return err
+	if rtxn.txn.ResponseTarget != nil {
+		err = produceResponse(ctx, aprod.Platform(), rtxn.txn.ResponseTarget.Brokers, rtxn, wg)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (aprod *ApecsProducer) produceComplete(
+func produceComplete(
 	ctx context.Context,
+	aprod ApecsProducer,
 	rtxn *rtApecsTxn,
 	wg *sync.WaitGroup,
 ) error {
@@ -647,10 +707,10 @@ func (aprod *ApecsProducer) produceComplete(
 	// first step, which I think makes sense in most cases
 	step := rtxn.firstForwardStep()
 	if step == nil {
-		return fmt.Errorf("ApecsProducer.complete TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
+		return fmt.Errorf("ApecsKafkaProducer.complete TxnId=%s: failed to get firstForwardStep", rtxn.txn.Id)
 	}
 
-	prd, err := aprod.getProducer(step.Concern, COMPLETE, wg)
+	prd, err := aprod.GetProducer(step.Concern, COMPLETE, wg)
 	if err != nil {
 		return err
 	}
@@ -662,15 +722,18 @@ func (aprod *ApecsProducer) produceComplete(
 
 	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
-	err = aprod.produceResponse(ctx, rtxn, wg)
-	if err != nil {
-		return err
+	if rtxn.txn.ResponseTarget != nil {
+		err = produceResponse(ctx, aprod.Platform(), rtxn.txn.ResponseTarget.Brokers, rtxn, wg)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (aprod *ApecsProducer) produceCurrentStep(
+func produceCurrentStep(
+	aprod ApecsProducer,
 	txn *ApecsTxn,
 	traceParent string,
 	wg *sync.WaitGroup,
@@ -682,13 +745,13 @@ func (aprod *ApecsProducer) produceCurrentStep(
 
 	step := rtxn.currentStep()
 
-	var prd *Producer = nil
+	var prd Producer = nil
 	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%s: Invalid System", rtxn.txn.Id, step.System.String())
+		return fmt.Errorf("ApecsKafkaProducer.produceCurrentStep TxnId=%s System=%s: Invalid System", rtxn.txn.Id, step.System.String())
 	}
 
-	prd, err = aprod.getProducer(step.Concern, topicName, wg)
+	prd, err = aprod.GetProducer(step.Concern, topicName, wg)
 	if err != nil {
 		return err
 	}
@@ -704,7 +767,7 @@ func (aprod *ApecsProducer) produceCurrentStep(
 	} else {
 		uid, err := uuid.NewRandom() // use a new randomized string
 		if err != nil {
-			return fmt.Errorf("ApecsProducer.produceCurrentStep TxnId=%s System=%s: uuid.NewRandom error: %s", rtxn.txn.Id, step.System.String(), err.Error())
+			return fmt.Errorf("ApecsKafkaProducer.produceCurrentStep TxnId=%s System=%s: uuid.NewRandom error: %s", rtxn.txn.Id, step.System.String(), err.Error())
 		}
 		hashKey = uid[:]
 	}

@@ -11,40 +11,40 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func (plat *Platform) prerunCobra(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) prerunCobra(cmd *cobra.Command, args []string) {
 	var err error
-	plat.telem, err = NewTelemetry(context.Background(), plat.settings.OtelcolEndpoint)
+	kplat.telem, err = NewTelemetry(context.Background(), kplat.settings.OtelcolEndpoint)
 	if err != nil {
 		log.Fatal().
 			Err(err).
 			Msg("Failed to NewTelemetry")
 	}
 
-	plat.rawProducer = NewRawProducer(plat.telem)
+	kplat.rawProducer = NewRawProducer(kplat.telem)
 }
 
-func (plat *Platform) postrunCobra(cmd *cobra.Command, args []string) {
-	if plat.telem != nil {
-		plat.telem.Close()
+func (kplat *KafkaPlatform) postrunCobra(cmd *cobra.Command, args []string) {
+	if kplat.telem != nil {
+		kplat.telem.Close()
 	}
 }
 
-func (plat *Platform) runCobra() {
+func (kplat *KafkaPlatform) runCobra() {
 	rootCmd := &cobra.Command{
-		Use:               plat.name,
-		Short:             "Rocketcycle Platform - " + plat.name,
-		PersistentPreRun:  plat.prerunCobra,
-		PersistentPostRun: plat.postrunCobra,
+		Use:               kplat.name,
+		Short:             "Rocketcycle Platform - " + kplat.name,
+		PersistentPreRun:  kplat.prerunCobra,
+		PersistentPostRun: kplat.postrunCobra,
 	}
-	rootCmd.PersistentFlags().StringVar(&plat.settings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
-	rootCmd.PersistentFlags().StringVar(&plat.settings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
-	rootCmd.PersistentFlags().UintVar(&plat.settings.AdminPingIntervalSecs, "admin_ping_interval_secs", 1, "Interval for producers to ping the management system")
+	rootCmd.PersistentFlags().StringVar(&kplat.settings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
+	rootCmd.PersistentFlags().StringVar(&kplat.settings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
+	rootCmd.PersistentFlags().UintVar(&kplat.settings.AdminPingIntervalSecs, "admin_ping_interval_secs", 1, "Interval for producers to ping the management system")
 
 	// admin sub command
 	adminCmd := &cobra.Command{
 		Use:   "admin",
 		Short: "Admin service that manages topics and orchestration",
-		Run:   plat.cobraAdminServe,
+		Run:   kplat.cobraAdminServe,
 	}
 	rootCmd.AddCommand(adminCmd)
 
@@ -59,20 +59,20 @@ func (plat *Platform) runCobra() {
 		Use:   "read",
 		Short: "read a specific resource from rest api",
 	}
-	portalReadCmd.PersistentFlags().StringVar(&plat.settings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
+	portalReadCmd.PersistentFlags().StringVar(&kplat.settings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
 	portalCmd.AddCommand(portalReadCmd)
 
 	portalReadPlatformCmd := &cobra.Command{
 		Use:   "platform",
 		Short: "read the platform definition",
-		Run:   plat.cobraPortalReadPlatform,
+		Run:   kplat.cobraPortalReadPlatform,
 	}
 	portalReadCmd.AddCommand(portalReadPlatformCmd)
 
 	portalReadConfigCmd := &cobra.Command{
 		Use:   "config",
 		Short: "read the current config",
-		Run:   plat.cobraPortalReadConfig,
+		Run:   kplat.cobraPortalReadConfig,
 	}
 	portalReadCmd.AddCommand(portalReadConfigCmd)
 
@@ -81,12 +81,12 @@ func (plat *Platform) runCobra() {
 		Short: "decode base64 opaque payloads by calling portal api",
 	}
 	portalCmd.AddCommand(portalDecodeCmd)
-	portalDecodeCmd.PersistentFlags().StringVar(&plat.settings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
+	portalDecodeCmd.PersistentFlags().StringVar(&kplat.settings.PortalAddr, "portal_addr", "http://localhost:11371", "Address against which to make client requests")
 
 	portalReadProducersCmd := &cobra.Command{
 		Use:   "producers",
 		Short: "read the active tracked producers",
-		Run:   plat.cobraPortalReadProducers,
+		Run:   kplat.cobraPortalReadProducers,
 	}
 	portalReadCmd.AddCommand(portalReadProducersCmd)
 
@@ -95,15 +95,15 @@ func (plat *Platform) runCobra() {
 		Short:     "Cancel APECS transaction",
 		Args:      cobra.MinimumNArgs(1),
 		ValidArgs: []string{"txn_id"},
-		Run:       plat.cobraPortalCancelTxn,
+		Run:       kplat.cobraPortalCancelTxn,
 	}
-	portalCancelTxnCmd.PersistentFlags().StringVar(&plat.settings.PortalAddr, "portal_addr", "localhost:11381", "Address against which to make client requests")
+	portalCancelTxnCmd.PersistentFlags().StringVar(&kplat.settings.PortalAddr, "portal_addr", "localhost:11381", "Address against which to make client requests")
 	portalCmd.AddCommand(portalCancelTxnCmd)
 
 	portalDecodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
 		Short:     "decode and print base64 payload",
-		Run:       plat.cobraPortalDecodeInstance,
+		Run:       kplat.cobraPortalDecodeInstance,
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"concern", "base64_payload"},
 	}
@@ -113,10 +113,10 @@ func (plat *Platform) runCobra() {
 		Use:   "serve",
 		Short: "Rocketcycle Portal Server",
 		Long:  "Host rest api",
-		Run:   plat.cobraPortalServe,
+		Run:   kplat.cobraPortalServe,
 	}
-	portalServeCmd.PersistentFlags().StringVar(&plat.settings.HttpAddr, "http_addr", ":11371", "Address to host http api")
-	portalServeCmd.PersistentFlags().StringVar(&plat.settings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
+	portalServeCmd.PersistentFlags().StringVar(&kplat.settings.HttpAddr, "http_addr", ":11371", "Address to host http api")
+	portalServeCmd.PersistentFlags().StringVar(&kplat.settings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
 	portalCmd.AddCommand(portalServeCmd)
 	// portal sub command (END)
 
@@ -131,9 +131,9 @@ func (plat *Platform) runCobra() {
 		Use:   "replace",
 		Short: "Replace config",
 		Long:  "WARNING: This will fully replace stored config with the file contents!!!! Publishes contents of config file to config topic and fully replaces it.",
-		Run:   plat.cobraConfigReplace,
+		Run:   kplat.cobraConfigReplace,
 	}
-	configReplaceCmd.PersistentFlags().StringVarP(&plat.settings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
+	configReplaceCmd.PersistentFlags().StringVarP(&kplat.settings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
 	configCmd.AddCommand(configReplaceCmd)
 
 	// decode sub command
@@ -145,7 +145,7 @@ func (plat *Platform) runCobra() {
 	decodeInstanceCmd := &cobra.Command{
 		Use:       "instance concern base64_payload",
 		Short:     "decode and print base64 payload",
-		Run:       plat.cobraDecodeInstance,
+		Run:       kplat.cobraDecodeInstance,
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"concern", "base64_payload"},
 	}
@@ -156,13 +156,13 @@ func (plat *Platform) runCobra() {
 		Use:   "process",
 		Short: "APECS processing mode",
 		Long:  "Runs a proc consumer against the partition specified",
-		Run:   plat.cobraApecsConsumer,
+		Run:   kplat.cobraApecsConsumer,
 	}
-	procCmd.PersistentFlags().StringVar(&plat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	procCmd.PersistentFlags().StringVar(&kplat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
 	procCmd.MarkPersistentFlagRequired("consumer_brokers")
-	procCmd.PersistentFlags().StringVarP(&plat.settings.Topic, "topic", "t", "", "Topic to consume")
+	procCmd.PersistentFlags().StringVarP(&kplat.settings.Topic, "topic", "t", "", "Topic to consume")
 	procCmd.MarkPersistentFlagRequired("topic")
-	procCmd.PersistentFlags().Int32VarP(&plat.settings.Partition, "partition", "p", -1, "Partition to consume")
+	procCmd.PersistentFlags().Int32VarP(&kplat.settings.Partition, "partition", "p", -1, "Partition to consume")
 	procCmd.MarkPersistentFlagRequired("partition")
 	rootCmd.AddCommand(procCmd)
 
@@ -171,15 +171,15 @@ func (plat *Platform) runCobra() {
 		Use:   "storage",
 		Short: "APECS storage mode",
 		Long:  "Runs a storage consumer against the partition specified",
-		Run:   plat.cobraApecsConsumer,
+		Run:   kplat.cobraApecsConsumer,
 	}
-	storageCmd.PersistentFlags().StringVar(&plat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	storageCmd.PersistentFlags().StringVar(&kplat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
 	storageCmd.MarkPersistentFlagRequired("consumer_brokers")
-	storageCmd.PersistentFlags().StringVarP(&plat.settings.Topic, "topic", "t", "", "Topic to consume")
+	storageCmd.PersistentFlags().StringVarP(&kplat.settings.Topic, "topic", "t", "", "Topic to consume")
 	storageCmd.MarkPersistentFlagRequired("topic")
-	storageCmd.PersistentFlags().Int32VarP(&plat.settings.Partition, "partition", "p", -1, "Partition to consume")
+	storageCmd.PersistentFlags().Int32VarP(&kplat.settings.Partition, "partition", "p", -1, "Partition to consume")
 	storageCmd.MarkPersistentFlagRequired("partition")
-	storageCmd.PersistentFlags().StringVar(&plat.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
+	storageCmd.PersistentFlags().StringVar(&kplat.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
 	storageCmd.MarkPersistentFlagRequired("storage_target")
 	rootCmd.AddCommand(storageCmd)
 
@@ -188,15 +188,15 @@ func (plat *Platform) runCobra() {
 		Use:   "storage-scnd",
 		Short: "APECS secondary storage mode",
 		Long:  "Runs a secondary storage consumer against the partition specified",
-		Run:   plat.cobraApecsConsumer,
+		Run:   kplat.cobraApecsConsumer,
 	}
-	storageScndCmd.PersistentFlags().StringVar(&plat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
+	storageScndCmd.PersistentFlags().StringVar(&kplat.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
 	storageScndCmd.MarkPersistentFlagRequired("consumer_brokers")
-	storageScndCmd.PersistentFlags().StringVarP(&plat.settings.Topic, "topic", "t", "", "Topic to consume")
+	storageScndCmd.PersistentFlags().StringVarP(&kplat.settings.Topic, "topic", "t", "", "Topic to consume")
 	storageScndCmd.MarkPersistentFlagRequired("topic")
-	storageScndCmd.PersistentFlags().Int32VarP(&plat.settings.Partition, "partition", "p", -1, "Partition to consume")
+	storageScndCmd.PersistentFlags().Int32VarP(&kplat.settings.Partition, "partition", "p", -1, "Partition to consume")
 	storageScndCmd.MarkPersistentFlagRequired("partition")
-	storageScndCmd.PersistentFlags().StringVar(&plat.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
+	storageScndCmd.PersistentFlags().StringVar(&kplat.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
 	storageScndCmd.MarkPersistentFlagRequired("storage_target")
 	rootCmd.AddCommand(storageScndCmd)
 
@@ -205,9 +205,9 @@ func (plat *Platform) runCobra() {
 		Use:   "watch",
 		Short: "APECS watch mode",
 		Long:  "Runs a watch consumer against all error/complete topics",
-		Run:   plat.cobraWatch,
+		Run:   kplat.cobraWatch,
 	}
-	watchCmd.PersistentFlags().BoolVarP(&plat.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
+	watchCmd.PersistentFlags().BoolVarP(&kplat.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(watchCmd)
 
 	// run sub command
@@ -215,9 +215,9 @@ func (plat *Platform) runCobra() {
 		Use:   "run",
 		Short: "Run all topic consumer programs",
 		Long:  "Orchestrates sub processes as specified by platform topics consumer programs",
-		Run:   plat.cobraRun,
+		Run:   kplat.cobraRun,
 	}
-	runCmd.PersistentFlags().BoolVarP(&plat.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
+	runCmd.PersistentFlags().BoolVarP(&kplat.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(runCmd)
 
 	// plaform sub command
@@ -231,12 +231,12 @@ func (plat *Platform) runCobra() {
 		Use:   "replace",
 		Short: "Replace platform config",
 		Long:  "WARNING: Only use this to bootstrap a new platform!!!! Publishes contents of platform config file to platform topic and fully replaces platform. Creates platform topics if they do not already exist.",
-		Run:   plat.cobraPlatReplace,
+		Run:   kplat.cobraPlatReplace,
 	}
-	platReplaceCmd.PersistentFlags().StringVarP(&plat.settings.PlatformFilePath, "platform_file_path", "p", "./platform.json", "Path to json file containing platform configuration")
+	platReplaceCmd.PersistentFlags().StringVarP(&kplat.settings.PlatformFilePath, "platform_file_path", "p", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platReplaceCmd)
 
-	for _, addtlCmd := range plat.cobraCommands {
+	for _, addtlCmd := range kplat.cobraCommands {
 		rootCmd.AddCommand(addtlCmd)
 	}
 

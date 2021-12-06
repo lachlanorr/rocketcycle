@@ -6,6 +6,7 @@ package main
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
@@ -18,9 +19,12 @@ import (
 )
 
 func main() {
+	offline, _ := strconv.ParseBool(os.Getenv("RKCY_OFFLINE"))
+
 	plat, err := rkcy.NewPlatform(
 		consts.Platform,
 		os.Getenv("RKCY_ENVIRONMENT"),
+		offline,
 	)
 	if err != nil {
 		panic(err.Error())

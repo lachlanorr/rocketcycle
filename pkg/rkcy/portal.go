@@ -30,7 +30,7 @@ import (
 //go:embed static/portal/docs
 var gDocsFiles embed.FS
 
-func (plat *Platform) cobraPortalServe(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraPortalServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("portal server started")
@@ -45,9 +45,9 @@ func (plat *Platform) cobraPortalServe(cmd *cobra.Command, args []string) {
 	}()
 
 	var wg sync.WaitGroup
-	go portalServe(ctx, plat, &wg)
+	go portalServe(ctx, kplat, &wg)
 
-	go plat.portalPlatform(ctx, &wg)
+	go kplat.portalPlatform(ctx, &wg)
 
 	select {
 	case <-interruptCh:
@@ -59,14 +59,14 @@ func (plat *Platform) cobraPortalServe(cmd *cobra.Command, args []string) {
 	}
 }
 
-func (plat *Platform) cobraPortalReadPlatform(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraPortalReadPlatform(cmd *cobra.Command, args []string) {
 	path := "/v1/platform/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(plat.settings.PortalAddr + path)
+	resp, err := http.Get(kplat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -84,14 +84,14 @@ func (plat *Platform) cobraPortalReadPlatform(cmd *cobra.Command, args []string)
 	fmt.Println(string(body))
 }
 
-func (plat *Platform) cobraPortalReadConfig(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraPortalReadConfig(cmd *cobra.Command, args []string) {
 	path := "/v1/config/read"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(plat.settings.PortalAddr + path)
+	resp, err := http.Get(kplat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -129,14 +129,14 @@ func (plat *Platform) cobraPortalReadConfig(cmd *cobra.Command, args []string) {
 	fmt.Printf("%s\n", string(prettyJson.Bytes()))
 }
 
-func (plat *Platform) cobraPortalReadProducers(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraPortalReadProducers(cmd *cobra.Command, args []string) {
 	path := "/v1/producers/read?pretty"
 
 	slog := log.With().
 		Str("Path", path).
 		Logger()
 
-	resp, err := http.Get(plat.settings.PortalAddr + path)
+	resp, err := http.Get(kplat.settings.PortalAddr + path)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -154,12 +154,12 @@ func (plat *Platform) cobraPortalReadProducers(cmd *cobra.Command, args []string
 	fmt.Println(string(body))
 }
 
-func (plat *Platform) cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
-	conn, err := grpc.Dial(plat.settings.PortalAddr, grpc.WithInsecure())
+func (kplat *KafkaPlatform) cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
+	conn, err := grpc.Dial(kplat.settings.PortalAddr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Str("PortalAddr", plat.settings.PortalAddr).
+			Str("PortalAddr", kplat.settings.PortalAddr).
 			Msg("Failed to grpc.Dial")
 	}
 	defer conn.Close()
@@ -177,7 +177,7 @@ func (plat *Platform) cobraPortalCancelTxn(cmd *cobra.Command, args []string) {
 	}
 }
 
-func (plat *Platform) cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraPortalDecodeInstance(cmd *cobra.Command, args []string) {
 	path := "/v1/instance/decode"
 	slog := log.With().
 		Str("Path", path).
@@ -198,7 +198,7 @@ func (plat *Platform) cobraPortalDecodeInstance(cmd *cobra.Command, args []strin
 	}
 
 	contentRdr := bytes.NewReader(rpcArgsSer)
-	resp, err := http.Post(plat.settings.PortalAddr+path, "application/json", contentRdr)
+	resp, err := http.Post(kplat.settings.PortalAddr+path, "application/json", contentRdr)
 	if err != nil {
 		slog.Fatal().
 			Err(err).
@@ -230,15 +230,15 @@ func (plat *Platform) cobraPortalDecodeInstance(cmd *cobra.Command, args []strin
 type portalServer struct {
 	UnimplementedPortalServiceServer
 
-	plat *Platform
+	kplat *KafkaPlatform
 }
 
 func (srv portalServer) HttpAddr() string {
-	return srv.plat.settings.HttpAddr
+	return srv.kplat.settings.HttpAddr
 }
 
 func (srv portalServer) GrpcAddr() string {
-	return srv.plat.settings.GrpcAddr
+	return srv.kplat.settings.GrpcAddr
 }
 
 func (portalServer) StaticFiles() http.FileSystem {
@@ -263,18 +263,18 @@ func (portalServer) RegisterHandlerFromEndpoint(
 }
 
 func (srv portalServer) PlatformDef(ctx context.Context, pa *Void) (*PlatformDef, error) {
-	if srv.plat.currentRtPlatDef != nil {
-		return srv.plat.currentRtPlatDef.PlatformDef, nil
+	if srv.kplat.currentRtPlatDef != nil {
+		return srv.kplat.currentRtPlatDef.PlatformDef, nil
 	}
 	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
 }
 
 func (srv portalServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
-	return srv.plat.ConfigMgr().BuildConfigResponse(), nil
+	return srv.kplat.ConfigMgr().BuildConfigResponse(), nil
 }
 
 func (srv portalServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
-	jsonBytes, err := srv.plat.concernHandlers.decodeInstance64Json(ctx, args.Concern, args.Payload64)
+	jsonBytes, err := srv.kplat.concernHandlers.decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) 
 }
 
 func (srv portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := srv.plat.concernHandlers.decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.kplat.concernHandlers.decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (srv portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloa
 }
 
 func (srv portalServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
-	resProto, _, err := srv.plat.concernHandlers.decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.kplat.concernHandlers.decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func (srv portalServer) DecodeResultPayload(ctx context.Context, args *DecodePay
 }
 
 func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) (*Void, error) {
-	ctx, traceId, span := srv.plat.telem.StartRequest(ctx)
+	ctx, traceId, span := srv.kplat.telem.StartRequest(ctx)
 	defer span.End()
 
 	log.Warn().Msgf("CancelTxn %s", cancelTxn.TxnId)
@@ -338,9 +338,9 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		srv.plat.settings.AdminBrokers,
-		srv.plat.name,
-		srv.plat.environment,
+		srv.kplat.settings.AdminBrokers,
+		srv.kplat.name,
+		srv.kplat.environment,
 		nil,
 		wg,
 	)
@@ -360,7 +360,7 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 			}
 			log.Info().Msgf("%s - %s", cluster.Brokers, adminRtTopics.CurrentTopic)
 
-			prodCh := srv.plat.rawProducer.getProducerCh(ctx, cluster.Brokers, wg)
+			prodCh := srv.kplat.rawProducer.getProducerCh(ctx, cluster.Brokers, wg)
 			msg, err := newKafkaMessage(
 				&adminRtTopics.CurrentTopic,
 				0,
@@ -378,15 +378,15 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 	return &Void{}, nil
 }
 
-func portalServe(ctx context.Context, plat *Platform, wg *sync.WaitGroup) {
+func portalServe(ctx context.Context, kplat *KafkaPlatform, wg *sync.WaitGroup) {
 	srv := portalServer{
-		plat: plat,
+		kplat: kplat,
 	}
-	plat.InitConfigMgr(ctx, wg)
+	kplat.InitConfigMgr(ctx, wg)
 	ServeGrpcGateway(ctx, srv)
 }
 
-func (plat *Platform) portalPlatform(
+func (kplat *KafkaPlatform) portalPlatform(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 ) {
@@ -394,9 +394,9 @@ func (plat *Platform) portalPlatform(
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		plat.settings.AdminBrokers,
-		plat.name,
-		plat.environment,
+		kplat.settings.AdminBrokers,
+		kplat.name,
+		kplat.environment,
 		nil,
 		wg,
 	)
@@ -413,7 +413,7 @@ func (plat *Platform) portalPlatform(
 				continue
 			}
 
-			plat.currentRtPlatDef = platMsg.NewRtPlatDef
+			kplat.currentRtPlatDef = platMsg.NewRtPlatDef
 		}
 	}
 }

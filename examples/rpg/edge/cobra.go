@@ -29,7 +29,7 @@ var (
 	settings Settings = Settings{Partition: -1}
 )
 
-func CobraCommand(plat *rkcy.Platform) *cobra.Command {
+func CobraCommand(plat rkcy.Platform) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "edge",
 		Short: "RPG Edge Rest Api",

@@ -327,7 +327,7 @@ func watchResultTopics(
 	}
 }
 
-func (plat *Platform) cobraWatch(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraWatch(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("APECS WATCH started")
@@ -345,11 +345,11 @@ func (plat *Platform) cobraWatch(cmd *cobra.Command, args []string) {
 	wg.Add(1)
 	go watchResultTopics(
 		ctx,
-		plat.settings.WatchDecode,
-		plat.settings.AdminBrokers,
-		plat.name,
-		plat.environment,
-		plat.concernHandlers,
+		kplat.settings.WatchDecode,
+		kplat.settings.AdminBrokers,
+		kplat.name,
+		kplat.environment,
+		kplat.concernHandlers,
 		&wg,
 	)
 

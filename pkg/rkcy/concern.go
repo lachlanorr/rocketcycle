@@ -424,8 +424,9 @@ func (concernHandlers ConcernHandlers) decodeResultPayload64Json(
 	return concernHandlers.decodeResultPayloadJson(ctx, concern, system, command, buffer)
 }
 
-func (plat *Platform) handleCommand(
+func handleCommand(
 	ctx context.Context,
+	plat Platform,
 	concern string,
 	system System,
 	command string,
@@ -447,7 +448,7 @@ func (plat *Platform) handleCommand(
 		}
 	}()
 
-	cncHdlr, ok := plat.concernHandlers[concern]
+	cncHdlr, ok := plat.ConcernHandlers()[concern]
 	if !ok {
 		rslt := &ApecsTxn_Step_Result{}
 		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
@@ -462,7 +463,7 @@ func (plat *Platform) handleCommand(
 			command,
 			direction,
 			args,
-			gInstanceStore,
+			plat.InstanceStore(),
 			confRdr,
 		)
 	case System_STORAGE:
@@ -474,7 +475,7 @@ func (plat *Platform) handleCommand(
 			command,
 			direction,
 			args,
-			plat.settings.StorageTarget,
+			plat.StorageTarget(),
 			wg,
 		)
 	default:

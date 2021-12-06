@@ -382,7 +382,7 @@ func runConsumerPrograms(
 	}
 }
 
-func (plat *Platform) cobraRun(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraRun(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
@@ -395,11 +395,11 @@ func (plat *Platform) cobraRun(cmd *cobra.Command, args []string) {
 	wg.Add(1)
 	go runConsumerPrograms(
 		ctx,
-		plat.settings.WatchDecode,
-		plat.settings.AdminBrokers,
-		plat.settings.OtelcolEndpoint,
-		plat.name,
-		plat.environment,
+		kplat.settings.WatchDecode,
+		kplat.settings.AdminBrokers,
+		kplat.settings.OtelcolEndpoint,
+		kplat.name,
+		kplat.environment,
 		&wg,
 	)
 	for {

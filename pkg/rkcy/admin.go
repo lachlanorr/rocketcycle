@@ -110,7 +110,7 @@ func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
 	return tp
 }
 
-func (plat *Platform) cobraAdminServe(cmd *cobra.Command, args []string) {
+func (kplat *KafkaPlatform) cobraAdminServe(cmd *cobra.Command, args []string) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("admin started")
@@ -124,10 +124,10 @@ func (plat *Platform) cobraAdminServe(cmd *cobra.Command, args []string) {
 		cancel()
 	}()
 
-	plat.producerTracker = NewProducerTracker(plat.name, plat.environment)
+	kplat.producerTracker = NewProducerTracker(kplat.name, kplat.environment)
 
 	var wg sync.WaitGroup
-	go plat.managePlatform(ctx, &wg)
+	go kplat.managePlatform(ctx, &wg)
 
 	select {
 	case <-interruptCh:
@@ -303,20 +303,20 @@ func updateTopics(rtPlatDef *rtPlatformDef) {
 	}
 }
 
-func (plat *Platform) managePlatform(
+func (kplat *KafkaPlatform) managePlatform(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 ) {
-	consumersTopic := ConsumersTopic(plat.name, plat.environment)
-	adminProdCh := plat.rawProducer.getProducerCh(ctx, plat.settings.AdminBrokers, wg)
+	consumersTopic := ConsumersTopic(kplat.name, kplat.environment)
+	adminProdCh := kplat.rawProducer.getProducerCh(ctx, kplat.settings.AdminBrokers, wg)
 
 	platCh := make(chan *PlatformMessage)
 	consumePlatformTopic(
 		ctx,
 		platCh,
-		plat.settings.AdminBrokers,
-		plat.name,
-		plat.environment,
+		kplat.settings.AdminBrokers,
+		kplat.name,
+		kplat.environment,
 		nil,
 		wg,
 	)
@@ -325,14 +325,14 @@ func (plat *Platform) managePlatform(
 	consumeProducersTopic(
 		ctx,
 		prodCh,
-		plat.settings.AdminBrokers,
-		plat.name,
-		plat.environment,
+		kplat.settings.AdminBrokers,
+		kplat.name,
+		kplat.environment,
 		nil,
 		wg,
 	)
 
-	cullInterval := plat.AdminPingInterval() * 10
+	cullInterval := kplat.AdminPingInterval() * 10
 	cullTicker := time.NewTicker(cullInterval)
 
 	for {
@@ -341,36 +341,36 @@ func (plat *Platform) managePlatform(
 			return
 		case <-cullTicker.C:
 			// cull stale producers
-			plat.producerTracker.cull(cullInterval)
+			kplat.producerTracker.cull(cullInterval)
 		case platMsg := <-platCh:
 			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}
 
-			plat.currentRtPlatDef = platMsg.NewRtPlatDef
+			kplat.currentRtPlatDef = platMsg.NewRtPlatDef
 
-			jsonBytes, _ := protojson.Marshal(proto.Message(plat.currentRtPlatDef.PlatformDef))
+			jsonBytes, _ := protojson.Marshal(proto.Message(kplat.currentRtPlatDef.PlatformDef))
 			log.Info().
 				Str("PlatformJson", string(jsonBytes)).
 				Msg("Platform Replaced")
 
-			platDiff := plat.currentRtPlatDef.diff(platMsg.OldRtPlatDef, plat.settings.AdminBrokers, plat.settings.OtelcolEndpoint)
-			updateTopics(plat.currentRtPlatDef)
-			plat.updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
+			platDiff := kplat.currentRtPlatDef.diff(platMsg.OldRtPlatDef, kplat.settings.AdminBrokers, kplat.settings.OtelcolEndpoint)
+			updateTopics(kplat.currentRtPlatDef)
+			kplat.updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
 		case prodMsg := <-prodCh:
 			if (prodMsg.Directive & Directive_PRODUCER_STATUS) != Directive_PRODUCER_STATUS {
 				log.Error().Msgf("Invalid directive for ProducerTopic: %s", prodMsg.Directive.String())
 				continue
 			}
 
-			plat.producerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, plat.AdminPingInterval()*2)
+			kplat.producerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, kplat.AdminPingInterval()*2)
 		}
 	}
 }
 
-func (plat *Platform) updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic string, platDiff *platformDiff) {
-	ctx, span := plat.telem.StartFunc(ctx)
+func (kplat *KafkaPlatform) updateRunner(ctx context.Context, adminProdCh ProducerCh, consumersTopic string, platDiff *platformDiff) {
+	ctx, span := kplat.telem.StartFunc(ctx)
 	defer span.End()
 	traceParent := ExtractTraceParent(ctx)
 

@@ -444,17 +444,17 @@ func config2json(conf *Config) (string, error) {
 	return string(jbytes), nil
 }
 
-func (plat *Platform) cobraConfigReplace(cmd *cobra.Command, args []string) {
-	ctx, span := plat.telem.StartFunc(context.Background())
+func (kplat *KafkaPlatform) cobraConfigReplace(cmd *cobra.Command, args []string) {
+	ctx, span := kplat.telem.StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().
-		Str("Brokers", plat.settings.AdminBrokers).
-		Str("ConfigPath", plat.settings.ConfigFilePath).
+		Str("Brokers", kplat.settings.AdminBrokers).
+		Str("ConfigPath", kplat.settings.ConfigFilePath).
 		Logger()
 
 	// read config file and deserialize
-	data, err := ioutil.ReadFile(plat.settings.ConfigFilePath)
+	data, err := ioutil.ReadFile(kplat.settings.ConfigFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -471,16 +471,16 @@ func (plat *Platform) cobraConfigReplace(cmd *cobra.Command, args []string) {
 	}
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), plat.settings.AdminBrokers, plat.name, plat.environment)
+	err = createPlatformTopics(context.Background(), kplat.settings.AdminBrokers, kplat.name, kplat.environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
 			Err(err).
-			Str("Platform", plat.name).
+			Str("Platform", kplat.name).
 			Msg("Failed to create platform topics")
 	}
 
-	configTopic := ConfigTopic(plat.name, plat.environment)
+	configTopic := ConfigTopic(kplat.name, kplat.environment)
 	slog = slog.With().
 		Str("Topic", configTopic).
 		Logger()
@@ -492,7 +492,7 @@ func (plat *Platform) cobraConfigReplace(cmd *cobra.Command, args []string) {
 	go printKafkaLogs(ctx, kafkaLogCh)
 
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  plat.settings.AdminBrokers,
+		"bootstrap.servers":  kplat.settings.AdminBrokers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
 
@@ -507,11 +507,11 @@ func (plat *Platform) cobraConfigReplace(cmd *cobra.Command, args []string) {
 	}
 	defer func() {
 		log.Warn().
-			Str("Brokers", plat.settings.AdminBrokers).
+			Str("Brokers", kplat.settings.AdminBrokers).
 			Msg("Closing kafka producer")
 		prod.Close()
 		log.Warn().
-			Str("Brokers", plat.settings.AdminBrokers).
+			Str("Brokers", kplat.settings.AdminBrokers).
 			Msg("Closed kafka producer")
 	}()
 

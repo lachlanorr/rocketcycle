@@ -18,7 +18,7 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 )
 
-type Producer struct {
+type KafkaProducer struct {
 	rawProducer *RawProducer
 
 	id string
@@ -76,7 +76,7 @@ func newKafkaMessage(
 	return msg, nil
 }
 
-func NewProducer(
+func NewKafkaProducer(
 	ctx context.Context,
 	rawProducer *RawProducer,
 	adminBrokers string,
@@ -86,8 +86,8 @@ func NewProducer(
 	topicName string,
 	adminPingInterval time.Duration,
 	wg *sync.WaitGroup,
-) *Producer {
-	prod := Producer{
+) *KafkaProducer {
+	prod := KafkaProducer{
 		rawProducer: rawProducer,
 		id:          uuid.NewString(),
 		constlog: log.With().
@@ -127,57 +127,57 @@ func NewProducer(
 	return &prod
 }
 
-func (prod *Producer) updatePlatform(
+func (kprod *KafkaProducer) updatePlatform(
 	ctx context.Context,
 	rtPlatDef *rtPlatformDef,
 	wg *sync.WaitGroup,
 ) {
 	var ok bool
-	prod.concern, ok = rtPlatDef.Concerns[prod.concernName]
+	kprod.concern, ok = rtPlatDef.Concerns[kprod.concernName]
 	if !ok {
-		prod.slog.Error().
+		kprod.slog.Error().
 			Msg("updatePlatform: Failed to find Concern")
 		return
 	}
 
-	prod.topics, ok = prod.concern.Topics[prod.topicName]
+	kprod.topics, ok = kprod.concern.Topics[kprod.topicName]
 	if !ok {
-		prod.slog.Error().
+		kprod.slog.Error().
 			Msg("updatePlatform: Failed to find Topics")
 		return
 	}
 
 	// reset to copy of constlog since we will replace "Topic" sometimes
-	prod.slog = prod.constlog.With().Str("Topic", prod.topics.CurrentTopic).Logger()
+	kprod.slog = kprod.constlog.With().Str("Topic", kprod.topics.CurrentTopic).Logger()
 
 	// update producer if necessary
-	if prod.brokers != prod.topics.CurrentCluster.Brokers {
-		prod.brokers = prod.topics.CurrentCluster.Brokers
-		prod.prodCh = prod.rawProducer.getProducerCh(ctx, prod.brokers, wg)
-		prod.slog = prod.slog.With().
-			Str("Brokers", prod.brokers).
+	if kprod.brokers != kprod.topics.CurrentCluster.Brokers {
+		kprod.brokers = kprod.topics.CurrentCluster.Brokers
+		kprod.prodCh = kprod.rawProducer.getProducerCh(ctx, kprod.brokers, wg)
+		kprod.slog = kprod.slog.With().
+			Str("Brokers", kprod.brokers).
 			Logger()
 	}
 }
 
-func (prod *Producer) producerDirective() *ProducerDirective {
+func (kprod *KafkaProducer) producerDirective() *ProducerDirective {
 	return &ProducerDirective{
-		Id:          prod.id,
-		ConcernName: prod.concernName,
-		ConcernType: prod.concern.Concern.Type,
-		Topic:       prod.topicName,
-		Generation:  prod.topics.Topics.Current.Generation,
+		Id:          kprod.id,
+		ConcernName: kprod.concernName,
+		ConcernType: kprod.concern.Concern.Type,
+		Topic:       kprod.topicName,
+		Generation:  kprod.topics.Topics.Current.Generation,
 	}
 }
 
-func (prod *Producer) Produce(
+func (kprod *KafkaProducer) Produce(
 	directive Directive,
 	traceParent string,
 	key []byte,
 	value []byte,
 	deliveryChan chan kafka.Event,
 ) {
-	prod.produceCh <- &message{
+	kprod.produceCh <- &message{
 		directive:   directive,
 		traceParent: traceParent,
 		key:         key,
@@ -186,21 +186,21 @@ func (prod *Producer) Produce(
 	}
 }
 
-func (prod *Producer) Close() {
-	prod.doneCh <- struct{}{}
+func (kprod *KafkaProducer) Close() {
+	kprod.doneCh <- struct{}{}
 }
 
-func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
-	pingAdminTicker := time.NewTicker(prod.adminPingInterval)
+func (kprod *KafkaProducer) run(ctx context.Context, wg *sync.WaitGroup) {
+	pingAdminTicker := time.NewTicker(kprod.adminPingInterval)
 	pingMsg, err := newKafkaMessage(
-		&prod.producersTopic,
+		&kprod.producersTopic,
 		0,
-		prod.producerDirective(),
+		kprod.producerDirective(),
 		Directive_PRODUCER_STATUS,
 		"",
 	)
 	if err != nil {
-		prod.slog.Fatal().
+		kprod.slog.Fatal().
 			Err(err).
 			Msg("Failed to create pingMsg")
 	}
@@ -211,11 +211,11 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-prod.doneCh:
+			case <-kprod.doneCh:
 				return
 			case <-pingAdminTicker.C:
-				prod.adminProdCh <- pingMsg
-			case paused = <-prod.pauseCh:
+				kprod.adminProdCh <- pingMsg
+			case paused = <-kprod.pauseCh:
 				var directive Directive
 				if paused {
 					directive = Directive_PRODUCER_PAUSED
@@ -223,44 +223,44 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 					directive = Directive_PRODUCER_RUNNING
 				}
 				msg, err := newKafkaMessage(
-					&prod.producersTopic,
+					&kprod.producersTopic,
 					0,
-					prod.producerDirective(),
+					kprod.producerDirective(),
 					directive,
 					"",
 				)
 				if err != nil {
-					prod.slog.Error().
+					kprod.slog.Error().
 						Err(err).
 						Msg("Failed to kafkaMessage")
 					continue
 				}
 				log.Info().Msgf("pause produce %+v", msg)
-				prod.adminProdCh <- msg
-			case platformMsg := <-prod.platformCh:
-				prod.updatePlatform(ctx, platformMsg.NewRtPlatDef, wg)
-			case msg := <-prod.produceCh:
-				if prod.prodCh == nil {
-					prod.slog.Error().
+				kprod.adminProdCh <- msg
+			case platformMsg := <-kprod.platformCh:
+				kprod.updatePlatform(ctx, platformMsg.NewRtPlatDef, wg)
+			case msg := <-kprod.produceCh:
+				if kprod.prodCh == nil {
+					kprod.slog.Error().
 						Msg("Failed to Produce, kafka Producer is nil")
 					continue
 				}
 
-				prod.fnv64.Reset()
-				prod.fnv64.Write(msg.key)
-				fnvCalc := prod.fnv64.Sum64()
-				partition := int32(fnvCalc % uint64(prod.topics.Topics.Current.PartitionCount))
+				kprod.fnv64.Reset()
+				kprod.fnv64.Write(msg.key)
+				fnvCalc := kprod.fnv64.Sum64()
+				partition := int32(fnvCalc % uint64(kprod.topics.Topics.Current.PartitionCount))
 
 				kMsg := &kafka.Message{
 					TopicPartition: kafka.TopicPartition{
-						Topic:     &prod.topics.CurrentTopic,
+						Topic:     &kprod.topics.CurrentTopic,
 						Partition: partition,
 					},
 					Value:   msg.value,
 					Headers: standardHeaders(msg.directive, msg.traceParent),
 				}
 
-				prod.prodCh <- kMsg
+				kprod.prodCh <- kMsg
 			}
 		} else {
 			// Same select as above without the produceCh read
@@ -270,12 +270,12 @@ func (prod *Producer) run(ctx context.Context, wg *sync.WaitGroup) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-prod.doneCh:
+			case <-kprod.doneCh:
 				return
-			case paused = <-prod.pauseCh:
+			case paused = <-kprod.pauseCh:
 				continue
-			case platMsg := <-prod.platformCh:
-				prod.updatePlatform(ctx, platMsg.NewRtPlatDef, wg)
+			case platMsg := <-kprod.platformCh:
+				kprod.updatePlatform(ctx, platMsg.NewRtPlatDef, wg)
 			}
 		}
 	}

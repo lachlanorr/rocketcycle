@@ -43,7 +43,6 @@ type Settings struct {
 	GrpcAddr   string
 	PortalAddr string
 
-	System    System
 	Topic     string
 	Partition int32
 
@@ -56,12 +55,13 @@ type Settings struct {
 
 type ConcernHandlers map[string]ConcernHandler
 
-type Platform struct {
+type KafkaPlatform struct {
 	name          string
 	environment   string
 	cobraCommands []*cobra.Command
 	storageInits  map[string]StorageInit
 
+	system    System
 	settings  Settings
 	telem     *Telemetry
 	configMgr *ConfigMgr
@@ -73,12 +73,31 @@ type Platform struct {
 
 	producerTracker  *ProducerTracker
 	currentRtPlatDef *rtPlatformDef
+
+	instanceStore *InstanceStore
 }
 
 func NewPlatform(
 	name string,
 	environment string,
-) (*Platform, error) {
+	offline bool,
+) (Platform, error) {
+	if !offline {
+		kplat, err := NewKafkaPlatform(name, environment)
+		if err != nil {
+			return nil, err
+		}
+		return Platform(kplat), nil
+	} else {
+		oplat := NewOfflinePlatform(name, environment)
+		return Platform(oplat), nil
+	}
+}
+
+func NewKafkaPlatform(
+	name string,
+	environment string,
+) (*KafkaPlatform, error) {
 	if !IsValidName(name) {
 		return nil, fmt.Errorf("Invalid name: %s", name)
 	}
@@ -92,7 +111,7 @@ func NewPlatform(
 		return nil, fmt.Errorf("Invalid RKCY_ENVIRONMENT: %s", environment)
 	}
 
-	plat := &Platform{
+	plat := &KafkaPlatform{
 		name:          name,
 		environment:   environment,
 		cobraCommands: make([]*cobra.Command, 0),
@@ -101,76 +120,136 @@ func NewPlatform(
 		settings: Settings{Partition: -1},
 
 		concernHandlers: gConcernHandlerRegistry,
+
+		instanceStore: NewInstanceStore(),
 	}
 
 	return plat, nil
 }
 
-func (plat *Platform) AdminPingInterval() time.Duration {
-	if plat.adminPingInterval == 0 {
-		plat.adminPingInterval = time.Duration(plat.settings.AdminPingIntervalSecs) * time.Second
+func (kplat *KafkaPlatform) AdminPingInterval() time.Duration {
+	if kplat.adminPingInterval == 0 {
+		kplat.adminPingInterval = time.Duration(kplat.settings.AdminPingIntervalSecs) * time.Second
 	}
-	return plat.adminPingInterval
+	return kplat.adminPingInterval
 }
 
-func (plat *Platform) Start() {
-	prepLogging(plat.name)
+func (kplat *KafkaPlatform) Start() {
+	prepLogging(kplat.name)
 	// validate all command handlers exist for each concern
-	if !plat.concernHandlers.validateConcernHandlers() {
+	if !kplat.concernHandlers.validateConcernHandlers() {
 		log.Fatal().
 			Msg("validateConcernHandlers failed")
 	}
-	plat.runCobra()
+	kplat.runCobra()
 }
 
-func (plat *Platform) Name() string {
-	return plat.name
+func (kplat *KafkaPlatform) Name() string {
+	return kplat.name
 }
 
-func (plat *Platform) Environment() string {
-	return plat.environment
+func (kplat *KafkaPlatform) Environment() string {
+	return kplat.environment
 }
 
-func (plat *Platform) Telem() *Telemetry {
-	return plat.telem
+func (kplat *KafkaPlatform) Telem() *Telemetry {
+	return kplat.telem
 }
 
-func (plat *Platform) Settings() Settings {
-	return plat.settings
+func (kplat *KafkaPlatform) System() System {
+	return kplat.system
 }
 
-func (plat *Platform) AppendCobraCommand(cmd *cobra.Command) {
-	plat.cobraCommands = append(plat.cobraCommands, cmd)
+func (kplat *KafkaPlatform) SetSystem(system System) {
+	kplat.system = system
 }
 
-func (plat *Platform) SetStorageInit(name string, storageInit StorageInit) {
-	plat.storageInits[name] = storageInit
+func (kplat *KafkaPlatform) AdminBrokers() string {
+	return kplat.settings.AdminBrokers
 }
 
-func (plat *Platform) RegisterLogicHandler(concern string, handler interface{}) {
-	plat.concernHandlers.RegisterLogicHandler(concern, handler)
+func (kplat *KafkaPlatform) StorageTarget() string {
+	return kplat.settings.StorageTarget
 }
 
-func (plat *Platform) RegisterCrudHandler(storageType string, concern string, handler interface{}) {
-	plat.concernHandlers.RegisterCrudHandler(storageType, concern, handler)
+func (kplat *KafkaPlatform) InstanceStore() *InstanceStore {
+	return kplat.instanceStore
 }
 
-func (plat *Platform) ConfigMgr() *ConfigMgr {
-	if plat.configMgr == nil {
+func (kplat *KafkaPlatform) ConcernHandlers() ConcernHandlers {
+	return kplat.concernHandlers
+}
+
+func (kplat *KafkaPlatform) AppendCobraCommand(cmd *cobra.Command) {
+	kplat.cobraCommands = append(kplat.cobraCommands, cmd)
+}
+
+func (kplat *KafkaPlatform) SetStorageInit(name string, storageInit StorageInit) {
+	kplat.storageInits[name] = storageInit
+}
+
+func (kplat *KafkaPlatform) NewApecsProducer(
+	ctx context.Context,
+	respTarget *TopicTarget,
+	wg *sync.WaitGroup,
+) ApecsProducer {
+	kprod := NewApecsKafkaProducer(ctx, kplat, respTarget, wg)
+	return ApecsProducer(kprod)
+}
+
+func (kplat *KafkaPlatform) GetProducerCh(
+	ctx context.Context,
+	brokers string,
+	wg *sync.WaitGroup,
+) ProducerCh {
+	return kplat.rawProducer.getProducerCh(ctx, brokers, wg)
+}
+
+func (kplat *KafkaPlatform) NewProducer(
+	ctx context.Context,
+	concernName string,
+	topicName string,
+	wg *sync.WaitGroup,
+) Producer {
+	pdc := NewKafkaProducer(
+		ctx,
+		kplat.rawProducer,
+		kplat.AdminBrokers(),
+		kplat.Name(),
+		kplat.Environment(),
+		concernName,
+		topicName,
+		kplat.AdminPingInterval(),
+		wg,
+	)
+
+	return Producer(pdc)
+}
+
+func (kplat *KafkaPlatform) RegisterLogicHandler(concern string, handler interface{}) {
+	kplat.concernHandlers.RegisterLogicHandler(concern, handler)
+}
+
+func (kplat *KafkaPlatform) RegisterCrudHandler(storageType string, concern string, handler interface{}) {
+	kplat.concernHandlers.RegisterCrudHandler(storageType, concern, handler)
+}
+
+func (kplat *KafkaPlatform) ConfigMgr() *ConfigMgr {
+	if kplat.configMgr == nil {
 		log.Fatal().Msg("InitConfigMgr has not been called")
 	}
-	return plat.configMgr
+	return kplat.configMgr
 }
 
-func (plat *Platform) InitConfigMgr(ctx context.Context, wg *sync.WaitGroup) {
-	if plat.configMgr != nil {
+func (kplat *KafkaPlatform) InitConfigMgr(ctx context.Context, wg *sync.WaitGroup) {
+	if kplat.configMgr != nil {
 		log.Fatal().Msg("InitConfigMgr called twice")
 	}
-	plat.configMgr = NewConfigMgr(
+	kplat.configMgr = NewConfigMgr(
 		ctx,
-		plat.settings.AdminBrokers,
-		plat.name,
-		plat.environment,
+		kplat.settings.AdminBrokers,
+		kplat.name,
+		kplat.environment,
 		wg,
 	)
 }
@@ -532,17 +611,17 @@ func uncommittedGroupNameAllPartitions(topic string) string {
 	return fmt.Sprintf("__%s_ALL__non_comitted_group", topic)
 }
 
-func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
-	ctx, span := plat.telem.StartFunc(context.Background())
+func (kplat *KafkaPlatform) cobraPlatReplace(cmd *cobra.Command, args []string) {
+	ctx, span := kplat.telem.StartFunc(context.Background())
 	defer span.End()
 
 	slog := log.With().
-		Str("Brokers", plat.settings.AdminBrokers).
-		Str("PlatformPath", plat.settings.PlatformFilePath).
+		Str("Brokers", kplat.settings.AdminBrokers).
+		Str("PlatformPath", kplat.settings.PlatformFilePath).
 		Logger()
 
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(plat.settings.PlatformFilePath)
+	conf, err := ioutil.ReadFile(kplat.settings.PlatformFilePath)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -561,7 +640,7 @@ func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
 	platDef.UpdateTime = timestamppb.Now()
 
 	// create an rtPlatformDef so we run the validations that involves
-	rtPlatDef, err := newRtPlatformDef(&platDef, plat.name, plat.environment)
+	rtPlatDef, err := newRtPlatformDef(&platDef, kplat.name, kplat.environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -574,7 +653,7 @@ func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topics
-	err = createPlatformTopics(context.Background(), plat.settings.AdminBrokers, platDef.Name, platDef.Environment)
+	err = createPlatformTopics(context.Background(), kplat.settings.AdminBrokers, platDef.Name, platDef.Environment)
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().
@@ -595,7 +674,7 @@ func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
 	go printKafkaLogs(ctx, kafkaLogCh)
 
 	prod, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  plat.settings.AdminBrokers,
+		"bootstrap.servers":  kplat.settings.AdminBrokers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
 
@@ -610,11 +689,11 @@ func (plat *Platform) cobraPlatReplace(cmd *cobra.Command, args []string) {
 	}
 	defer func() {
 		log.Warn().
-			Str("Brokers", plat.settings.AdminBrokers).
+			Str("Brokers", kplat.settings.AdminBrokers).
 			Msg("Closing kafka producer")
 		prod.Close()
 		log.Warn().
-			Str("Brokers", plat.settings.AdminBrokers).
+			Str("Brokers", kplat.settings.AdminBrokers).
 			Msg("Closed kafka producer")
 	}()
 

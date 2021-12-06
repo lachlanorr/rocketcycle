@@ -30,14 +30,15 @@ import (
 var docsFiles embed.FS
 
 var (
-	aprod *rkcy.ApecsProducer
+	aprod rkcy.ApecsProducer
 )
 
 type server struct {
 	UnimplementedRpgServiceServer
 
-	plat *rkcy.Platform
-	wg   *sync.WaitGroup
+	plat  rkcy.Platform
+	aprod rkcy.ApecsProducer
+	wg    *sync.WaitGroup
 }
 
 func (server) HttpAddr() string {
@@ -77,8 +78,10 @@ func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerRespo
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.ReadPlayer(req.Id),
 		timeout(),
 		srv.wg,
@@ -94,8 +97,10 @@ func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.CreatePlayer(plyr),
 		timeout(),
 		srv.wg,
@@ -111,8 +116,10 @@ func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.UpdatePlayer(plyr),
 		timeout(),
 		srv.wg,
@@ -128,8 +135,10 @@ func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.DeletePlayer(req.Id),
 		timeout(),
 		srv.wg,
@@ -145,8 +154,10 @@ func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*Characte
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.ReadCharacter(req.Id),
 		timeout(),
 		srv.wg,
@@ -162,8 +173,10 @@ func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.CreateCharacter(plyr),
 		timeout(),
 		srv.wg,
@@ -179,8 +192,10 @@ func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.UpdateCharacter(plyr),
 		timeout(),
 		srv.wg,
@@ -196,8 +211,10 @@ func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Cha
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.DeleteCharacter(req.Id),
 		timeout(),
 		srv.wg,
@@ -213,8 +230,10 @@ func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := aprod.ExecuteTxnSync(
+	resProto, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.Fund(fr),
 		timeout(),
 		srv.wg,
@@ -230,8 +249,10 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	_, err := aprod.ExecuteTxnSync(
+	_, err := rkcy.ExecuteTxnSync(
 		ctx,
+		srv.plat,
+		srv.aprod,
 		txn.Trade(tr),
 		timeout(),
 		srv.wg,
@@ -245,17 +266,19 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.
 
 func runServer(
 	ctx context.Context,
-	plat *rkcy.Platform,
+	plat rkcy.Platform,
+	aprod rkcy.ApecsProducer,
 	wg *sync.WaitGroup,
 ) {
 	srv := server{
-		plat: plat,
-		wg:   wg,
+		plat:  plat,
+		aprod: aprod,
+		wg:    wg,
 	}
 	rkcy.ServeGrpcGateway(ctx, srv)
 }
 
-func serve(plat *rkcy.Platform) {
+func serve(plat rkcy.Platform) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("edge server started")
@@ -270,9 +293,9 @@ func serve(plat *rkcy.Platform) {
 	}()
 
 	var wg sync.WaitGroup
-	aprod = rkcy.NewApecsProducer(
+
+	aprod := plat.NewApecsProducer(
 		ctx,
-		plat,
 		&rkcy.TopicTarget{
 			Brokers:   settings.ConsumerBrokers,
 			Topic:     settings.Topic,
@@ -286,7 +309,7 @@ func serve(plat *rkcy.Platform) {
 			Msg("Failed to NewApecsProducer")
 	}
 
-	go runServer(ctx, plat, &wg)
+	go runServer(ctx, plat, aprod, &wg)
 
 	select {
 	case <-interruptCh:

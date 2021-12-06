@@ -20,12 +20,12 @@ type rtApecsTxn struct {
 func newApecsTxn(
 	txnId string,
 	assocTxn *AssocTxn,
-	rspTgt *TopicTarget,
+	respTarget *TopicTarget,
 	uponError UponError,
 	steps []*ApecsTxn_Step,
 ) (*ApecsTxn, error) {
-	if rspTgt != nil && (rspTgt.Topic == "" || rspTgt.Partition < 0) {
-		return nil, fmt.Errorf("NewApecsTxn TxnId=%s TopicTarget=%+v: Invalid TopicTarget", txnId, rspTgt)
+	if respTarget != nil && (respTarget.Topic == "" || respTarget.Partition < 0) {
+		return nil, fmt.Errorf("NewApecsTxn TxnId=%s TopicTarget=%+v: Invalid TopicTarget", txnId, respTarget)
 	}
 
 	var assocTxns []*AssocTxn
@@ -36,7 +36,7 @@ func newApecsTxn(
 	txn := ApecsTxn{
 		Id:             txnId,
 		AssocTxns:      assocTxns,
-		ResponseTarget: rspTgt,
+		ResponseTarget: respTarget,
 		CurrentStepIdx: 0,
 		Direction:      Direction_FORWARD,
 		UponError:      uponError,
@@ -91,7 +91,7 @@ func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
 	return &rtxn, nil
 }
 
-func (plat *Platform) ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, *ResultProto, *ApecsTxn_Step_Result) {
+func ApecsTxnResult(ctx context.Context, plat Platform, txn *ApecsTxn) (bool, *ResultProto, *ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
 	success := txn.Direction == Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
@@ -100,7 +100,7 @@ func (plat *Platform) ApecsTxnResult(ctx context.Context, txn *ApecsTxn) (bool, 
 	var resProto *ResultProto
 	if step.Result != nil && step.Result.Payload != nil {
 		var err error
-		resProto, _, err = plat.concernHandlers.decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
+		resProto, _, err = plat.ConcernHandlers().decodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
 		if err != nil {
 			log.Error().
 				Err(err).
