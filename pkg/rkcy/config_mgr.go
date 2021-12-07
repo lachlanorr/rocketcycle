@@ -20,6 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type ComplexConfigHandler interface {
@@ -97,13 +99,17 @@ func NewConfigMgr(
 	return confMgr
 }
 
+type Config struct {
+	rkcypb.Config
+}
+
 func newEmptyConfig() *Config {
-	return &Config{
-		StringVals:  make(map[string]string),
-		BoolVals:    make(map[string]bool),
-		Float64Vals: make(map[string]float64),
-		ComplexVals: make(map[string]*Config_Complex),
-	}
+	conf := &Config{}
+	conf.StringVals = make(map[string]string)
+	conf.BoolVals = make(map[string]bool)
+	conf.Float64Vals = make(map[string]float64)
+	conf.ComplexVals = make(map[string]*rkcypb.Config_Complex)
+	return conf
 }
 
 func (conf *Config) getString(key string) (string, bool) {
@@ -192,11 +198,11 @@ func (conf *Config) getComplexBytes(msgType string, key string) ([]byte, bool) {
 
 func (conf *Config) setComplexBytes(msgType string, key string, val []byte) {
 	if conf.ComplexVals == nil {
-		conf.ComplexVals = make(map[string]*Config_Complex)
+		conf.ComplexVals = make(map[string]*rkcypb.Config_Complex)
 	}
 	confCmplx, ok := conf.ComplexVals[msgType]
 	if !ok {
-		confCmplx = &Config_Complex{
+		confCmplx = &rkcypb.Config_Complex{
 			MessageVals: make(map[string][]byte),
 		}
 		conf.ComplexVals[msgType] = confCmplx
@@ -327,12 +333,12 @@ func (confMgr *ConfigMgr) manageConfigTopic(
 	}
 }
 
-func (confMgr *ConfigMgr) BuildConfigResponse() *ConfigReadResponse {
+func (confMgr *ConfigMgr) BuildConfigResponse() *rkcypb.ConfigReadResponse {
 	confMgr.mtx.Lock()
 	defer confMgr.mtx.Unlock()
 
-	confRsp := &ConfigReadResponse{
-		Config:            confMgr.config,
+	confRsp := &rkcypb.ConfigReadResponse{
+		Config:            &confMgr.config.Config,
 		LastChanged:       timestamppb.New(confMgr.lastChanged),
 		LastChangedOffset: confMgr.lastChangedOffset,
 	}
@@ -515,7 +521,7 @@ func (kplat *KafkaPlatform) cobraConfigReplace(cmd *cobra.Command, args []string
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := newKafkaMessage(&configTopic, 0, conf, Directive_CONFIG_PUBLISH, ExtractTraceParent(ctx))
+	msg, err := newKafkaMessage(&configTopic, 0, conf, rkcypb.Directive_CONFIG_PUBLISH, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

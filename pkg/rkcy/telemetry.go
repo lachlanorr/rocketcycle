@@ -25,6 +25,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type Telemetry struct {
@@ -228,14 +230,14 @@ func (telem *Telemetry) StartRequest(ctx context.Context) (context.Context, stri
 	return ctx, traceId, span
 }
 
-func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (context.Context, trace.Span, *ApecsTxn_Step) {
+func (telem *Telemetry) StartStep(ctx context.Context, rtxn *rtApecsTxn) (context.Context, trace.Span, *rkcypb.ApecsTxn_Step) {
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		ctx = SpanContext(ctx, rtxn.txn.Id)
 	}
 
 	step := rtxn.currentStep()
-	spanName := fmt.Sprintf("Step %s %d %s", rtxn.txn.DirectionName(), rtxn.txn.CurrentStepIdx, step.Command)
+	spanName := fmt.Sprintf("Step %s %d %s", TxnDirectionName(rtxn.txn), rtxn.txn.CurrentStepIdx, step.Command)
 
 	ctx, span := Tracer().Start(
 		ctx,

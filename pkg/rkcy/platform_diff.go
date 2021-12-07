@@ -4,13 +4,17 @@
 
 package rkcy
 
+import (
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+)
+
 type platformDiff struct {
-	progsToStop  []*Program
-	progsToStart []*Program
+	progsToStop  []*rkcypb.Program
+	progsToStart []*rkcypb.Program
 }
 
-func (rtPlatDef *rtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint string) map[string]*Program {
-	progs := make(map[string]*Program)
+func (rtPlatDef *rtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint string) map[string]*rkcypb.Program {
+	progs := make(map[string]*rkcypb.Program)
 	if rtPlatDef != nil {
 		for _, concern := range rtPlatDef.PlatformDef.Concerns {
 			for _, topics := range concern.Topics {

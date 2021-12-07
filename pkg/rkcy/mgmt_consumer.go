@@ -12,10 +12,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type RawMessage struct {
-	Directive   Directive
+	Directive   rkcypb.Directive
 	Value       []byte
 	Offset      int64
 	Timestamp   time.Time
@@ -41,7 +43,7 @@ func findMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	match Directive,
+	match rkcypb.Directive,
 	matchLoc MatchLoc,
 	delta int64,
 ) (FindResult, int64, error) {
@@ -77,7 +79,7 @@ func findMostRecentMatching(
 		return kFound, high, nil
 	}
 
-	if match == Directive_ALL {
+	if match == rkcypb.Directive_ALL {
 		matchingOffset := high
 		if matchLoc == kAtLastMatch {
 			matchingOffset = maxi64(0, matchingOffset-1)
@@ -137,7 +139,7 @@ func FindMostRecentMatching(
 	bootstrapServers string,
 	topic string,
 	partition int32,
-	match Directive,
+	match rkcypb.Directive,
 	matchLoc MatchLoc,
 ) (bool, int64, error) {
 	const maxDelta int64 = 100000
@@ -189,7 +191,7 @@ func consumeMgmtTopic(
 	ctx context.Context,
 	adminBrokers string,
 	topic string,
-	match Directive,
+	match rkcypb.Directive,
 	startMatchLoc MatchLoc,
 	handler func(rawMsg *RawMessage),
 	readyCh chan<- bool,
@@ -295,7 +297,7 @@ func consumeMgmtTopic(
 }
 
 type PlatformMessage struct {
-	Directive    Directive
+	Directive    rkcypb.Directive
 	Timestamp    time.Time
 	Offset       int64
 	NewRtPlatDef *rtPlatformDef
@@ -318,10 +320,10 @@ func consumePlatformTopic(
 		ctx,
 		adminBrokers,
 		PlatformTopic(platformName, environment),
-		Directive_PLATFORM,
+		rkcypb.Directive_PLATFORM,
 		kAtLastMatch,
 		func(rawMsg *RawMessage) {
-			platDef := &PlatformDef{}
+			platDef := &rkcypb.PlatformDef{}
 			err := proto.Unmarshal(rawMsg.Value, platDef)
 			if err != nil {
 				log.Error().
@@ -364,7 +366,7 @@ func consumePlatformTopic(
 }
 
 type ConfigPublishMessage struct {
-	Directive Directive
+	Directive rkcypb.Directive
 	Timestamp time.Time
 	Offset    int64
 	Config    *Config
@@ -384,10 +386,10 @@ func consumeConfigTopic(
 		ctx,
 		adminBrokers,
 		ConfigTopic(platformName, environment),
-		Directive_CONFIG,
+		rkcypb.Directive_CONFIG,
 		kAtLastMatch,
 		func(rawMsg *RawMessage) {
-			if chPublish != nil && (rawMsg.Directive&Directive_CONFIG_PUBLISH) == Directive_CONFIG_PUBLISH {
+			if chPublish != nil && (rawMsg.Directive&rkcypb.Directive_CONFIG_PUBLISH) == rkcypb.Directive_CONFIG_PUBLISH {
 				conf := &Config{}
 				err := proto.Unmarshal(rawMsg.Value, conf)
 				if err != nil {
@@ -411,10 +413,10 @@ func consumeConfigTopic(
 }
 
 type ConsumerMessage struct {
-	Directive         Directive
+	Directive         rkcypb.Directive
 	Timestamp         time.Time
 	Offset            int64
-	ConsumerDirective *ConsumerDirective
+	ConsumerDirective *rkcypb.ConsumerDirective
 }
 
 func consumeConsumersTopic(
@@ -431,10 +433,10 @@ func consumeConsumersTopic(
 		ctx,
 		adminBrokers,
 		ConsumersTopic(platformName, environment),
-		Directive_CONSUMER,
+		rkcypb.Directive_CONSUMER,
 		kPastLastMatch,
 		func(rawMsg *RawMessage) {
-			consDir := &ConsumerDirective{}
+			consDir := &rkcypb.ConsumerDirective{}
 			err := proto.Unmarshal(rawMsg.Value, consDir)
 			if err != nil {
 				log.Error().
@@ -456,8 +458,8 @@ func consumeConsumersTopic(
 }
 
 type ProducerMessage struct {
-	Directive         Directive
-	ProducerDirective *ProducerDirective
+	Directive         rkcypb.Directive
+	ProducerDirective *rkcypb.ProducerDirective
 	Timestamp         time.Time
 	Offset            int64
 }
@@ -476,10 +478,10 @@ func consumeProducersTopic(
 		ctx,
 		adminBrokers,
 		ProducersTopic(platformName, environment),
-		Directive_PRODUCER,
+		rkcypb.Directive_PRODUCER,
 		kPastLastMatch,
 		func(rawMsg *RawMessage) {
-			prodDir := &ProducerDirective{}
+			prodDir := &rkcypb.ProducerDirective{}
 			err := proto.Unmarshal(rawMsg.Value, prodDir)
 			if err != nil {
 				log.Error().
@@ -515,7 +517,7 @@ func consumeACETopic(
 	concern string,
 	aceTopic StandardTopicName,
 
-	match Directive,
+	match rkcypb.Directive,
 	startMatchLoc MatchLoc,
 	handler func(rawMsg *RawMessage),
 
@@ -555,7 +557,7 @@ func consumeACETopic(
 			}
 			return
 		case platMsg := <-platCh:
-			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}
@@ -603,10 +605,10 @@ func consumeACETopic(
 }
 
 type ConcernAdminMessage struct {
-	Directive             Directive
+	Directive             rkcypb.Directive
 	Timestamp             time.Time
 	Offset                int64
-	ConcernAdminDirective *ConcernAdminDirective
+	ConcernAdminDirective *rkcypb.ConcernAdminDirective
 }
 
 func consumeConcernAdminTopic(
@@ -626,10 +628,10 @@ func consumeConcernAdminTopic(
 		environment,
 		concern,
 		ADMIN,
-		Directive_CONCERN_ADMIN,
+		rkcypb.Directive_CONCERN_ADMIN,
 		kPastLastMatch,
 		func(rawMsg *RawMessage) {
-			cncAdminDir := &ConcernAdminDirective{}
+			cncAdminDir := &rkcypb.ConcernAdminDirective{}
 			err := proto.Unmarshal(rawMsg.Value, cncAdminDir)
 			if err != nil {
 				log.Error().

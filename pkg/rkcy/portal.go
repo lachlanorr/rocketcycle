@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -107,7 +108,7 @@ func (kplat *KafkaPlatform) cobraPortalReadConfig(cmd *cobra.Command, args []str
 		return
 	}
 
-	confRsp := &ConfigReadResponse{}
+	confRsp := &rkcypb.ConfigReadResponse{}
 	err = protojson.Unmarshal(body, confRsp)
 	if err != nil {
 		slog.Fatal().
@@ -163,9 +164,9 @@ func (kplat *KafkaPlatform) cobraPortalCancelTxn(cmd *cobra.Command, args []stri
 			Msg("Failed to grpc.Dial")
 	}
 	defer conn.Close()
-	client := NewPortalServiceClient(conn)
+	client := rkcypb.NewPortalServiceClient(conn)
 
-	cancelTxnReq := &CancelTxnRequest{
+	cancelTxnReq := &rkcypb.CancelTxnRequest{
 		TxnId: args[0],
 	}
 
@@ -185,7 +186,7 @@ func (kplat *KafkaPlatform) cobraPortalDecodeInstance(cmd *cobra.Command, args [
 
 	var err error
 
-	rpcArgs := DecodeInstanceArgs{
+	rpcArgs := rkcypb.DecodeInstanceArgs{
 		Concern:   args[0],
 		Payload64: args[1],
 	}
@@ -213,7 +214,7 @@ func (kplat *KafkaPlatform) cobraPortalDecodeInstance(cmd *cobra.Command, args [
 			Msg("Failed to ReadAll")
 	}
 
-	decodeRsp := DecodeResponse{}
+	decodeRsp := rkcypb.DecodeResponse{}
 	err = protojson.Unmarshal(body, &decodeRsp)
 	if err != nil {
 		slog.Fatal().
@@ -228,7 +229,7 @@ func (kplat *KafkaPlatform) cobraPortalDecodeInstance(cmd *cobra.Command, args [
 }
 
 type portalServer struct {
-	UnimplementedPortalServiceServer
+	rkcypb.UnimplementedPortalServiceServer
 
 	kplat *KafkaPlatform
 }
@@ -250,7 +251,7 @@ func (portalServer) StaticFilesPathPrefix() string {
 }
 
 func (srv portalServer) RegisterServer(srvReg grpc.ServiceRegistrar) {
-	RegisterPortalServiceServer(srvReg, srv)
+	rkcypb.RegisterPortalServiceServer(srvReg, srv)
 }
 
 func (portalServer) RegisterHandlerFromEndpoint(
@@ -259,38 +260,38 @@ func (portalServer) RegisterHandlerFromEndpoint(
 	endpoint string,
 	opts []grpc.DialOption,
 ) (err error) {
-	return RegisterPortalServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
+	return rkcypb.RegisterPortalServiceHandlerFromEndpoint(ctx, mux, endpoint, opts)
 }
 
-func (srv portalServer) PlatformDef(ctx context.Context, pa *Void) (*PlatformDef, error) {
+func (srv portalServer) PlatformDef(ctx context.Context, pa *rkcypb.Void) (*rkcypb.PlatformDef, error) {
 	if srv.kplat.currentRtPlatDef != nil {
 		return srv.kplat.currentRtPlatDef.PlatformDef, nil
 	}
 	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
 }
 
-func (srv portalServer) ConfigRead(ctx context.Context, pa *Void) (*ConfigReadResponse, error) {
+func (srv portalServer) ConfigRead(ctx context.Context, pa *rkcypb.Void) (*rkcypb.ConfigReadResponse, error) {
 	return srv.kplat.ConfigMgr().BuildConfigResponse(), nil
 }
 
-func (srv portalServer) DecodeInstance(ctx context.Context, args *DecodeInstanceArgs) (*DecodeResponse, error) {
+func (srv portalServer) DecodeInstance(ctx context.Context, args *rkcypb.DecodeInstanceArgs) (*rkcypb.DecodeResponse, error) {
 	jsonBytes, err := srv.kplat.concernHandlers.decodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
-	return &DecodeResponse{
+	return &rkcypb.DecodeResponse{
 		Type:     args.Concern,
 		Instance: string(jsonBytes),
 	}, nil
 }
 
-func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) {
+func resultProto2DecodeResponse(resProto *ResultProto) (*rkcypb.DecodeResponse, error) {
 	instJson, err := protojson.Marshal(resProto.Instance)
 	if err != nil {
 		return nil, err
 	}
 
-	decResp := &DecodeResponse{
+	decResp := &rkcypb.DecodeResponse{
 		Type:     resProto.Type,
 		Instance: string(instJson),
 	}
@@ -306,7 +307,7 @@ func resultProto2DecodeResponse(resProto *ResultProto) (*DecodeResponse, error) 
 	return decResp, nil
 }
 
-func (srv portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+func (srv portalServer) DecodeArgPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
 	resProto, _, err := srv.kplat.concernHandlers.decodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
@@ -314,7 +315,7 @@ func (srv portalServer) DecodeArgPayload(ctx context.Context, args *DecodePayloa
 	return resultProto2DecodeResponse(resProto)
 }
 
-func (srv portalServer) DecodeResultPayload(ctx context.Context, args *DecodePayloadArgs) (*DecodeResponse, error) {
+func (srv portalServer) DecodeResultPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
 	resProto, _, err := srv.kplat.concernHandlers.decodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
@@ -322,13 +323,13 @@ func (srv portalServer) DecodeResultPayload(ctx context.Context, args *DecodePay
 	return resultProto2DecodeResponse(resProto)
 }
 
-func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnRequest) (*Void, error) {
+func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelTxnRequest) (*rkcypb.Void, error) {
 	ctx, traceId, span := srv.kplat.telem.StartRequest(ctx)
 	defer span.End()
 
 	log.Warn().Msgf("CancelTxn %s", cancelTxn.TxnId)
 
-	cncAdminDir := &ConcernAdminDirective{
+	cncAdminDir := &rkcypb.ConcernAdminDirective{
 		TxnId: cancelTxn.TxnId,
 	}
 
@@ -349,7 +350,7 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 	rtPlat := platMsg.NewRtPlatDef
 
 	for _, rtCnc := range rtPlat.Concerns {
-		if rtCnc.Concern.Type == Concern_APECS {
+		if rtCnc.Concern.Type == rkcypb.Concern_APECS {
 			adminRtTopics, ok := rtCnc.Topics[string(ADMIN)]
 			if !ok {
 				return nil, fmt.Errorf("No admin topic for concern: %s", rtCnc.Concern.Name)
@@ -365,7 +366,7 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 				&adminRtTopics.CurrentTopic,
 				0,
 				cncAdminDir,
-				Directive_CONCERN_ADMIN_CANCEL_TXN,
+				rkcypb.Directive_CONCERN_ADMIN_CANCEL_TXN,
 				traceId,
 			)
 			if err != nil {
@@ -375,7 +376,7 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *CancelTxnReque
 		}
 	}
 
-	return &Void{}, nil
+	return &rkcypb.Void{}, nil
 }
 
 func portalServe(ctx context.Context, kplat *KafkaPlatform, wg *sync.WaitGroup) {
@@ -408,7 +409,7 @@ func (kplat *KafkaPlatform) portalPlatform(
 				Msg("managePlatform exiting, ctx.Done()")
 			return
 		case platMsg := <-platCh:
-			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}

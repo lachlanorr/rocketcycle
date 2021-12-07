@@ -35,7 +35,7 @@ clean: ## remove all build artifacts
 .PHONY: proto
 proto: ## generate protocol buffers
 	@echo "==> Building $@..."
-	@go generate pkg/rkcy/gen.go
+	@go generate pkg/rkcypb/gen.go
 
 .PHONY: protoc-gen-rkcy
 protoc-gen-rkcy: proto ## compile rkcy mgmt app

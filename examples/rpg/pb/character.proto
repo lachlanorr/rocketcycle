@@ -7,7 +7,7 @@ syntax = "proto3";
 package pb;
 option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
-import "rkcy/extensions.proto";
+import "extensions.proto";
 
 message Character {
     option (rkcy.is_concern) = true;

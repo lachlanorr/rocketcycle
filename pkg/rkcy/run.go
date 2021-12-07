@@ -19,10 +19,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type rtProgram struct {
-	program     *Program
+	program     *rkcypb.Program
 	key         string
 	color       int
 	abbrev      string
@@ -36,7 +38,7 @@ type rtProgram struct {
 
 var gCurrColorIdx int = 0
 
-func newRtProgram(program *Program, key string) *rtProgram {
+func newRtProgram(program *rkcypb.Program, key string) *rtProgram {
 	rtProg := &rtProgram{
 		program: program,
 		key:     key,
@@ -48,7 +50,7 @@ func newRtProgram(program *Program, key string) *rtProgram {
 	return rtProg
 }
 
-func progKey(prog *Program) string {
+func progKey(prog *rkcypb.Program) string {
 	// Combine name and args to a string for key lookup
 	if prog == nil {
 		return "NIL"
@@ -166,8 +168,8 @@ func (rtProg *rtProgram) start(
 func updateRunning(
 	ctx context.Context,
 	running map[string]*rtProgram,
-	directive Directive,
-	acd *ConsumerDirective,
+	directive rkcypb.Directive,
+	acd *rkcypb.ConsumerDirective,
 	printCh chan<- string,
 ) {
 	key := progKey(acd.Program)
@@ -178,7 +180,7 @@ func updateRunning(
 	)
 
 	switch directive {
-	case Directive_CONSUMER_START:
+	case rkcypb.Directive_CONSUMER_START:
 		rtProg, ok = running[key]
 		if ok {
 			log.Warn().
@@ -195,7 +197,7 @@ func updateRunning(
 			return
 		}
 		running[key] = rtProg
-	case Directive_CONSUMER_STOP:
+	case rkcypb.Directive_CONSUMER_STOP:
 		rtProg, ok = running[key]
 		if !ok {
 			log.Warn().Msg("Program not running running, cannot stop: " + key)
@@ -255,9 +257,9 @@ func startAdmin(
 	updateRunning(
 		ctx,
 		running,
-		Directive_CONSUMER_START,
-		&ConsumerDirective{
-			Program: &Program{
+		rkcypb.Directive_CONSUMER_START,
+		&rkcypb.ConsumerDirective{
+			Program: &rkcypb.Program{
 				Name:   "./" + platformName,
 				Args:   append([]string{"admin"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
 				Abbrev: "admin",
@@ -280,9 +282,9 @@ func startPortalServer(
 	updateRunning(
 		ctx,
 		running,
-		Directive_CONSUMER_START,
-		&ConsumerDirective{
-			Program: &Program{
+		rkcypb.Directive_CONSUMER_START,
+		&rkcypb.ConsumerDirective{
+			Program: &rkcypb.Program{
 				Name:   "./" + platformName,
 				Args:   append([]string{"portal", "serve"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
 				Abbrev: "portal",
@@ -312,9 +314,9 @@ func startWatch(
 	updateRunning(
 		ctx,
 		running,
-		Directive_CONSUMER_START,
-		&ConsumerDirective{
-			Program: &Program{
+		rkcypb.Directive_CONSUMER_START,
+		&rkcypb.ConsumerDirective{
+			Program: &rkcypb.Program{
 				Name:   "./" + platformName,
 				Args:   args,
 				Abbrev: "watch",
@@ -367,7 +369,7 @@ func runConsumerPrograms(
 		case <-ticker.C:
 			doMaintenance(ctx, running, printCh)
 		case consMsg := <-consCh:
-			if (consMsg.Directive & Directive_CONSUMER) != Directive_CONSUMER {
+			if (consMsg.Directive & rkcypb.Directive_CONSUMER) != rkcypb.Directive_CONSUMER {
 				log.Error().Msgf("Invalid directive for ConsumersTopic: %s", consMsg.Directive.String())
 				continue
 			}

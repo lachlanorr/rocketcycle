@@ -20,6 +20,8 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type Txn struct {
@@ -70,7 +72,7 @@ func ValidateTxn(txn *Txn) error {
 type ApecsKafkaProducer struct {
 	ctx               context.Context
 	plat              Platform
-	respTarget        *TopicTarget
+	respTarget        *rkcypb.TopicTarget
 	producers         map[string]map[StandardTopicName]Producer
 	producersMtx      sync.Mutex
 	respRegisterCh    chan *RespChan
@@ -81,7 +83,7 @@ func (akprod *ApecsKafkaProducer) Platform() Platform {
 	return akprod.plat
 }
 
-func (akprod *ApecsKafkaProducer) ResponseTarget() *TopicTarget {
+func (akprod *ApecsKafkaProducer) ResponseTarget() *rkcypb.TopicTarget {
 	return akprod.respTarget
 }
 
@@ -91,14 +93,14 @@ func (akprod *ApecsKafkaProducer) RegisterResponseChannel(respCh *RespChan) {
 
 type RespChan struct {
 	TxnId     string
-	RespCh    chan *ApecsTxn
+	RespCh    chan *rkcypb.ApecsTxn
 	StartTime time.Time
 }
 
 func NewApecsKafkaProducer(
 	ctx context.Context,
 	plat Platform,
-	respTarget *TopicTarget,
+	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
 ) *ApecsKafkaProducer {
 	akprod := &ApecsKafkaProducer{
@@ -185,7 +187,7 @@ func produceResponse(
 
 	respTgt := rtxn.txn.ResponseTarget
 
-	kMsg, err := newKafkaMessage(&respTgt.Topic, respTgt.Partition, rtxn.txn, Directive_APECS_TXN, rtxn.traceParent)
+	kMsg, err := newKafkaMessage(&respTgt.Topic, respTgt.Partition, rtxn.txn, rkcypb.Directive_APECS_TXN, rtxn.traceParent)
 	if err != nil {
 		return err
 	}
@@ -196,7 +198,7 @@ func produceResponse(
 	return nil
 }
 
-func respondThroughChannel(txnId string, respCh chan *ApecsTxn, txn *ApecsTxn) {
+func respondThroughChannel(txnId string, respCh chan *rkcypb.ApecsTxn, txn *rkcypb.ApecsTxn) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -360,7 +362,7 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 				}
 
 				directive := GetDirective(msg)
-				if directive == Directive_APECS_TXN {
+				if directive == rkcypb.Directive_APECS_TXN {
 					txnId := GetTraceId(msg)
 					respCh, ok := reqMap[txnId]
 					if !ok {
@@ -369,7 +371,7 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 							Msg("TxnId not found in reqMap")
 					} else {
 						delete(reqMap, txnId)
-						txn := ApecsTxn{}
+						txn := rkcypb.ApecsTxn{}
 						err := proto.Unmarshal(msg.Value, &txn)
 						if err != nil {
 							log.Error().
@@ -404,7 +406,7 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 	}
 }
 
-func waitForResponse(ctx context.Context, respCh <-chan *ApecsTxn, timeout time.Duration) (*ApecsTxn, error) {
+func waitForResponse(ctx context.Context, respCh <-chan *rkcypb.ApecsTxn, timeout time.Duration) (*rkcypb.ApecsTxn, error) {
 	if timeout.Seconds() == 0 {
 		timeout = defaultTimeout
 	}
@@ -420,25 +422,25 @@ func waitForResponse(ctx context.Context, respCh <-chan *ApecsTxn, timeout time.
 	}
 }
 
-func CodeTranslate(code Code) codes.Code {
+func CodeTranslate(code rkcypb.Code) codes.Code {
 	switch code {
-	case Code_OK:
+	case rkcypb.Code_OK:
 		return codes.OK
-	case Code_NOT_FOUND:
+	case rkcypb.Code_NOT_FOUND:
 		return codes.NotFound
-	case Code_CONSTRAINT_VIOLATION:
+	case rkcypb.Code_CONSTRAINT_VIOLATION:
 		return codes.AlreadyExists
 
-	case Code_INVALID_ARGUMENT:
+	case rkcypb.Code_INVALID_ARGUMENT:
 		return codes.InvalidArgument
 
-	case Code_INTERNAL:
+	case rkcypb.Code_INTERNAL:
 		fallthrough
-	case Code_MARSHAL_FAILED:
+	case rkcypb.Code_MARSHAL_FAILED:
 		fallthrough
-	case Code_CONNECTION:
+	case rkcypb.Code_CONNECTION:
 		fallthrough
-	case Code_UNKNOWN_COMMAND:
+	case rkcypb.Code_UNKNOWN_COMMAND:
 		fallthrough
 	default:
 		return codes.Internal
@@ -448,8 +450,8 @@ func CodeTranslate(code Code) codes.Code {
 type preparedApecsSteps struct {
 	traceParent string
 	txnId       string
-	uponError   UponError
-	steps       []*ApecsTxn_Step
+	uponError   rkcypb.UponError
+	steps       []*rkcypb.ApecsTxn_Step
 }
 
 func prepareApecsSteps(
@@ -471,12 +473,12 @@ func prepareApecsSteps(
 	prepSteps.txnId = TraceIdFromTraceParent(prepSteps.traceParent)
 
 	if txn.Revert == Revertable {
-		prepSteps.uponError = UponError_REVERT
+		prepSteps.uponError = rkcypb.UponError_REVERT
 	} else {
-		prepSteps.uponError = UponError_REPORT
+		prepSteps.uponError = rkcypb.UponError_REPORT
 	}
 
-	prepSteps.steps = make([]*ApecsTxn_Step, len(txn.Steps))
+	prepSteps.steps = make([]*rkcypb.ApecsTxn_Step, len(txn.Steps))
 	for i, step := range txn.Steps {
 		payloadBytes, err := proto.Marshal(step.Payload)
 		if err != nil {
@@ -487,8 +489,8 @@ func prepareApecsSteps(
 			step.EffectiveTime = time.Now()
 		}
 
-		prepSteps.steps[i] = &ApecsTxn_Step{
-			System:        System_PROCESS,
+		prepSteps.steps[i] = &rkcypb.ApecsTxn_Step{
+			System:        rkcypb.System_PROCESS,
 			Concern:       step.Concern,
 			Command:       step.Command,
 			Key:           step.Key,
@@ -529,7 +531,7 @@ func ExecuteTxnSync(
 
 	respCh := RespChan{
 		TxnId:     prepSteps.txnId,
-		RespCh:    make(chan *ApecsTxn),
+		RespCh:    make(chan *rkcypb.ApecsTxn),
 		StartTime: time.Now(),
 	}
 	defer close(respCh.RespCh)
@@ -619,10 +621,10 @@ func ExecuteTxnAsync(
 func executeTxn(
 	aprod ApecsProducer,
 	txnId string,
-	assocTxn *AssocTxn,
+	assocTxn *rkcypb.AssocTxn,
 	traceParent string,
-	uponError UponError,
-	steps []*ApecsTxn_Step,
+	uponError rkcypb.UponError,
+	steps []*rkcypb.ApecsTxn_Step,
 	wg *sync.WaitGroup,
 ) error {
 	txn, err := newApecsTxn(txnId, assocTxn, aprod.ResponseTarget(), uponError, steps)
@@ -633,18 +635,18 @@ func executeTxn(
 	return produceCurrentStep(aprod, txn, traceParent, wg)
 }
 
-var gSystemToTopic = map[System]StandardTopicName{
-	System_PROCESS:      PROCESS,
-	System_STORAGE:      STORAGE,
-	System_STORAGE_SCND: STORAGE_SCND,
+var gSystemToTopic = map[rkcypb.System]StandardTopicName{
+	rkcypb.System_PROCESS:      PROCESS,
+	rkcypb.System_STORAGE:      STORAGE,
+	rkcypb.System_STORAGE_SCND: STORAGE_SCND,
 }
 
 func produceError(
 	ctx context.Context,
 	aprod ApecsProducer,
 	rtxn *rtApecsTxn,
-	step *ApecsTxn_Step,
-	code Code,
+	step *rkcypb.ApecsTxn_Step,
+	code rkcypb.Code,
 	logToResult bool,
 	msg string,
 	wg *sync.WaitGroup,
@@ -659,7 +661,7 @@ func produceError(
 
 	// if no result, put one in so we can log to it
 	if step.Result == nil {
-		step.Result = &ApecsTxn_Step_Result{
+		step.Result = &rkcypb.ApecsTxn_Step_Result{
 			Code:          code,
 			ProcessedTime: timestamppb.Now(),
 		}
@@ -668,8 +670,8 @@ func produceError(
 	if logToResult {
 		step.Result.LogEvents = append(
 			step.Result.LogEvents,
-			&LogEvent{
-				Sev: Severity_ERR,
+			&rkcypb.LogEvent{
+				Sev: rkcypb.Severity_ERR,
 				Msg: msg,
 			},
 		)
@@ -685,7 +687,7 @@ func produceError(
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
+	prd.Produce(rkcypb.Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
 	if rtxn.txn.ResponseTarget != nil {
 		err = produceResponse(ctx, aprod.Platform(), rtxn.txn.ResponseTarget.Brokers, rtxn, wg)
@@ -720,7 +722,7 @@ func produceComplete(
 		return err
 	}
 
-	prd.Produce(Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
+	prd.Produce(rkcypb.Directive_APECS_TXN, rtxn.traceParent, []byte(step.Key), txnSer, nil)
 
 	if rtxn.txn.ResponseTarget != nil {
 		err = produceResponse(ctx, aprod.Platform(), rtxn.txn.ResponseTarget.Brokers, rtxn, wg)
@@ -734,7 +736,7 @@ func produceComplete(
 
 func produceCurrentStep(
 	aprod ApecsProducer,
-	txn *ApecsTxn,
+	txn *rkcypb.ApecsTxn,
 	traceParent string,
 	wg *sync.WaitGroup,
 ) error {
@@ -772,6 +774,6 @@ func produceCurrentStep(
 		hashKey = uid[:]
 	}
 
-	prd.Produce(Directive_APECS_TXN, traceParent, hashKey, txnSer, nil)
+	prd.Produce(rkcypb.Directive_APECS_TXN, traceParent, hashKey, txnSer, nil)
 	return nil
 }

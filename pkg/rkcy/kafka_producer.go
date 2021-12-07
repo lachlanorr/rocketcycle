@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type KafkaProducer struct {
@@ -49,7 +51,7 @@ type KafkaProducer struct {
 }
 
 type message struct {
-	directive   Directive
+	directive   rkcypb.Directive
 	traceParent string
 	key         []byte
 	value       []byte
@@ -60,7 +62,7 @@ func newKafkaMessage(
 	topic *string,
 	partition int32,
 	value proto.Message,
-	directive Directive,
+	directive rkcypb.Directive,
 	traceParent string,
 ) (*kafka.Message, error) {
 	valueSer, err := proto.Marshal(value)
@@ -160,8 +162,8 @@ func (kprod *KafkaProducer) updatePlatform(
 	}
 }
 
-func (kprod *KafkaProducer) producerDirective() *ProducerDirective {
-	return &ProducerDirective{
+func (kprod *KafkaProducer) producerDirective() *rkcypb.ProducerDirective {
+	return &rkcypb.ProducerDirective{
 		Id:          kprod.id,
 		ConcernName: kprod.concernName,
 		ConcernType: kprod.concern.Concern.Type,
@@ -171,7 +173,7 @@ func (kprod *KafkaProducer) producerDirective() *ProducerDirective {
 }
 
 func (kprod *KafkaProducer) Produce(
-	directive Directive,
+	directive rkcypb.Directive,
 	traceParent string,
 	key []byte,
 	value []byte,
@@ -196,7 +198,7 @@ func (kprod *KafkaProducer) run(ctx context.Context, wg *sync.WaitGroup) {
 		&kprod.producersTopic,
 		0,
 		kprod.producerDirective(),
-		Directive_PRODUCER_STATUS,
+		rkcypb.Directive_PRODUCER_STATUS,
 		"",
 	)
 	if err != nil {
@@ -216,11 +218,11 @@ func (kprod *KafkaProducer) run(ctx context.Context, wg *sync.WaitGroup) {
 			case <-pingAdminTicker.C:
 				kprod.adminProdCh <- pingMsg
 			case paused = <-kprod.pauseCh:
-				var directive Directive
+				var directive rkcypb.Directive
 				if paused {
-					directive = Directive_PRODUCER_PAUSED
+					directive = rkcypb.Directive_PRODUCER_PAUSED
 				} else {
-					directive = Directive_PRODUCER_RUNNING
+					directive = rkcypb.Directive_PRODUCER_RUNNING
 				}
 				msg, err := newKafkaMessage(
 					&kprod.producersTopic,

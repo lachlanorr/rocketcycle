@@ -25,6 +25,7 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -33,8 +34,8 @@ func produceApecsTxnError(
 	aprod ApecsProducer,
 	span trace.Span,
 	rtxn *rtApecsTxn,
-	step *ApecsTxn_Step,
-	code Code,
+	step *rkcypb.ApecsTxn_Step,
+	code rkcypb.Code,
 	logToResult bool,
 	wg *sync.WaitGroup,
 	format string,
@@ -66,8 +67,8 @@ func produceNextStep(
 	aprod ApecsProducer,
 	span trace.Span,
 	rtxn *rtApecsTxn,
-	step *ApecsTxn_Step,
-	cmpdOffset *CompoundOffset,
+	step *rkcypb.ApecsTxn_Step,
+	cmpdOffset *rkcypb.CompoundOffset,
 	wg *sync.WaitGroup,
 ) {
 	if rtxn.advanceStepIdx() {
@@ -76,7 +77,7 @@ func produceNextStep(
 		if nextStep.Payload == nil && IsPlatformCommand(nextStep.Command) {
 			nextStep.Payload = step.Result.Payload
 		}
-		if nextStep.System == System_STORAGE && nextStep.CmpdOffset == nil {
+		if nextStep.System == rkcypb.System_STORAGE && nextStep.CmpdOffset == nil {
 			// STORAGE steps always need the value PROCESS Offset
 			if step.CmpdOffset != nil {
 				// if current step has an offset, set that one
@@ -92,40 +93,40 @@ func produceNextStep(
 		}
 		err := produceCurrentStep(aprod, rtxn.txn, rtxn.traceParent, wg)
 		if err != nil {
-			produceApecsTxnError(ctx, aprod, span, rtxn, nextStep, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+			produceApecsTxnError(ctx, aprod, span, rtxn, nextStep, rkcypb.Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed produceCurrentStep for next step", err.Error())
 			return
 		}
 	} else {
 		// search for instance updates and create new storage txn to update storage
-		if rtxn.txn.Direction == Direction_FORWARD {
-			if plat.System() == System_PROCESS {
+		if rtxn.txn.Direction == rkcypb.Direction_FORWARD {
+			if plat.System() == rkcypb.System_PROCESS {
 				for _, step := range rtxn.txn.ForwardSteps {
-					if step.System == System_STORAGE {
+					if step.System == rkcypb.System_STORAGE {
 						// generate secondary storage steps
 						if step.Command == CREATE || step.Command == UPDATE || step.Command == DELETE {
-							storageStep := &ApecsTxn_Step{
-								System:     System_STORAGE_SCND,
+							storageStep := &rkcypb.ApecsTxn_Step{
+								System:     rkcypb.System_STORAGE_SCND,
 								Concern:    step.Concern,
 								Command:    step.Command,
 								Key:        step.Result.Key,
 								Payload:    step.Result.Payload,
 								CmpdOffset: step.CmpdOffset,
 							}
-							storageSteps := []*ApecsTxn_Step{storageStep}
+							storageSteps := []*rkcypb.ApecsTxn_Step{storageStep}
 							storageTxnId := NewTraceId()
-							rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_SECONDARY_STORAGE})
+							rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &rkcypb.AssocTxn{Id: storageTxnId, Type: rkcypb.AssocTxn_SECONDARY_STORAGE})
 
 							err := executeTxn(
 								aprod,
 								storageTxnId,
-								&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
+								&rkcypb.AssocTxn{Id: rtxn.txn.Id, Type: rkcypb.AssocTxn_PARENT},
 								rtxn.traceParent,
-								UponError_BAILOUT,
+								rkcypb.UponError_BAILOUT,
 								storageSteps,
 								wg,
 							)
 							if err != nil {
-								produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to apply secondary storage steps", err.Error(), step.Key)
+								produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to apply secondary storage steps", err.Error(), step.Key)
 								// This should be extremely rare, maybe impossible
 								// assuming we can produce at all.  Without proper
 								// storage messages going through, we are better
@@ -139,16 +140,16 @@ func produceNextStep(
 			}
 
 			// Generate update steps for any changed instances
-			storageStepsMap := make(map[string]*ApecsTxn_Step)
+			storageStepsMap := make(map[string]*rkcypb.ApecsTxn_Step)
 			for _, step := range rtxn.txn.ForwardSteps {
-				if step.System == System_PROCESS &&
+				if step.System == rkcypb.System_PROCESS &&
 					(step.Result.Instance != nil || step.Command == REQUEST_RELATED || step.Command == REFRESH_RELATED) {
 					var stepInst []byte
 					stepKey := fmt.Sprintf("%s_%s", step.Concern, step.Key)
 					if step.Result.Instance != nil {
 						stepInst = PackPayloads(step.Result.Instance, plat.InstanceStore().GetRelated(step.Key))
 					} else if step.Command == REQUEST_RELATED {
-						relRsp := &RelatedResponse{}
+						relRsp := &rkcypb.RelatedResponse{}
 						err := proto.Unmarshal(step.Result.Payload, relRsp)
 						if err != nil {
 							log.Error().
@@ -164,8 +165,8 @@ func produceNextStep(
 						log.Error().
 							Msgf("UPDATE_ASYNC ERROR: Empty stepInst, stepKey=%s", stepKey)
 					} else {
-						storageStepsMap[stepKey] = &ApecsTxn_Step{
-							System:        System_STORAGE,
+						storageStepsMap[stepKey] = &rkcypb.ApecsTxn_Step{
+							System:        rkcypb.System_STORAGE,
 							Concern:       step.Concern,
 							Command:       UPDATE_ASYNC,
 							Key:           step.Key,
@@ -179,21 +180,21 @@ func produceNextStep(
 			// generate a distinct storage transaction with a single
 			// UPDATE_ASYNC storage step for every instance modified
 			for _, step := range storageStepsMap {
-				storageSteps := []*ApecsTxn_Step{step}
+				storageSteps := []*rkcypb.ApecsTxn_Step{step}
 				storageTxnId := NewTraceId()
-				rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_STORAGE})
+				rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &rkcypb.AssocTxn{Id: storageTxnId, Type: rkcypb.AssocTxn_GENERATED_STORAGE})
 
 				err := executeTxn(
 					aprod,
 					storageTxnId,
-					&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
+					&rkcypb.AssocTxn{Id: rtxn.txn.Id, Type: rkcypb.AssocTxn_PARENT},
 					rtxn.traceParent,
-					UponError_BAILOUT,
+					rkcypb.UponError_BAILOUT,
 					storageSteps,
 					wg,
 				)
 				if err != nil {
-					produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
+					produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update storage", err.Error(), step.Key)
 					// This should be extremely rare, maybe impossible
 					// assuming we can produce at all.  Without proper
 					// storage messages going through, we are better
@@ -203,21 +204,21 @@ func produceNextStep(
 
 				} else {
 					// also execute secondary storage txn
-					storageSteps[0].System = System_STORAGE_SCND
+					storageSteps[0].System = rkcypb.System_STORAGE_SCND
 					storageScndTxnId := NewTraceId()
-					rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &AssocTxn{Id: storageTxnId, Type: AssocTxn_GENERATED_STORAGE})
+					rtxn.txn.AssocTxns = append(rtxn.txn.AssocTxns, &rkcypb.AssocTxn{Id: storageTxnId, Type: rkcypb.AssocTxn_GENERATED_STORAGE})
 
 					err := executeTxn(
 						aprod,
 						storageScndTxnId,
-						&AssocTxn{Id: rtxn.txn.Id, Type: AssocTxn_PARENT},
+						&rkcypb.AssocTxn{Id: rtxn.txn.Id, Type: rkcypb.AssocTxn_PARENT},
 						rtxn.traceParent,
-						UponError_BAILOUT,
+						rkcypb.UponError_BAILOUT,
 						storageSteps,
 						wg,
 					)
 					if err != nil {
-						produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update secondary storage", err.Error(), step.Key)
+						produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "produceNextStep error=\"%s\" Key=%s: Failed to update secondary storage", err.Error(), step.Key)
 						// This should be extremely rare, maybe impossible
 						// assuming we can produce at all.  Without proper
 						// storage messages going through, we are better
@@ -231,19 +232,19 @@ func produceNextStep(
 
 		err := produceComplete(ctx, aprod, rtxn, wg)
 		if err != nil {
-			produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
+			produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "produceNextStep error=\"%s\": Failed to produceComplete", err.Error())
 			return
 		}
 	}
 }
 
-func isKeylessStep(step *ApecsTxn_Step) bool {
-	return (step.System == System_STORAGE && step.Command == CREATE) ||
-		(step.System == System_PROCESS && step.Command == VALIDATE_CREATE)
+func isKeylessStep(step *rkcypb.ApecsTxn_Step) bool {
+	return (step.System == rkcypb.System_STORAGE && step.Command == CREATE) ||
+		(step.System == rkcypb.System_PROCESS && step.Command == VALIDATE_CREATE)
 }
 
-func isInstanceStoreStep(step *ApecsTxn_Step) bool {
-	return step.System == System_PROCESS &&
+func isInstanceStoreStep(step *rkcypb.ApecsTxn_Step) bool {
+	return step.System == rkcypb.System_PROCESS &&
 		(step.Command == REFRESH_INSTANCE || step.Command == FLUSH_INSTANCE)
 }
 
@@ -260,7 +261,7 @@ func cancelApecsTxn(
 	plat Platform,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
-	cmpdOffset *CompoundOffset,
+	cmpdOffset *rkcypb.CompoundOffset,
 	aprod ApecsProducer,
 	confRdr *ConfigRdr,
 	wg *sync.WaitGroup,
@@ -269,7 +270,7 @@ func cancelApecsTxn(
 	ctx, span, step := plat.Telem().StartStep(ctx, rtxn)
 	defer span.End()
 
-	produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_CANCELLED, true, wg, "Txn Cancelled")
+	produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_CANCELLED, true, wg, "Txn Cancelled")
 }
 
 func advanceApecsTxn(
@@ -277,32 +278,32 @@ func advanceApecsTxn(
 	plat Platform,
 	rtxn *rtApecsTxn,
 	tp *TopicParts,
-	cmpdOffset *CompoundOffset,
+	cmpdOffset *rkcypb.CompoundOffset,
 	aprod ApecsProducer,
 	confRdr *ConfigRdr,
 	wg *sync.WaitGroup,
-) Code {
+) rkcypb.Code {
 	ctx = InjectTraceParent(ctx, rtxn.traceParent)
 	ctx, span, step := plat.Telem().StartStep(ctx, rtxn)
 	defer span.End()
 
 	log.Debug().
 		Str("TxnId", rtxn.txn.Id).
-		Msgf("Advancing ApecsTxn: %s %d %s", Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, jsonNoErr(step))
+		Msgf("Advancing ApecsTxn: %s %d %s", rkcypb.Direction_name[int32(rtxn.txn.Direction)], rtxn.txn.CurrentStepIdx, jsonNoErr(step))
 
 	if step.Result != nil {
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result, %s", step.Result, jsonNoErr(step))
-		return Code_INTERNAL
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn Result=%+v: Current step already has Result, %s", step.Result, jsonNoErr(step))
+		return rkcypb.Code_INTERNAL
 	}
 
 	if step.Concern != tp.Concern {
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s, %s", tp.Concern, step.Concern, jsonNoErr(step))
-		return Code_INTERNAL
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched concern, expected=%s actual=%s, %s", tp.Concern, step.Concern, jsonNoErr(step))
+		return rkcypb.Code_INTERNAL
 	}
 
 	if step.System != tp.System {
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d, %s", tp.System, step.System, jsonNoErr(step))
-		return Code_INTERNAL
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn: Mismatched system, expected=%d actual=%d, %s", tp.System, step.System, jsonNoErr(step))
+		return rkcypb.Code_INTERNAL
 	}
 
 	// Special case, only storage CREATE and process VALIDATE_CREATE can have empty key
@@ -311,8 +312,8 @@ func advanceApecsTxn(
 		if prevStep != nil && prevStep.Result != nil && prevStep.Result.Key != "" {
 			step.Key = prevStep.Result.Key
 		} else {
-			produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step: %s %s, %s", step.System.String(), step.Command, jsonNoErr(step))
-			return Code_INTERNAL
+			produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn: No key in step: %s %s, %s", step.System.String(), step.Command, jsonNoErr(step))
+			return rkcypb.Code_INTERNAL
 		}
 	}
 
@@ -321,7 +322,7 @@ func advanceApecsTxn(
 
 	// Read instance from InstanceStore
 	var inst []byte
-	if step.System == System_PROCESS {
+	if step.System == rkcypb.System_PROCESS {
 		step.CmpdOffset = cmpdOffset
 
 		if !isKeylessStep(step) && !isInstanceStoreStep(step) {
@@ -338,14 +339,14 @@ func advanceApecsTxn(
 				Msg("Instance not found, injecting STORAGE READ")
 
 			var err error
-			if step.System == System_PROCESS && step.Command == READ {
+			if step.System == rkcypb.System_PROCESS && step.Command == READ {
 				// If we are doing a PROCESS READ, we can just substitute a STORAGE READ
 				// The STORAGE READ, if successful, will inject a REFRESH_INSTANCE which
 				// can safely stand in for the original PROCESS READ
 				err = rtxn.replaceStep(
 					rtxn.txn.CurrentStepIdx,
-					&ApecsTxn_Step{
-						System:     System_STORAGE,
+					&rkcypb.ApecsTxn_Step{
+						System:     rkcypb.System_STORAGE,
 						Concern:    step.Concern,
 						Command:    READ,
 						Key:        step.Key,
@@ -357,8 +358,8 @@ func advanceApecsTxn(
 				// command to run after the STORAGE READ runs
 				err = rtxn.insertSteps(
 					rtxn.txn.CurrentStepIdx,
-					&ApecsTxn_Step{
-						System:     System_STORAGE,
+					&rkcypb.ApecsTxn_Step{
+						System:     rkcypb.System_STORAGE,
 						Concern:    step.Concern,
 						Command:    READ,
 						Key:        step.Key,
@@ -368,24 +369,24 @@ func advanceApecsTxn(
 			}
 			if err != nil {
 				log.Error().Err(err).Msg("error in insertSteps")
-				produceApecsTxnError(ctx, aprod, span, rtxn, nil, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
-				return Code_INTERNAL
+				produceApecsTxnError(ctx, aprod, span, rtxn, nil, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Unable to insert Storage READ implicit steps", step.Key)
+				return rkcypb.Code_INTERNAL
 			}
 			err = produceCurrentStep(aprod, rtxn.txn, rtxn.traceParent, wg)
 			if err != nil {
-				produceApecsTxnError(ctx, aprod, span, rtxn, nil, Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
-				return Code_INTERNAL
+				produceApecsTxnError(ctx, aprod, span, rtxn, nil, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn error=\"%s\": Failed produceCurrentStep for next step", err.Error())
+				return rkcypb.Code_INTERNAL
 			}
-			return Code_OK
+			return rkcypb.Code_OK
 		} else if inst != nil && step.Command == CREATE {
-			produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in store in CREATE command", step.Key)
-			return Code_INTERNAL
+			produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: Instance already exists in store in CREATE command", step.Key)
+			return rkcypb.Code_INTERNAL
 		}
 	}
 
 	if step.CmpdOffset == nil {
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn: Nil offset")
-		return Code_INTERNAL
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn: Nil offset")
+		return rkcypb.Code_INTERNAL
 	}
 
 	args := &StepArgs{
@@ -397,7 +398,7 @@ func advanceApecsTxn(
 		CmpdOffset:    step.CmpdOffset,
 	}
 
-	var addSteps []*ApecsTxn_Step
+	var addSteps []*rkcypb.ApecsTxn_Step
 	step.Result, addSteps = handleCommand(
 		ctx,
 		plat,
@@ -410,11 +411,11 @@ func advanceApecsTxn(
 		wg,
 	)
 
-	if (step.Result == nil || step.Result.Code != Code_OK) &&
-		rtxn.txn.UponError == UponError_BAILOUT {
+	if (step.Result == nil || step.Result.Code != rkcypb.Code_OK) &&
+		rtxn.txn.UponError == rkcypb.UponError_BAILOUT {
 		// We'll bailout up the chain, but down here we can at least
 		// log any info we have about the result.
-		var code Code
+		var code rkcypb.Code
 		if step.Result != nil {
 			code = step.Result.Code
 			for _, logEvt := range step.Result.LogEvents {
@@ -424,17 +425,17 @@ func advanceApecsTxn(
 					Str("System", step.System.String()).
 					Str("Command", step.Command).
 					Str("Direction", rtxn.txn.Direction.String()).
-					Msgf("BAILOUT LogEvent: %s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
+					Msgf("BAILOUT LogEvent: %s %s", rkcypb.Severity_name[int32(logEvt.Sev)], logEvt.Msg)
 			}
 		} else {
-			code = Code_NIL_RESULT
+			code = rkcypb.Code_NIL_RESULT
 		}
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: BAILOUT, %s", step.Key, jsonNoErr(step))
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: BAILOUT, %s", step.Key, jsonNoErr(step))
 		return code
 	}
 
 	if step.Result == nil {
-		produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler, %s", step.Key, jsonNoErr(step))
+		produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "advanceApecsTxn Key=%s: nil result from step handler, %s", step.Key, jsonNoErr(step))
 		return step.Result.Code
 	}
 
@@ -442,8 +443,8 @@ func advanceApecsTxn(
 
 	if step.Result.LogEvents != nil {
 		for _, logEvt := range step.Result.LogEvents {
-			sevMsg := fmt.Sprintf("%s %s", Severity_name[int32(logEvt.Sev)], logEvt.Msg)
-			if logEvt.Sev == Severity_ERR {
+			sevMsg := fmt.Sprintf("%s %s", rkcypb.Severity_name[int32(logEvt.Sev)], logEvt.Msg)
+			if logEvt.Sev == rkcypb.Severity_ERR {
 				span.RecordError(errors.New(sevMsg))
 			} else {
 				span.AddEvent(sevMsg)
@@ -453,7 +454,7 @@ func advanceApecsTxn(
 	span.SetAttributes(
 		attribute.String("rkcy.code", strconv.Itoa(int(step.Result.Code))),
 	)
-	if step.Result.Code != Code_OK {
+	if step.Result.Code != rkcypb.Code_OK {
 		produceApecsTxnError(ctx, aprod, span, rtxn, step, step.Result.Code, false, wg, "advanceApecsTxn Key=%s: Step failed with non OK result, %s", step.Key, jsonNoErr(step))
 		return step.Result.Code
 	}
@@ -465,7 +466,7 @@ func advanceApecsTxn(
 	}
 
 	// Record orignal instance in step if result has changed the instance
-	if tp.System == System_PROCESS && step.Result.Instance != nil {
+	if tp.System == rkcypb.System_PROCESS && step.Result.Instance != nil {
 		step.Instance = inst
 	}
 
@@ -474,8 +475,8 @@ func advanceApecsTxn(
 	if addSteps != nil && len(addSteps) > 0 {
 		err := rtxn.insertSteps(rtxn.txn.CurrentStepIdx+1, addSteps...)
 		if err != nil {
-			produceApecsTxnError(ctx, aprod, span, rtxn, step, Code_INTERNAL, true, wg, "insertSteps failure: %s", err.Error())
-			return Code_INTERNAL
+			produceApecsTxnError(ctx, aprod, span, rtxn, step, rkcypb.Code_INTERNAL, true, wg, "insertSteps failure: %s", err.Error())
+			return rkcypb.Code_INTERNAL
 		}
 	}
 
@@ -484,7 +485,7 @@ func advanceApecsTxn(
 }
 
 func (kplat *KafkaPlatform) UpdateStorageTargets(platMsg *PlatformMessage) {
-	if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+	if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
 		log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 		return
 	}
@@ -558,7 +559,7 @@ func consumeApecsTopic(
 	aprod := plat.NewApecsProducer(ctx, nil, wg)
 
 	var groupName string
-	if plat.System() == System_STORAGE {
+	if plat.System() == rkcypb.System_STORAGE {
 		groupName = fmt.Sprintf("rkcy_apecs_%s_%s", fullTopic, plat.StorageTarget())
 	} else {
 		groupName = fmt.Sprintf("rkcy_apecs_%s", fullTopic)
@@ -640,7 +641,7 @@ func consumeApecsTopic(
 		case <-cncAdminReadyCh:
 			//			cncAdminReady = true
 		case cncAdminMsg := <-cncAdminCh:
-			if cncAdminMsg.Directive == Directive_CONCERN_ADMIN_CANCEL_TXN {
+			if cncAdminMsg.Directive == rkcypb.Directive_CONCERN_ADMIN_CANCEL_TXN {
 				log.Info().Msgf("CANCEL TXN %s", cncAdminMsg.ConcernAdminDirective.TxnId)
 				txnsToCancel[cncAdminMsg.ConcernAdminDirective.TxnId] = time.Now()
 			}
@@ -688,15 +689,15 @@ func consumeApecsTopic(
 				}
 
 				directive := GetDirective(msg)
-				if directive == Directive_APECS_TXN {
-					txn := ApecsTxn{}
+				if directive == rkcypb.Directive_APECS_TXN {
+					txn := rkcypb.ApecsTxn{}
 					err := proto.Unmarshal(msg.Value, &txn)
 					if err != nil {
 						log.Error().
 							Err(err).
 							Msg("Failed to Unmarshal ApecsTxn")
 					} else {
-						offset := &CompoundOffset{
+						offset := &rkcypb.CompoundOffset{
 							Generation: tp.Generation,
 							Partition:  partition,
 							Offset:     int64(msg.TopicPartition.Offset),
@@ -719,7 +720,7 @@ func consumeApecsTopic(
 								// So... we force commit the offset to current and
 								// kill ourselves, and we'll pick up where we left
 								// off when we are restarted.
-								if code != Code_OK && rtxn.txn.UponError == UponError_BAILOUT {
+								if code != rkcypb.Code_OK && rtxn.txn.UponError == rkcypb.UponError_BAILOUT {
 									log.Error().
 										Int("Code", int(code)).
 										Str("TxnId", rtxn.txn.Id).
@@ -793,7 +794,7 @@ func startApecsRunner(
 			Msg("startApecsRunner: failed to ParseFullTopicName")
 	}
 
-	if tp.System == System_NO_SYSTEM {
+	if tp.System == rkcypb.System_NO_SYSTEM {
 		log.Fatal().
 			Str("Topic", fullTopic).
 			Msg("startApecsRunner: No system matches topic")
@@ -806,7 +807,7 @@ func startApecsRunner(
 			Msgf("Mismatched system with topic: %s != %s", plat.System().String(), tp.System.String())
 	}
 
-	if tp.ConcernType != Concern_APECS {
+	if tp.ConcernType != rkcypb.Concern_APECS {
 		log.Fatal().
 			Err(err).
 			Str("Topic", fullTopic).

@@ -14,16 +14,17 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
 type Player struct{}
 
-func (*Player) Read(ctx context.Context, key string) (*pb.Player, *pb.PlayerRelated, *rkcy.CompoundOffset, error) {
+func (*Player) Read(ctx context.Context, key string) (*pb.Player, *pb.PlayerRelated, *rkcypb.CompoundOffset, error) {
 	inst := &pb.Player{}
 	var relB64 string
-	cmpdOffset := &rkcy.CompoundOffset{}
+	cmpdOffset := &rkcypb.CompoundOffset{}
 	err := pool.QueryRow(
 		ctx,
 		`SELECT id,
@@ -48,7 +49,7 @@ func (*Player) Read(ctx context.Context, key string) (*pb.Player, *pb.PlayerRela
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
+			return nil, nil, nil, rkcy.NewError(rkcypb.Code_NOT_FOUND, err.Error())
 		}
 		return nil, nil, nil, err
 	}
@@ -68,7 +69,7 @@ func (*Player) Read(ctx context.Context, key string) (*pb.Player, *pb.PlayerRela
 	return inst, rel, cmpdOffset, nil
 }
 
-func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.CompoundOffset) (*pb.Player, error) {
+func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcypb.CompoundOffset) (*pb.Player, error) {
 	if inst.Id == "" {
 		inst.Id = uuid.NewString()
 	}
@@ -79,11 +80,11 @@ func (p *Player) Create(ctx context.Context, inst *pb.Player, cmpdOffset *rkcy.C
 	return inst, nil
 }
 
-func (p *Player) Update(ctx context.Context, inst *pb.Player, rel *pb.PlayerRelated, cmpdOffset *rkcy.CompoundOffset) error {
+func (p *Player) Update(ctx context.Context, inst *pb.Player, rel *pb.PlayerRelated, cmpdOffset *rkcypb.CompoundOffset) error {
 	return p.upsert(ctx, inst, rel, cmpdOffset)
 }
 
-func (*Player) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
+func (*Player) Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error {
 	log.Warn().Msgf("Player DELETE %s", key)
 	_, err := pool.Exec(
 		context.Background(),
@@ -96,7 +97,7 @@ func (*Player) Delete(ctx context.Context, key string, cmpdOffset *rkcy.Compound
 	return err
 }
 
-func (*Player) upsert(ctx context.Context, inst *pb.Player, rel *pb.PlayerRelated, offset *rkcy.CompoundOffset) error {
+func (*Player) upsert(ctx context.Context, inst *pb.Player, rel *pb.PlayerRelated, offset *rkcypb.CompoundOffset) error {
 	var relB64 string
 	if rel != nil {
 		relBytes, err := proto.Marshal(rel)

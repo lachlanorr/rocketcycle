@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type InstanceRecord struct {
 	Instance   []byte
 	Related    []byte
-	CmpdOffset *CompoundOffset
+	CmpdOffset *rkcypb.CompoundOffset
 	LastAccess time.Time
 }
 
@@ -63,7 +65,7 @@ func (instStore *InstanceStore) GetRelated(key string) []byte {
 	return nil
 }
 
-func (instStore *InstanceStore) Set(key string, instance []byte, related []byte, cmpdOffset *CompoundOffset) {
+func (instStore *InstanceStore) Set(key string, instance []byte, related []byte, cmpdOffset *rkcypb.CompoundOffset) {
 	rec, ok := instStore.instances[key]
 	if ok {
 		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {
@@ -81,7 +83,7 @@ func (instStore *InstanceStore) Set(key string, instance []byte, related []byte,
 	}
 }
 
-func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOffset *CompoundOffset) {
+func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOffset *rkcypb.CompoundOffset) {
 	rec, ok := instStore.instances[key]
 	if ok {
 		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {
@@ -98,7 +100,7 @@ func (instStore *InstanceStore) SetInstance(key string, instance []byte, cmpdOff
 	}
 }
 
-func (instStore *InstanceStore) SetRelated(key string, related []byte, cmpdOffset *CompoundOffset) error {
+func (instStore *InstanceStore) SetRelated(key string, related []byte, cmpdOffset *rkcypb.CompoundOffset) error {
 	rec, ok := instStore.instances[key]
 	if ok {
 		if !OffsetGT(cmpdOffset, rec.CmpdOffset) {

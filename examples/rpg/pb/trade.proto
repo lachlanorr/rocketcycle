@@ -9,17 +9,19 @@ option go_package = "github.com/lachlanorr/rocketcycle/examples/rpg/pb";
 
 import "extensions.proto";
 
-message Player {
-    option (rkcy.is_concern) = true;
+/*
+message Trade {
+    option (rkcy.pb.is_concern) = true;
 
-    string id = 1 [(rkcy.is_key) = true];
+    string id = 1 [(rkcy.pb.is_key) = true];
     string username = 2;
     bool active = 3;
 
-    string limits_id = 4;
+    Limits limits = 4;
 }
+*/
 
-message Limits {
+message TradeCategory {
     option (rkcy.is_config) = true;
 
     string id = 1 [(rkcy.is_key) = true];

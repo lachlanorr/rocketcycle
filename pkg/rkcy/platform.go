@@ -22,6 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 var nameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z\-]{1,15}$`)
@@ -61,7 +63,7 @@ type KafkaPlatform struct {
 	cobraCommands []*cobra.Command
 	storageInits  map[string]StorageInit
 
-	system    System
+	system    rkcypb.System
 	settings  Settings
 	telem     *Telemetry
 	configMgr *ConfigMgr
@@ -156,11 +158,11 @@ func (kplat *KafkaPlatform) Telem() *Telemetry {
 	return kplat.telem
 }
 
-func (kplat *KafkaPlatform) System() System {
+func (kplat *KafkaPlatform) System() rkcypb.System {
 	return kplat.system
 }
 
-func (kplat *KafkaPlatform) SetSystem(system System) {
+func (kplat *KafkaPlatform) SetSystem(system rkcypb.System) {
 	kplat.system = system
 }
 
@@ -190,7 +192,7 @@ func (kplat *KafkaPlatform) SetStorageInit(name string, storageInit StorageInit)
 
 func (kplat *KafkaPlatform) NewApecsProducer(
 	ctx context.Context,
-	respTarget *TopicTarget,
+	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
 ) ApecsProducer {
 	kprod := NewApecsKafkaProducer(ctx, kplat, respTarget, wg)
@@ -255,31 +257,31 @@ func (kplat *KafkaPlatform) InitConfigMgr(ctx context.Context, wg *sync.WaitGrou
 }
 
 type rtPlatformDef struct {
-	PlatformDef          *PlatformDef
+	PlatformDef          *rkcypb.PlatformDef
 	Hash                 string
 	Concerns             map[string]*rtConcern
-	Clusters             map[string]*Cluster
+	Clusters             map[string]*rkcypb.Cluster
 	AdminCluster         string
-	StorageTargets       map[string]*StorageTarget
+	StorageTargets       map[string]*rkcypb.StorageTarget
 	PrimaryStorageTarget string
 }
 
 type rtConcern struct {
-	Concern *Concern
+	Concern *rkcypb.Concern
 	Topics  map[string]*rtTopics
 }
 
 type rtTopics struct {
-	Topics                     *Concern_Topics
+	Topics                     *rkcypb.Concern_Topics
 	CurrentTopic               string
 	CurrentTopicPartitionCount int32
-	CurrentCluster             *Cluster
+	CurrentCluster             *rkcypb.Cluster
 	FutureTopic                string
 	FutureTopicPartitionCount  int32
-	FutureCluster              *Cluster
+	FutureCluster              *rkcypb.Cluster
 }
 
-func newRtConcern(rtPlatDef *rtPlatformDef, concern *Concern) (*rtConcern, error) {
+func newRtConcern(rtPlatDef *rtPlatformDef, concern *rkcypb.Concern) (*rtConcern, error) {
 	rtConc := rtConcern{
 		Concern: concern,
 		Topics:  make(map[string]*rtTopics),
@@ -302,7 +304,7 @@ func isACETopic(topic string) bool {
 	return topic == string(ADMIN) || topic == string(ERROR) || topic == string(COMPLETE)
 }
 
-func newRtTopics(rtPlatDef *rtPlatformDef, rtConc *rtConcern, topics *Concern_Topics) (*rtTopics, error) {
+func newRtTopics(rtPlatDef *rtPlatformDef, rtConc *rtConcern, topics *rkcypb.Concern_Topics) (*rtTopics, error) {
 	rtTops := rtTopics{
 		Topics: topics,
 	}
@@ -335,9 +337,9 @@ func newRtTopics(rtPlatDef *rtPlatformDef, rtConc *rtConcern, topics *Concern_To
 	return &rtTops, nil
 }
 
-func initTopic(topic *Concern_Topic, adminCluster string) *Concern_Topic {
+func initTopic(topic *rkcypb.Concern_Topic, adminCluster string) *rkcypb.Concern_Topic {
 	if topic == nil {
-		topic = &Concern_Topic{}
+		topic = &rkcypb.Concern_Topic{}
 	}
 
 	if topic.Generation <= 0 {
@@ -356,13 +358,13 @@ func initTopic(topic *Concern_Topic, adminCluster string) *Concern_Topic {
 }
 
 func initTopics(
-	topics *Concern_Topics,
+	topics *rkcypb.Concern_Topics,
 	adminCluster string,
-	concernType Concern_Type,
-	storageTargets []*StorageTarget,
-) *Concern_Topics {
+	concernType rkcypb.Concern_Type,
+	storageTargets []*rkcypb.StorageTarget,
+) *rkcypb.Concern_Topics {
 	if topics == nil {
-		topics = &Concern_Topics{}
+		topics = &rkcypb.Concern_Topics{}
 	}
 
 	topics.Current = initTopic(topics.Current, adminCluster)
@@ -370,11 +372,11 @@ func initTopics(
 		topics.Future = initTopic(topics.Future, adminCluster)
 	}
 
-	if concernType == Concern_APECS {
+	if concernType == rkcypb.Concern_APECS {
 		topics.ConsumerPrograms = nil
 		switch topics.Name {
 		case "process":
-			prog := &Program{
+			prog := &rkcypb.Program{
 				Name:   "./@platform",
 				Args:   []string{"process", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
 				Abbrev: "p/@concern/@partition",
@@ -383,7 +385,7 @@ func initTopics(
 		case "storage":
 			for _, stgTgt := range storageTargets {
 				if stgTgt.IsPrimary {
-					prog := &Program{
+					prog := &rkcypb.Program{
 						Name: "./@platform",
 						Args: []string{"storage", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
 					}
@@ -394,7 +396,7 @@ func initTopics(
 		case "storage-scnd":
 			for _, stgTgt := range storageTargets {
 				if !stgTgt.IsPrimary {
-					prog := &Program{
+					prog := &rkcypb.Program{
 						Name: "./@platform",
 						Args: []string{"storage-scnd", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
 					}
@@ -408,7 +410,7 @@ func initTopics(
 	return topics
 }
 
-func newRtPlatformDef(platDef *PlatformDef, platformName string, environment string) (*rtPlatformDef, error) {
+func newRtPlatformDef(platDef *rkcypb.PlatformDef, platformName string, environment string) (*rtPlatformDef, error) {
 	if platDef.Name != platformName {
 		return nil, fmt.Errorf("Platform Name mismatch, '%s' != '%s'", platDef.Name, platformName)
 	}
@@ -419,8 +421,8 @@ func newRtPlatformDef(platDef *PlatformDef, platformName string, environment str
 	rtPlatDef := rtPlatformDef{
 		PlatformDef:    platDef,
 		Concerns:       make(map[string]*rtConcern),
-		Clusters:       make(map[string]*Cluster),
-		StorageTargets: make(map[string]*StorageTarget),
+		Clusters:       make(map[string]*rkcypb.Cluster),
+		StorageTargets: make(map[string]*rkcypb.StorageTarget),
 	}
 
 	platJson := protojson.Format(proto.Message(rtPlatDef.PlatformDef))
@@ -483,10 +485,10 @@ func newRtPlatformDef(platDef *PlatformDef, platformName string, environment str
 		return nil, fmt.Errorf("No primary storage target defined")
 	}
 
-	requiredTopics := map[Concern_Type][]string{
-		Concern_GENERAL: {"admin", "error"},
-		Concern_BATCH:   {"admin", "error"},
-		Concern_APECS:   {"admin", "process", "error", "complete", "storage", "storage-scnd"},
+	requiredTopics := map[rkcypb.Concern_Type][]string{
+		rkcypb.Concern_GENERAL: {"admin", "error"},
+		rkcypb.Concern_BATCH:   {"admin", "error"},
+		rkcypb.Concern_APECS:   {"admin", "process", "error", "complete", "storage", "storage-scnd"},
 	}
 
 	for idx, concern := range rtPlatDef.PlatformDef.Concerns {
@@ -504,12 +506,12 @@ func newRtPlatformDef(platDef *PlatformDef, platformName string, environment str
 		for _, req := range requiredTopics[concern.Type] {
 			if !contains(topicNames, req) {
 				// conern.Topics will get initialized with reasonable defaults during topic validation below
-				concern.Topics = append(concern.Topics, &Concern_Topics{Name: req})
+				concern.Topics = append(concern.Topics, &rkcypb.Concern_Topics{Name: req})
 			}
 		}
 
 		// ensure APECS concern only has required topics
-		if concern.Type == Concern_APECS {
+		if concern.Type == rkcypb.Concern_APECS {
 			// simple len check is adequate since we added all required above
 			if len(requiredTopics[concern.Type]) != len(concern.Topics) {
 				return nil, fmt.Errorf("ApecsConcern %d contains invalid command %+v required vs %+v total", idx, requiredTopics, concern.Topics)
@@ -544,7 +546,7 @@ var singlePartitionTopics = map[string]bool{
 	"complete": true,
 }
 
-func validateTopics(concern *Concern, topics *Concern_Topics, clusters map[string]*Cluster) error {
+func validateTopics(concern *rkcypb.Concern, topics *rkcypb.Concern_Topics, clusters map[string]*rkcypb.Cluster) error {
 	if topics.Name == "" {
 		return fmt.Errorf("Topics missing Name field: %s", topics.Name)
 	}
@@ -587,7 +589,7 @@ func validateTopics(concern *Concern, topics *Concern_Topics, clusters map[strin
 	return nil
 }
 
-func validateTopic(topic *Concern_Topic, clusters map[string]*Cluster) error {
+func validateTopic(topic *rkcypb.Concern_Topic, clusters map[string]*rkcypb.Cluster) error {
 	if topic.Generation == 0 {
 		return fmt.Errorf("Topic missing Generation field")
 	}
@@ -628,7 +630,7 @@ func (kplat *KafkaPlatform) cobraPlatReplace(cmd *cobra.Command, args []string) 
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
-	platDef := PlatformDef{}
+	platDef := rkcypb.PlatformDef{}
 	err = protojson.Unmarshal(conf, proto.Message(&platDef))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
@@ -697,7 +699,7 @@ func (kplat *KafkaPlatform) cobraPlatReplace(cmd *cobra.Command, args []string) 
 			Msg("Closed kafka producer")
 	}()
 
-	msg, err := newKafkaMessage(&platformTopic, 0, &platDef, Directive_PLATFORM, ExtractTraceParent(ctx))
+	msg, err := newKafkaMessage(&platformTopic, 0, &platDef, rkcypb.Directive_PLATFORM, ExtractTraceParent(ctx))
 	if err != nil {
 		span.SetStatus(otel_codes.Error, err.Error())
 		slog.Fatal().

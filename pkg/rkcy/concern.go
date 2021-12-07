@@ -18,12 +18,13 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 var gConcernHandlerRegistry = make(map[string]ConcernHandler)
 
 type StorageTargetInit struct {
-	*StorageTarget
+	*rkcypb.StorageTarget
 	Init StorageInit
 }
 
@@ -99,26 +100,26 @@ type ConcernHandler interface {
 	ConcernName() string
 	HandleLogicCommand(
 		ctx context.Context,
-		system System,
+		system rkcypb.System,
 		command string,
-		direction Direction,
+		direction rkcypb.Direction,
 		args *StepArgs,
 		instanceStore *InstanceStore,
 		confRdr *ConfigRdr,
-	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
+	) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step)
 	HandleCrudCommand(
 		ctx context.Context,
-		system System,
+		system rkcypb.System,
 		command string,
-		direction Direction,
+		direction rkcypb.Direction,
 		args *StepArgs,
 		storageType string,
 		wg *sync.WaitGroup,
-	) (*ApecsTxn_Step_Result, []*ApecsTxn_Step)
+	) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step)
 	DecodeInstance(ctx context.Context, buffer []byte) (*ResultProto, error)
-	DecodeArg(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
-	DecodeResult(ctx context.Context, system System, command string, buffer []byte) (*ResultProto, error)
-	DecodeRelatedRequest(ctx context.Context, relReq *RelatedRequest) (*ResultProto, error)
+	DecodeArg(ctx context.Context, system rkcypb.System, command string, buffer []byte) (*ResultProto, error)
+	DecodeResult(ctx context.Context, system rkcypb.System, command string, buffer []byte) (*ResultProto, error)
+	DecodeRelatedRequest(ctx context.Context, relReq *rkcypb.RelatedRequest) (*ResultProto, error)
 
 	SetLogicHandler(commands interface{}) error
 	SetCrudHandler(storageType string, commands interface{}) error
@@ -239,7 +240,7 @@ func (concernHandlers ConcernHandlers) decodeInstance64Json(ctx context.Context,
 func (concernHandlers ConcernHandlers) decodeArgPayload(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) (*ResultProto, ConcernHandler, error) {
@@ -254,7 +255,7 @@ func (concernHandlers ConcernHandlers) decodeArgPayload(
 func (concernHandlers ConcernHandlers) decodeArgPayload64(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer64 string,
 ) (*ResultProto, ConcernHandler, error) {
@@ -285,7 +286,7 @@ func (concernHandlers ConcernHandlers) resultProto2OrderedMap(
 
 		switch resProto.Type {
 		case "RelatedRequest":
-			relReqDec, err := cncHdlr.DecodeRelatedRequest(ctx, resProto.Instance.(*RelatedRequest))
+			relReqDec, err := cncHdlr.DecodeRelatedRequest(ctx, resProto.Instance.(*rkcypb.RelatedRequest))
 			if err != nil {
 				return nil, err
 			}
@@ -295,7 +296,7 @@ func (concernHandlers ConcernHandlers) resultProto2OrderedMap(
 			}
 			instOmap.SetAfter("payloadDec", relReqDecOmap, "payload")
 		case "RelatedResponse":
-			relRsp := resProto.Instance.(*RelatedResponse)
+			relRsp := resProto.Instance.(*rkcypb.RelatedResponse)
 			relRspInst, err := concernHandlers.decodeInstance(ctx, relRsp.Concern, relRsp.Payload)
 			if err != nil {
 				return nil, err
@@ -342,7 +343,7 @@ func (concernHandlers ConcernHandlers) resultProto2Json(ctx context.Context, cnc
 func (concernHandlers ConcernHandlers) decodeArgPayloadJson(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
@@ -356,7 +357,7 @@ func (concernHandlers ConcernHandlers) decodeArgPayloadJson(
 func (concernHandlers ConcernHandlers) decodeArgPayload64Json(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer64 string,
 ) ([]byte, error) {
@@ -370,7 +371,7 @@ func (concernHandlers ConcernHandlers) decodeArgPayload64Json(
 func (concernHandlers ConcernHandlers) decodeResultPayload(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) (*ResultProto, ConcernHandler, error) {
@@ -385,7 +386,7 @@ func (concernHandlers ConcernHandlers) decodeResultPayload(
 func (concernHandlers ConcernHandlers) decodeResultPayload64(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer64 string,
 ) (*ResultProto, ConcernHandler, error) {
@@ -399,7 +400,7 @@ func (concernHandlers ConcernHandlers) decodeResultPayload64(
 func (concernHandlers ConcernHandlers) decodeResultPayloadJson(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) ([]byte, error) {
@@ -413,7 +414,7 @@ func (concernHandlers ConcernHandlers) decodeResultPayloadJson(
 func (concernHandlers ConcernHandlers) decodeResultPayload64Json(
 	ctx context.Context,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
 	buffer64 string,
 ) ([]byte, error) {
@@ -428,13 +429,13 @@ func handleCommand(
 	ctx context.Context,
 	plat Platform,
 	concern string,
-	system System,
+	system rkcypb.System,
 	command string,
-	direction Direction,
+	direction rkcypb.Direction,
 	args *StepArgs,
 	confRdr *ConfigRdr,
 	wg *sync.WaitGroup,
-) (*ApecsTxn_Step_Result, []*ApecsTxn_Step) {
+) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -450,13 +451,13 @@ func handleCommand(
 
 	cncHdlr, ok := plat.ConcernHandlers()[concern]
 	if !ok {
-		rslt := &ApecsTxn_Step_Result{}
-		rslt.SetResult(fmt.Errorf("No handler for concern: '%s'", concern))
+		rslt := &rkcypb.ApecsTxn_Step_Result{}
+		SetStepResult(rslt, fmt.Errorf("No handler for concern: '%s'", concern))
 		return rslt, nil
 	}
 
 	switch system {
-	case System_PROCESS:
+	case rkcypb.System_PROCESS:
 		return cncHdlr.HandleLogicCommand(
 			ctx,
 			system,
@@ -466,9 +467,9 @@ func handleCommand(
 			plat.InstanceStore(),
 			confRdr,
 		)
-	case System_STORAGE:
+	case rkcypb.System_STORAGE:
 		fallthrough
-	case System_STORAGE_SCND:
+	case rkcypb.System_STORAGE_SCND:
 		return cncHdlr.HandleCrudCommand(
 			ctx,
 			system,
@@ -479,8 +480,8 @@ func handleCommand(
 			wg,
 		)
 	default:
-		rslt := &ApecsTxn_Step_Result{}
-		rslt.SetResult(fmt.Errorf("Invalid system: %s", system.String()))
+		rslt := &rkcypb.ApecsTxn_Step_Result{}
+		SetStepResult(rslt, fmt.Errorf("Invalid system: %s", system.String()))
 		return rslt, nil
 	}
 }
@@ -492,39 +493,39 @@ type StepArgs struct {
 	Payload       []byte
 	EffectiveTime time.Time
 
-	CmpdOffset    *CompoundOffset
-	ForwardResult *ApecsTxn_Step_Result
+	CmpdOffset    *rkcypb.CompoundOffset
+	ForwardResult *rkcypb.ApecsTxn_Step_Result
 }
 
 type Error struct {
-	Code Code
+	Code rkcypb.Code
 	Msg  string
 }
 
-func (rslt *ApecsTxn_Step_Result) SetResult(err error) {
+func SetStepResult(rslt *rkcypb.ApecsTxn_Step_Result, err error) {
 	if err == nil {
-		rslt.Code = Code_OK
+		rslt.Code = rkcypb.Code_OK
 	} else {
 		rkcyErr, ok := err.(*Error)
 		if ok {
 			rslt.Code = rkcyErr.Code
-			rslt.LogEvents = append(rslt.LogEvents, &LogEvent{Sev: Severity_ERR, Msg: rkcyErr.Msg})
+			rslt.LogEvents = append(rslt.LogEvents, &rkcypb.LogEvent{Sev: rkcypb.Severity_ERR, Msg: rkcyErr.Msg})
 		} else {
-			rslt.Code = Code_INTERNAL
-			rslt.LogEvents = append(rslt.LogEvents, &LogEvent{Sev: Severity_ERR, Msg: err.Error()})
+			rslt.Code = rkcypb.Code_INTERNAL
+			rslt.LogEvents = append(rslt.LogEvents, &rkcypb.LogEvent{Sev: rkcypb.Severity_ERR, Msg: err.Error()})
 		}
 	}
 }
 
-func IsStorageSystem(system System) bool {
-	return system == System_STORAGE || system == System_STORAGE_SCND
+func IsStorageSystem(system rkcypb.System) bool {
+	return system == rkcypb.System_STORAGE || system == rkcypb.System_STORAGE_SCND
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("%s: %s", Code_name[int32(e.Code)], e.Msg)
+	return fmt.Sprintf("%s: %s", rkcypb.Code_name[int32(e.Code)], e.Msg)
 }
 
-func NewError(code Code, msg string) *Error {
+func NewError(code rkcypb.Code, msg string) *Error {
 	return &Error{Code: code, Msg: msg}
 }
 

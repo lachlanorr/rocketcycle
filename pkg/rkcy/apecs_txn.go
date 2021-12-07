@@ -10,55 +10,57 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type rtApecsTxn struct {
-	txn         *ApecsTxn
+	txn         *rkcypb.ApecsTxn
 	traceParent string
 }
 
 func newApecsTxn(
 	txnId string,
-	assocTxn *AssocTxn,
-	respTarget *TopicTarget,
-	uponError UponError,
-	steps []*ApecsTxn_Step,
-) (*ApecsTxn, error) {
+	assocTxn *rkcypb.AssocTxn,
+	respTarget *rkcypb.TopicTarget,
+	uponError rkcypb.UponError,
+	steps []*rkcypb.ApecsTxn_Step,
+) (*rkcypb.ApecsTxn, error) {
 	if respTarget != nil && (respTarget.Topic == "" || respTarget.Partition < 0) {
 		return nil, fmt.Errorf("NewApecsTxn TxnId=%s TopicTarget=%+v: Invalid TopicTarget", txnId, respTarget)
 	}
 
-	var assocTxns []*AssocTxn
+	var assocTxns []*rkcypb.AssocTxn
 	if assocTxn != nil {
 		assocTxns = append(assocTxns, assocTxn)
 	}
 
-	txn := ApecsTxn{
+	txn := rkcypb.ApecsTxn{
 		Id:             txnId,
 		AssocTxns:      assocTxns,
 		ResponseTarget: respTarget,
 		CurrentStepIdx: 0,
-		Direction:      Direction_FORWARD,
+		Direction:      rkcypb.Direction_FORWARD,
 		UponError:      uponError,
-		ForwardSteps:   make([]*ApecsTxn_Step, 0, len(steps)),
+		ForwardSteps:   make([]*rkcypb.ApecsTxn_Step, 0, len(steps)),
 	}
 
 	for _, step := range steps {
-		if step.System == System_PROCESS && step.Command == CREATE {
+		if step.System == rkcypb.System_PROCESS && step.Command == CREATE {
 			// Inject a refresh step so the cache gets updated if storage Create succeeds
-			validateStep := &ApecsTxn_Step{
-				System:        System_PROCESS,
+			validateStep := &rkcypb.ApecsTxn_Step{
+				System:        rkcypb.System_PROCESS,
 				Concern:       step.Concern,
 				Command:       VALIDATE_CREATE,
 				Payload:       step.Payload,
 				EffectiveTime: step.EffectiveTime,
 			}
-			step.System = System_STORAGE // switch to storage CREATE
+			step.System = rkcypb.System_STORAGE // switch to storage CREATE
 			txn.ForwardSteps = append(txn.ForwardSteps, validateStep)
 			txn.ForwardSteps = append(txn.ForwardSteps, step)
-		} else if step.System == System_PROCESS && step.Command == UPDATE {
-			validateStep := &ApecsTxn_Step{
-				System:        System_PROCESS,
+		} else if step.System == rkcypb.System_PROCESS && step.Command == UPDATE {
+			validateStep := &rkcypb.ApecsTxn_Step{
+				System:        rkcypb.System_PROCESS,
 				Concern:       step.Concern,
 				Command:       VALIDATE_UPDATE,
 				Payload:       step.Payload,
@@ -74,7 +76,7 @@ func newApecsTxn(
 	return &txn, nil
 }
 
-func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
+func newRtApecsTxn(txn *rkcypb.ApecsTxn, traceParent string) (*rtApecsTxn, error) {
 	if !TraceParentIsValid(traceParent) {
 		panic("newRtApecsTxn invalid traceParent: " + traceParent)
 	}
@@ -91,12 +93,12 @@ func newRtApecsTxn(txn *ApecsTxn, traceParent string) (*rtApecsTxn, error) {
 	return &rtxn, nil
 }
 
-func ApecsTxnResult(ctx context.Context, plat Platform, txn *ApecsTxn) (bool, *ResultProto, *ApecsTxn_Step_Result) {
+func ApecsTxnResult(ctx context.Context, plat Platform, txn *rkcypb.ApecsTxn) (bool, *ResultProto, *rkcypb.ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
-	success := txn.Direction == Direction_FORWARD &&
+	success := txn.Direction == rkcypb.Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
 		step.Result != nil &&
-		step.Result.Code == Code_OK
+		step.Result.Code == rkcypb.Code_OK
 	var resProto *ResultProto
 	if step.Result != nil && step.Result.Payload != nil {
 		var err error
@@ -110,11 +112,11 @@ func ApecsTxnResult(ctx context.Context, plat Platform, txn *ApecsTxn) (bool, *R
 	return success, resProto, step.Result
 }
 
-func (rtxn *rtApecsTxn) firstForwardStep() *ApecsTxn_Step {
+func (rtxn *rtApecsTxn) firstForwardStep() *rkcypb.ApecsTxn_Step {
 	return rtxn.txn.ForwardSteps[0]
 }
 
-func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
+func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*rkcypb.ApecsTxn_Step) error {
 	currSteps := rtxn.getSteps()
 
 	if idx == int32(len(currSteps)) {
@@ -129,7 +131,7 @@ func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 	}
 
 	// put in the middle, so make a new slice
-	newSteps := make([]*ApecsTxn_Step, len(currSteps)+len(steps))
+	newSteps := make([]*rkcypb.ApecsTxn_Step, len(currSteps)+len(steps))
 
 	newIdx := int32(0)
 	for currIdx, _ := range currSteps {
@@ -146,7 +148,7 @@ func (rtxn *rtApecsTxn) insertSteps(idx int32, steps ...*ApecsTxn_Step) error {
 	return nil
 }
 
-func (rtxn *rtApecsTxn) replaceStep(idx int32, step *ApecsTxn_Step) error {
+func (rtxn *rtApecsTxn) replaceStep(idx int32, step *rkcypb.ApecsTxn_Step) error {
 	currSteps := rtxn.getSteps()
 
 	if idx < 0 || idx >= int32(len(currSteps)) {
@@ -157,20 +159,20 @@ func (rtxn *rtApecsTxn) replaceStep(idx int32, step *ApecsTxn_Step) error {
 	return nil
 }
 
-func getSteps(txn *ApecsTxn) []*ApecsTxn_Step {
-	if txn.Direction == Direction_FORWARD {
+func getSteps(txn *rkcypb.ApecsTxn) []*rkcypb.ApecsTxn_Step {
+	if txn.Direction == rkcypb.Direction_FORWARD {
 		return txn.ForwardSteps
 	} else { // txn.Direction == Reverse
 		return txn.ReverseSteps
 	}
 }
 
-func (rtxn *rtApecsTxn) getSteps() []*ApecsTxn_Step {
+func (rtxn *rtApecsTxn) getSteps() []*rkcypb.ApecsTxn_Step {
 	return getSteps(rtxn.txn)
 }
 
-func (rtxn *rtApecsTxn) setSteps(steps []*ApecsTxn_Step) {
-	if rtxn.txn.Direction == Direction_FORWARD {
+func (rtxn *rtApecsTxn) setSteps(steps []*rkcypb.ApecsTxn_Step) {
+	if rtxn.txn.Direction == rkcypb.Direction_FORWARD {
 		rtxn.txn.ForwardSteps = steps
 	} else { // txn.Direction == Reverse
 		rtxn.txn.ReverseSteps = steps
@@ -190,7 +192,7 @@ func (rtxn *rtApecsTxn) advanceStepIdx() bool {
 	return false
 }
 
-func (rtxn *rtApecsTxn) previousStep() *ApecsTxn_Step {
+func (rtxn *rtApecsTxn) previousStep() *rkcypb.ApecsTxn_Step {
 	if rtxn.txn.CurrentStepIdx == 0 {
 		return nil
 	}
@@ -198,16 +200,16 @@ func (rtxn *rtApecsTxn) previousStep() *ApecsTxn_Step {
 	return steps[rtxn.txn.CurrentStepIdx-1]
 }
 
-func (rtxn *rtApecsTxn) currentStep() *ApecsTxn_Step {
+func (rtxn *rtApecsTxn) currentStep() *rkcypb.ApecsTxn_Step {
 	return ApecsTxnCurrentStep(rtxn.txn)
 }
 
-func ApecsTxnCurrentStep(txn *ApecsTxn) *ApecsTxn_Step {
+func ApecsTxnCurrentStep(txn *rkcypb.ApecsTxn) *rkcypb.ApecsTxn_Step {
 	steps := getSteps(txn)
 	return steps[txn.CurrentStepIdx]
 }
 
-func validateSteps(txnId string, currentStepIdx int32, steps []*ApecsTxn_Step, name string) error {
+func validateSteps(txnId string, currentStepIdx int32, steps []*rkcypb.ApecsTxn_Step, name string) error {
 	if currentStepIdx >= int32(len(steps)) {
 		return fmt.Errorf(
 			"rtApecsTxn.validateSteps TxnId=%s CurrentStepIdx=%d len(%sSteps)=%d: CurrentStepIdx out of bounds",
@@ -226,7 +228,7 @@ func validateSteps(txnId string, currentStepIdx int32, steps []*ApecsTxn_Step, n
 	}
 
 	for _, step := range steps {
-		if step.System != System_PROCESS && !IsStorageSystem(step.System) {
+		if step.System != rkcypb.System_PROCESS && !IsStorageSystem(step.System) {
 			return fmt.Errorf(
 				"rtApecsTxn.validateSteps TxnId=%s System=%s: Invalid System",
 				txnId,
@@ -252,11 +254,11 @@ func (rtxn *rtApecsTxn) validate() error {
 			rtxn.txn.CurrentStepIdx,
 		)
 	}
-	if rtxn.txn.Direction == Direction_FORWARD {
+	if rtxn.txn.Direction == rkcypb.Direction_FORWARD {
 		if err := validateSteps(rtxn.txn.Id, rtxn.txn.CurrentStepIdx, rtxn.txn.ForwardSteps, "Forward"); err != nil {
 			return err
 		}
-	} else if rtxn.txn.Direction == Direction_REVERSE {
+	} else if rtxn.txn.Direction == rkcypb.Direction_REVERSE {
 		if err := validateSteps(rtxn.txn.Id, rtxn.txn.CurrentStepIdx, rtxn.txn.ReverseSteps, "Reverse"); err != nil {
 			return err
 		}
@@ -271,10 +273,10 @@ func (rtxn *rtApecsTxn) validate() error {
 	return nil // all looks good
 }
 
-func (txn *ApecsTxn) DirectionName() string {
-	return strings.Title(strings.ToLower(Direction_name[int32(txn.Direction)]))
+func TxnDirectionName(txn *rkcypb.ApecsTxn) string {
+	return strings.Title(strings.ToLower(rkcypb.Direction_name[int32(txn.Direction)]))
 }
 
-func (step *ApecsTxn_Step) SystemName() string {
-	return strings.Title(strings.ToLower(System_name[int32(step.System)]))
+func StepSystemName(step *rkcypb.ApecsTxn_Step) string {
+	return strings.Title(strings.ToLower(rkcypb.System_name[int32(step.System)]))
 }

@@ -10,11 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type Producer interface {
 	Produce(
-		directive Directive,
+		directive rkcypb.Directive,
 		traceParent string,
 		key []byte,
 		value []byte,
@@ -25,7 +27,7 @@ type Producer interface {
 
 type ApecsProducer interface {
 	Platform() Platform
-	ResponseTarget() *TopicTarget
+	ResponseTarget() *rkcypb.TopicTarget
 	RegisterResponseChannel(respCh *RespChan)
 
 	GetProducer(
@@ -41,8 +43,8 @@ type Platform interface {
 
 	Telem() *Telemetry
 
-	System() System
-	SetSystem(system System)
+	System() rkcypb.System
+	SetSystem(system rkcypb.System)
 
 	AdminBrokers() string
 	UpdateStorageTargets(platMsg *PlatformMessage)
@@ -52,7 +54,7 @@ type Platform interface {
 
 	NewApecsProducer(
 		ctx context.Context,
-		respTarget *TopicTarget,
+		respTarget *rkcypb.TopicTarget,
 		wg *sync.WaitGroup,
 	) ApecsProducer
 

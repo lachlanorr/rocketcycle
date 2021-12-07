@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -42,7 +43,7 @@ func NewProducerTracker(platformName string, environment string) *ProducerTracke
 	return pt
 }
 
-func (pt *ProducerTracker) update(pd *ProducerDirective, timestamp time.Time, pingInterval time.Duration) {
+func (pt *ProducerTracker) update(pd *rkcypb.ProducerDirective, timestamp time.Time, pingInterval time.Duration) {
 	pt.topicProdsMtx.Lock()
 	defer pt.topicProdsMtx.Unlock()
 
@@ -89,17 +90,17 @@ func (pt *ProducerTracker) cull(ageLimit time.Duration) {
 	}
 }
 
-func (pt *ProducerTracker) toTrackedProducers() *TrackedProducers {
+func (pt *ProducerTracker) toTrackedProducers() *rkcypb.TrackedProducers {
 	pt.topicProdsMtx.Lock()
 	defer pt.topicProdsMtx.Unlock()
 
-	tp := &TrackedProducers{}
+	tp := &rkcypb.TrackedProducers{}
 	now := time.Now()
 
 	for topic, prodMap := range pt.topicProds {
 		for id, timestamp := range prodMap {
 			age := now.Sub(timestamp)
-			tp.TopicProducers = append(tp.TopicProducers, &TrackedProducers_ProducerInfo{
+			tp.TopicProducers = append(tp.TopicProducers, &rkcypb.TrackedProducers_ProducerInfo{
 				Topic:           topic,
 				Id:              id,
 				TimeSinceUpdate: age.String(),
@@ -140,7 +141,7 @@ func (kplat *KafkaPlatform) cobraAdminServe(cmd *cobra.Command, args []string) {
 }
 
 type clusterInfo struct {
-	cluster        *Cluster
+	cluster        *rkcypb.Cluster
 	admin          *kafka.AdminClient
 	existingTopics map[string]struct{}
 	brokerCount    int
@@ -189,7 +190,7 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func newClusterInfo(cluster *Cluster) (*clusterInfo, error) {
+func newClusterInfo(cluster *rkcypb.Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
 	config := make(kafka.ConfigMap)
@@ -229,7 +230,7 @@ func newClusterInfo(cluster *Cluster) (*clusterInfo, error) {
 	return &ci, nil
 }
 
-func createMissingTopic(topicName string, topic *Concern_Topic, clusterInfos map[string]*clusterInfo) {
+func createMissingTopic(topicName string, topic *rkcypb.Concern_Topic, clusterInfos map[string]*clusterInfo) {
 	ci, ok := clusterInfos[topic.Cluster]
 	if !ok {
 		log.Error().
@@ -253,7 +254,7 @@ func createMissingTopic(topicName string, topic *Concern_Topic, clusterInfos map
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *Concern_Topics, clusterInfos map[string]*clusterInfo) {
+func createMissingTopics(topicNamePrefix string, topics *rkcypb.Concern_Topics, clusterInfos map[string]*clusterInfo) {
 	if topics != nil {
 		if topics.Current != nil {
 			createMissingTopic(
@@ -292,7 +293,7 @@ func updateTopics(rtPlatDef *rtPlatformDef) {
 	var concernTypesAutoCreate = []string{"GENERAL", "APECS"}
 
 	for _, concern := range rtPlatDef.PlatformDef.Concerns {
-		if contains(concernTypesAutoCreate, Concern_Type_name[int32(concern.Type)]) {
+		if contains(concernTypesAutoCreate, rkcypb.Concern_Type_name[int32(concern.Type)]) {
 			for _, topics := range concern.Topics {
 				createMissingTopics(
 					BuildTopicNamePrefix(rtPlatDef.PlatformDef.Name, rtPlatDef.PlatformDef.Environment, concern.Name, concern.Type),
@@ -343,7 +344,7 @@ func (kplat *KafkaPlatform) managePlatform(
 			// cull stale producers
 			kplat.producerTracker.cull(cullInterval)
 		case platMsg := <-platCh:
-			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}
@@ -359,7 +360,7 @@ func (kplat *KafkaPlatform) managePlatform(
 			updateTopics(kplat.currentRtPlatDef)
 			kplat.updateRunner(ctx, adminProdCh, consumersTopic, platDiff)
 		case prodMsg := <-prodCh:
-			if (prodMsg.Directive & Directive_PRODUCER_STATUS) != Directive_PRODUCER_STATUS {
+			if (prodMsg.Directive & rkcypb.Directive_PRODUCER_STATUS) != rkcypb.Directive_PRODUCER_STATUS {
 				log.Error().Msgf("Invalid directive for ProducerTopic: %s", prodMsg.Directive.String())
 				continue
 			}
@@ -378,8 +379,8 @@ func (kplat *KafkaPlatform) updateRunner(ctx context.Context, adminProdCh Produc
 		msg, err := newKafkaMessage(
 			&consumersTopic,
 			0,
-			&ConsumerDirective{Program: p},
-			Directive_CONSUMER_STOP,
+			&rkcypb.ConsumerDirective{Program: p},
+			rkcypb.Directive_CONSUMER_STOP,
 			traceParent,
 		)
 		if err != nil {
@@ -394,8 +395,8 @@ func (kplat *KafkaPlatform) updateRunner(ctx context.Context, adminProdCh Produc
 		msg, err := newKafkaMessage(
 			&consumersTopic,
 			0,
-			&ConsumerDirective{Program: p},
-			Directive_CONSUMER_START,
+			&rkcypb.ConsumerDirective{Program: p},
+			rkcypb.Directive_CONSUMER_START,
 			traceParent,
 		)
 		if err != nil {
@@ -430,10 +431,10 @@ func expandProgs(
 	environment string,
 	adminBrokers string,
 	otelcolEndpoint string,
-	concern *Concern,
-	topics *Concern_Topics,
-	clusters map[string]*Cluster,
-) []*Program {
+	concern *rkcypb.Concern,
+	topics *rkcypb.Concern_Topics,
+	clusters map[string]*rkcypb.Cluster,
+) []*rkcypb.Program {
 
 	substMap := map[string]string{
 		"@platform":         platformName,
@@ -443,7 +444,7 @@ func expandProgs(
 		"@concern":          concern.Name,
 	}
 
-	progs := make([]*Program, 0, topics.Current.PartitionCount)
+	progs := make([]*rkcypb.Program, 0, topics.Current.PartitionCount)
 	for _, consProg := range topics.ConsumerPrograms {
 		for i := int32(0); i < topics.Current.PartitionCount; i++ {
 			substMap["@consumer_brokers"] = clusters[topics.Current.Cluster].Brokers
@@ -451,7 +452,7 @@ func expandProgs(
 			substMap["@topic"] = BuildFullTopicName(platformName, environment, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 			substMap["@partition"] = strconv.Itoa(int(i))
 
-			prog := &Program{
+			prog := &rkcypb.Program{
 				Name:   substStr(consProg.Name, substMap),
 				Args:   make([]string, len(consProg.Args)),
 				Abbrev: substStr(consProg.Abbrev, substMap),

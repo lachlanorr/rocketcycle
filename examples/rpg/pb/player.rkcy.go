@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 // -----------------------------------------------------------------------------
@@ -78,14 +79,14 @@ func MarshalPlayerOrPanic(inst *Player) []byte {
 
 func (inst *Player) PreValidateCreate(ctx context.Context) error {
 	if inst.Key() != "" {
-		return rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Empty Key during PreValidateCreate for Player")
+		return rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Empty Key during PreValidateCreate for Player")
 	}
 	return nil
 }
 
 func (inst *Player) PreValidateUpdate(ctx context.Context, updated *Player) error {
 	if updated.Key() == "" || inst.Key() != updated.Key() {
-		return rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Mismatched Keys during PreValidateUpdate for Player")
+		return rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Mismatched Keys during PreValidateUpdate for Player")
 	}
 	return nil
 }
@@ -98,10 +99,10 @@ type PlayerLogicHandler interface {
 
 // CrudHandler Interface
 type PlayerCrudHandler interface {
-	Read(ctx context.Context, key string) (*Player, *PlayerRelated, *rkcy.CompoundOffset, error)
-	Create(ctx context.Context, inst *Player, cmpdOffset *rkcy.CompoundOffset) (*Player, error)
-	Update(ctx context.Context, inst *Player, rel *PlayerRelated, cmpdOffset *rkcy.CompoundOffset) error
-	Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error
+	Read(ctx context.Context, key string) (*Player, *PlayerRelated, *rkcypb.CompoundOffset, error)
+	Create(ctx context.Context, inst *Player, cmpdOffset *rkcypb.CompoundOffset) (*Player, error)
+	Update(ctx context.Context, inst *Player, rel *PlayerRelated, cmpdOffset *rkcypb.CompoundOffset) error
+	Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error
 }
 
 // Concern Handler
@@ -178,19 +179,19 @@ func PlayerGetRelated(instKey string, instanceStore *rkcy.InstanceStore) (*Playe
 	return rel, relBytes, nil
 }
 
-func (inst *Player) RequestRelatedSteps(instBytes []byte, relBytes []byte) ([]*rkcy.ApecsTxn_Step, error) {
+func (inst *Player) RequestRelatedSteps(instBytes []byte, relBytes []byte) ([]*rkcypb.ApecsTxn_Step, error) {
 	// No forward related Concerns
 	return nil, nil
 }
 
-func (rel *PlayerRelated) RefreshRelatedSteps(instKey string, instBytes []byte, relBytes []byte) ([]*rkcy.ApecsTxn_Step, error) {
-	var steps []*rkcy.ApecsTxn_Step
+func (rel *PlayerRelated) RefreshRelatedSteps(instKey string, instBytes []byte, relBytes []byte) ([]*rkcypb.ApecsTxn_Step, error) {
+	var steps []*rkcypb.ApecsTxn_Step
 
 	payload := rkcy.PackPayloads(instBytes, relBytes)
 
 	// Field: Characters
 	for _, itm := range rel.Characters {
-		relRsp := &rkcy.RelatedResponse{
+		relRsp := &rkcypb.RelatedResponse{
 			Concern: "Player",
 			Field:   "Player",
 			Payload: payload,
@@ -199,8 +200,8 @@ func (rel *PlayerRelated) RefreshRelatedSteps(instKey string, instBytes []byte, 
 		if err != nil {
 			return nil, err
 		}
-		steps = append(steps, &rkcy.ApecsTxn_Step{
-			System:  rkcy.System_PROCESS,
+		steps = append(steps, &rkcypb.ApecsTxn_Step{
+			System:  rkcypb.System_PROCESS,
 			Concern: "Character",
 			Command: rkcy.REFRESH_RELATED,
 			Key:     itm.Key(),
@@ -211,8 +212,8 @@ func (rel *PlayerRelated) RefreshRelatedSteps(instKey string, instBytes []byte, 
 	// Inject a read step to ensure we keep a consistent
 	// result payload type with this concern
 	if len(steps) > 0 {
-		steps = append(steps, &rkcy.ApecsTxn_Step{
-			System:  rkcy.System_PROCESS,
+		steps = append(steps, &rkcypb.ApecsTxn_Step{
+			System:  rkcypb.System_PROCESS,
 			Concern: "Player",
 			Command: rkcy.READ,
 			Key:     instKey,
@@ -238,7 +239,7 @@ func (rel *PlayerRelated) UpsertRelatedCharacters(msg *Character) {
 	}
 }
 
-func (rel *PlayerRelated) HandleRequestRelated(relReq *rkcy.RelatedRequest) (bool, error) {
+func (rel *PlayerRelated) HandleRequestRelated(relReq *rkcypb.RelatedRequest) (bool, error) {
 	switch relReq.Field {
 	case "Player":
 		if relReq.Concern == "Character" {
@@ -263,7 +264,7 @@ func (rel *PlayerRelated) HandleRequestRelated(relReq *rkcy.RelatedRequest) (boo
 	return false, nil
 }
 
-func (rel *PlayerRelated) HandleRefreshRelated(relRsp *rkcy.RelatedResponse) (bool, error) {
+func (rel *PlayerRelated) HandleRefreshRelated(relRsp *rkcypb.RelatedResponse) (bool, error) {
 	switch relRsp.Field {
 	case "Characters":
 		if relRsp.Concern == "Character" {
@@ -293,34 +294,34 @@ func (rel *PlayerRelated) HandleRefreshRelated(relRsp *rkcy.RelatedResponse) (bo
 
 func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 	ctx context.Context,
-	system rkcy.System,
+	system rkcypb.System,
 	command string,
-	direction rkcy.Direction,
+	direction rkcypb.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
 	confRdr *rkcy.ConfigRdr,
-) (*rkcy.ApecsTxn_Step_Result, []*rkcy.ApecsTxn_Step) {
+) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	var err error
-	rslt := &rkcy.ApecsTxn_Step_Result{}
-	var addSteps []*rkcy.ApecsTxn_Step // additional steps we want to be run after us
+	rslt := &rkcypb.ApecsTxn_Step_Result{}
+	var addSteps []*rkcypb.ApecsTxn_Step // additional steps we want to be run after us
 
-	if direction == rkcy.Direction_REVERSE && args.ForwardResult == nil {
-		rslt.SetResult(fmt.Errorf("Unable to reverse step with nil ForwardResult"))
+	if direction == rkcypb.Direction_REVERSE && args.ForwardResult == nil {
+		rkcy.SetStepResult(rslt, fmt.Errorf("Unable to reverse step with nil ForwardResult"))
 		return rslt, nil
 	}
 
-	if system != rkcy.System_PROCESS {
-		rslt.SetResult(fmt.Errorf("Invalid system: %s", system.String()))
+	if system != rkcypb.System_PROCESS {
+		rkcy.SetStepResult(rslt, fmt.Errorf("Invalid system: %s", system.String()))
 		return rslt, nil
 	}
 
 	switch command {
 	// process handlers
 	case rkcy.CREATE:
-		rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
+		rkcy.SetStepResult(rslt, fmt.Errorf("Invalid process command: %s", command))
 		return rslt, nil
 	case rkcy.READ:
-		if direction == rkcy.Direction_FORWARD {
+		if direction == rkcypb.Direction_FORWARD {
 			related := instanceStore.GetRelated(args.Key)
 			rslt.Payload = rkcy.PackPayloads(args.Instance, related)
 		} else {
@@ -334,8 +335,8 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 		payload = rkcy.PackPayloads(args.Payload, related)
 		addSteps = append(
 			addSteps,
-			&rkcy.ApecsTxn_Step{
-				System:  rkcy.System_STORAGE,
+			&rkcypb.ApecsTxn_Step{
+				System:  rkcypb.System_STORAGE,
 				Concern: "Player",
 				Command: command,
 				Key:     args.Key,
@@ -345,8 +346,8 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 	case rkcy.DELETE:
 		addSteps = append(
 			addSteps,
-			&rkcy.ApecsTxn_Step{
-				System:  rkcy.System_STORAGE,
+			&rkcypb.ApecsTxn_Step{
+				System:  rkcypb.System_STORAGE,
 				Concern: "Player",
 				Command: command,
 				Key:     args.Key,
@@ -357,14 +358,14 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 		// Same operation for both directions
 		instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 		if err != nil {
-			rslt.SetResult(err)
+			rkcy.SetStepResult(rslt, err)
 			return rslt, nil
 		}
 		rel := &PlayerRelated{}
 		if relBytes != nil && len(relBytes) > 0 {
 			err := proto.Unmarshal(relBytes, rel)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 		} else {
@@ -374,7 +375,7 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 			// refresh related
 			relSteps, err := rel.RefreshRelatedSteps(args.Key, instBytes, relBytes)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			if relSteps != nil {
@@ -392,26 +393,26 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 		}
 		rslt.Payload = packed
 	case rkcy.VALIDATE_CREATE:
-		if direction == rkcy.Direction_FORWARD {
+		if direction == rkcypb.Direction_FORWARD {
 			payloadIn := &Player{}
 			err = proto.Unmarshal(args.Payload, payloadIn)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			err = payloadIn.PreValidateCreate(ctx)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			payloadOut, err := cncHdlr.logicHandler.ValidateCreate(ctx, payloadIn)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			rslt.Payload, err = proto.Marshal(payloadOut)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 		} else {
@@ -420,37 +421,37 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 				Msg("Invalid command to reverse, no-op")
 		}
 	case rkcy.VALIDATE_UPDATE:
-		if direction == rkcy.Direction_FORWARD {
+		if direction == rkcypb.Direction_FORWARD {
 			if args.Instance == nil {
-				rslt.SetResult(fmt.Errorf("No instance exists during VALIDATE_UPDATE"))
+				rkcy.SetStepResult(rslt, fmt.Errorf("No instance exists during VALIDATE_UPDATE"))
 				return rslt, nil
 			}
 			inst := &Player{}
 			err = proto.Unmarshal(args.Instance, inst)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 
 			payloadIn := &Player{}
 			err = proto.Unmarshal(args.Payload, payloadIn)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			err = inst.PreValidateUpdate(ctx, payloadIn)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			payloadOut, err := cncHdlr.logicHandler.ValidateUpdate(ctx, inst, payloadIn)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			rslt.Payload, err = proto.Marshal(payloadOut)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 		} else {
@@ -459,54 +460,54 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 				Msg("Invalid command to reverse, no-op")
 		}
 	case rkcy.REQUEST_RELATED:
-		if direction == rkcy.Direction_FORWARD {
-			relReq := &rkcy.RelatedRequest{}
+		if direction == rkcypb.Direction_FORWARD {
+			relReq := &rkcypb.RelatedRequest{}
 			err := proto.Unmarshal(args.Payload, relReq)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			// Get our related concerns from instanceStore
 			rel, _, err := PlayerGetRelated(args.Key, instanceStore)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			// Handle refresh related request to see if it fulfills any of our related items
 			changed, err := rel.HandleRequestRelated(relReq)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			relBytes, err := proto.Marshal(rel)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			relPayload := rkcy.PackPayloads(args.Instance, relBytes)
 			if changed {
 				err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 			}
 			// Send response containing our instance
-			relRsp := &rkcy.RelatedResponse{
+			relRsp := &rkcypb.RelatedResponse{
 				Concern: "Player",
 				Field:   relReq.Field,
 				Payload: relPayload,
 			}
 			relRspBytes, err := proto.Marshal(relRsp)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			rslt.Payload = relRspBytes
 			addSteps = append(
 				addSteps,
-				&rkcy.ApecsTxn_Step{
-					System:        rkcy.System_PROCESS,
+				&rkcypb.ApecsTxn_Step{
+					System:        rkcypb.System_PROCESS,
 					Concern:       relReq.Concern,
 					Command:       rkcy.REFRESH_RELATED,
 					Key:           relReq.Key,
@@ -520,34 +521,34 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 				Msg("Invalid command to reverse, no-op")
 		}
 	case rkcy.REFRESH_RELATED:
-		if direction == rkcy.Direction_FORWARD {
-			relRsp := &rkcy.RelatedResponse{}
+		if direction == rkcypb.Direction_FORWARD {
+			relRsp := &rkcypb.RelatedResponse{}
 			err := proto.Unmarshal(args.Payload, relRsp)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			// Get our related concerns from instanceStore
 			rel, _, err := PlayerGetRelated(args.Key, instanceStore)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			// Handle refresh related response
 			changed, err := rel.HandleRefreshRelated(relRsp) // dummy
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			relBytes, err := proto.Marshal(rel)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 			if changed {
 				err = instanceStore.SetRelated(args.Key, relBytes, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 			}
@@ -558,48 +559,48 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 				Msg("Invalid command to reverse, no-op")
 		}
 	default:
-		rslt.SetResult(fmt.Errorf("Invalid process command: %s", command))
+		rkcy.SetStepResult(rslt, fmt.Errorf("Invalid process command: %s", command))
 		return rslt, nil
 	}
 
-	if rslt.Code == rkcy.Code_UNDEFINED {
-		rslt.Code = rkcy.Code_OK
+	if rslt.Code == rkcypb.Code_UNDEFINED {
+		rslt.Code = rkcypb.Code_OK
 	}
 	return rslt, addSteps
 }
 
 func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 	ctx context.Context,
-	system rkcy.System,
+	system rkcypb.System,
 	command string,
-	direction rkcy.Direction,
+	direction rkcypb.Direction,
 	args *rkcy.StepArgs,
 	storageTarget string,
 	wg *sync.WaitGroup,
-) (*rkcy.ApecsTxn_Step_Result, []*rkcy.ApecsTxn_Step) {
+) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	var err error
-	rslt := &rkcy.ApecsTxn_Step_Result{}
-	var addSteps []*rkcy.ApecsTxn_Step // additional steps we want to be run after us
+	rslt := &rkcypb.ApecsTxn_Step_Result{}
+	var addSteps []*rkcypb.ApecsTxn_Step // additional steps we want to be run after us
 
-	if direction == rkcy.Direction_REVERSE && args.ForwardResult == nil {
-		rslt.SetResult(fmt.Errorf("Unable to reverse step with nil ForwardResult"))
+	if direction == rkcypb.Direction_REVERSE && args.ForwardResult == nil {
+		rkcy.SetStepResult(rslt, fmt.Errorf("Unable to reverse step with nil ForwardResult"))
 		return rslt, nil
 	}
 
 	if !rkcy.IsStorageSystem(system) {
-		rslt.SetResult(fmt.Errorf("Invalid system: %s", system.String()))
+		rkcy.SetStepResult(rslt, fmt.Errorf("Invalid system: %s", system.String()))
 		return rslt, nil
 	}
 
 	stgTgt, ok := cncHdlr.storageTargets[storageTarget]
 	if !ok {
-		rslt.SetResult(fmt.Errorf("No matching StorageTarget: %s, %+v", storageTarget, cncHdlr.storageTargets))
+		rkcy.SetStepResult(rslt, fmt.Errorf("No matching StorageTarget: %s, %+v", storageTarget, cncHdlr.storageTargets))
 		return rslt, nil
 	}
 
 	handler, ok := cncHdlr.crudHandlers[stgTgt.Type]
 	if !ok {
-		rslt.SetResult(fmt.Errorf("No CrudHandler for %s", stgTgt.Type))
+		rkcy.SetStepResult(rslt, fmt.Errorf("No CrudHandler for %s", stgTgt.Type))
 		return rslt, nil
 	}
 
@@ -607,7 +608,7 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 		if stgTgt.Init != nil {
 			err := stgTgt.Init(ctx, stgTgt.Config, wg)
 			if err != nil {
-				rslt.SetResult(err)
+				rkcy.SetStepResult(rslt, err)
 				return rslt, nil
 			}
 		}
@@ -615,9 +616,9 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 	}
 
 	switch system {
-	case rkcy.System_STORAGE:
+	case rkcypb.System_STORAGE:
 		if !stgTgt.IsPrimary {
-			rslt.SetResult(fmt.Errorf("Storage target is not primary in STORAGE target: %s, command: %s", stgTgt.Name, command))
+			rkcy.SetStepResult(rslt, fmt.Errorf("Storage target is not primary in STORAGE target: %s, command: %s", stgTgt.Name, command))
 			return rslt, nil
 		}
 		switch command {
@@ -626,18 +627,18 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				inst := &Player{}
 				err = proto.Unmarshal(instBytes, inst)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				instOut, err := handler.Create(ctx, inst, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				// NOTE: From this point on any error handler must attempt to
@@ -647,20 +648,20 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 					err := fmt.Errorf("No Key set in CREATE Player")
 					errDel := handler.Delete(ctx, instOut.Key(), args.CmpdOffset)
 					if errDel != nil {
-						rslt.SetResult(fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
+						rkcy.SetStepResult(rslt, fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
 						return rslt, nil
 					}
-					rslt.SetResult(fmt.Errorf("No Key set in CREATE Player"))
+					rkcy.SetStepResult(rslt, fmt.Errorf("No Key set in CREATE Player"))
 					return rslt, nil
 				}
 				instOutBytes, err := proto.Marshal(instOut)
 				if err != nil {
 					errDel := handler.Delete(ctx, instOut.Key(), args.CmpdOffset)
 					if errDel != nil {
-						rslt.SetResult(fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
+						rkcy.SetStepResult(rslt, fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
 						return rslt, nil
 					}
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rslt.Key = instOut.Key()
@@ -669,8 +670,8 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 				// Add a refresh step which will update the instance cache
 				addSteps = append(
 					addSteps,
-					&rkcy.ApecsTxn_Step{
-						System:        rkcy.System_PROCESS,
+					&rkcypb.ApecsTxn_Step{
+						System:        rkcypb.System_PROCESS,
 						Concern:       "Player",
 						Command:       rkcy.REFRESH_INSTANCE,
 						Key:           rslt.Key,
@@ -683,10 +684,10 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 				if err != nil {
 					errDel := handler.Delete(ctx, instOut.Key(), args.CmpdOffset)
 					if errDel != nil {
-						rslt.SetResult(fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
+						rkcy.SetStepResult(rslt, fmt.Errorf("DELETE error cleaning up CREATE failure, orig err: '%s', DELETE err: '%s'", err.Error(), errDel.Error()))
 						return rslt, nil
 					}
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				if relSteps != nil {
@@ -699,26 +700,26 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 				var rel *PlayerRelated
 				inst, rel, rslt.CmpdOffset, err = handler.Read(ctx, args.Key)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				instBytes, err := proto.Marshal(inst)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				var relBytes []byte
 				relBytes, err = proto.Marshal(rel)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rslt.Key = inst.Key()
 				rslt.Payload = rkcy.PackPayloads(instBytes, relBytes)
 				addSteps = append(
 					addSteps,
-					&rkcy.ApecsTxn_Step{
-						System:        rkcy.System_PROCESS,
+					&rkcypb.ApecsTxn_Step{
+						System:        rkcypb.System_PROCESS,
 						Concern:       "Player",
 						Command:       rkcy.REFRESH_INSTANCE,
 						Key:           rslt.Key,
@@ -733,26 +734,26 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				inst := &Player{}
 				err = proto.Unmarshal(instBytes, inst)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rel := &PlayerRelated{}
 				if relBytes != nil && len(relBytes) > 0 {
 					err = proto.Unmarshal(relBytes, rel)
 					if err != nil {
-						rslt.SetResult(err)
+						rkcy.SetStepResult(rslt, err)
 						return rslt, nil
 					}
 				}
 				err = handler.Update(ctx, inst, rel, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				if command == rkcy.UPDATE {
@@ -763,8 +764,8 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 					// Add a refresh step which will update the instance cache
 					addSteps = append(
 						addSteps,
-						&rkcy.ApecsTxn_Step{
-							System:        rkcy.System_PROCESS,
+						&rkcypb.ApecsTxn_Step{
+							System:        rkcypb.System_PROCESS,
 							Concern:       "Player",
 							Command:       rkcy.REFRESH_INSTANCE,
 							Key:           rslt.Key,
@@ -778,14 +779,14 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				err = handler.Delete(ctx, args.Key, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rslt.Key = args.Key
 				addSteps = append(
 					addSteps,
-					&rkcy.ApecsTxn_Step{
-						System:        rkcy.System_PROCESS,
+					&rkcypb.ApecsTxn_Step{
+						System:        rkcypb.System_PROCESS,
 						Concern:       "Player",
 						Command:       rkcy.FLUSH_INSTANCE,
 						Key:           rslt.Key,
@@ -794,16 +795,16 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 				)
 			}
 		default:
-			rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
+			rkcy.SetStepResult(rslt, fmt.Errorf("Invalid storage command: %s", command))
 			return rslt, nil
 		}
-	case rkcy.System_STORAGE_SCND:
+	case rkcypb.System_STORAGE_SCND:
 		if stgTgt.IsPrimary {
-			rslt.SetResult(fmt.Errorf("Storage target is primary in STORAGE_SCND handler: %s, command: %s", stgTgt.Name, command))
+			rkcy.SetStepResult(rslt, fmt.Errorf("Storage target is primary in STORAGE_SCND handler: %s, command: %s", stgTgt.Name, command))
 			return rslt, nil
 		}
-		if direction != rkcy.Direction_FORWARD {
-			rslt.SetResult(fmt.Errorf("Reverse direction not supported in STORAGE_SCND handler: %s, command: %s", stgTgt.Name, command))
+		if direction != rkcypb.Direction_FORWARD {
+			rkcy.SetStepResult(rslt, fmt.Errorf("Reverse direction not supported in STORAGE_SCND handler: %s, command: %s", stgTgt.Name, command))
 			return rslt, nil
 		}
 		switch command {
@@ -811,22 +812,22 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				instBytes, _, err := rkcy.ParsePayload(args.Payload)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				inst := &Player{}
 				err = proto.Unmarshal(instBytes, inst)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				if inst.Key() == "" {
-					rslt.SetResult(fmt.Errorf("Empty key in CREATE STORAGE_SCND"))
+					rkcy.SetStepResult(rslt, fmt.Errorf("Empty key in CREATE STORAGE_SCND"))
 					return rslt, nil
 				}
 				_, err = handler.Create(ctx, inst, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rslt.Key = inst.Key()
@@ -839,26 +840,26 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				instBytes, relBytes, err := rkcy.ParsePayload(args.Payload)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				inst := &Player{}
 				err = proto.Unmarshal(instBytes, inst)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rel := &PlayerRelated{}
 				if relBytes != nil && len(relBytes) > 0 {
 					err = proto.Unmarshal(relBytes, rel)
 					if err != nil {
-						rslt.SetResult(err)
+						rkcy.SetStepResult(rslt, err)
 						return rslt, nil
 					}
 				}
 				err = handler.Update(ctx, inst, rel, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 			}
@@ -866,19 +867,19 @@ func (cncHdlr *PlayerConcernHandler) HandleCrudCommand(
 			{
 				err = handler.Delete(ctx, args.Key, args.CmpdOffset)
 				if err != nil {
-					rslt.SetResult(err)
+					rkcy.SetStepResult(rslt, err)
 					return rslt, nil
 				}
 				rslt.Key = args.Key
 			}
 		default:
-			rslt.SetResult(fmt.Errorf("Invalid storage command: %s", command))
+			rkcy.SetStepResult(rslt, fmt.Errorf("Invalid storage command: %s", command))
 			return rslt, nil
 		}
 	}
 
-	if rslt.Code == rkcy.Code_UNDEFINED {
-		rslt.Code = rkcy.Code_OK
+	if rslt.Code == rkcypb.Code_UNDEFINED {
+		rslt.Code = rkcypb.Code_OK
 	}
 	return rslt, addSteps
 }
@@ -928,14 +929,14 @@ func (*PlayerConcernHandler) DecodeInstance(
 
 func (cncHdlr *PlayerConcernHandler) DecodeArg(
 	ctx context.Context,
-	system rkcy.System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) (*rkcy.ResultProto, error) {
 	switch system {
-	case rkcy.System_STORAGE:
+	case rkcypb.System_STORAGE:
 		fallthrough
-	case rkcy.System_STORAGE_SCND:
+	case rkcypb.System_STORAGE_SCND:
 		switch command {
 		case rkcy.CREATE:
 			fallthrough
@@ -948,7 +949,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 		default:
 			return nil, fmt.Errorf("ArgDecoder invalid command: %d %s", system, command)
 		}
-	case rkcy.System_PROCESS:
+	case rkcypb.System_PROCESS:
 		switch command {
 		case rkcy.VALIDATE_CREATE:
 			fallthrough
@@ -958,7 +959,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 			return cncHdlr.DecodeInstance(ctx, buffer)
 		case rkcy.REQUEST_RELATED:
 			{
-				relReq := &rkcy.RelatedRequest{}
+				relReq := &rkcypb.RelatedRequest{}
 				err := proto.Unmarshal(buffer, relReq)
 				if err != nil {
 					return nil, err
@@ -967,7 +968,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 			}
 		case rkcy.REFRESH_RELATED:
 			{
-				relRsp := &rkcy.RelatedResponse{}
+				relRsp := &rkcypb.RelatedResponse{}
 				err := proto.Unmarshal(buffer, relRsp)
 				if err != nil {
 					return nil, err
@@ -984,14 +985,14 @@ func (cncHdlr *PlayerConcernHandler) DecodeArg(
 
 func (cncHdlr *PlayerConcernHandler) DecodeResult(
 	ctx context.Context,
-	system rkcy.System,
+	system rkcypb.System,
 	command string,
 	buffer []byte,
 ) (*rkcy.ResultProto, error) {
 	switch system {
-	case rkcy.System_STORAGE:
+	case rkcypb.System_STORAGE:
 		fallthrough
-	case rkcy.System_STORAGE_SCND:
+	case rkcypb.System_STORAGE_SCND:
 		switch command {
 		case rkcy.READ:
 			fallthrough
@@ -1004,7 +1005,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 		default:
 			return nil, fmt.Errorf("ResultDecoder invalid command: %d %s", system, command)
 		}
-	case rkcy.System_PROCESS:
+	case rkcypb.System_PROCESS:
 		switch command {
 		case rkcy.READ:
 			fallthrough
@@ -1018,7 +1019,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 			return cncHdlr.DecodeInstance(ctx, buffer)
 		case rkcy.REQUEST_RELATED:
 			{
-				relRsp := &rkcy.RelatedResponse{}
+				relRsp := &rkcypb.RelatedResponse{}
 				err := proto.Unmarshal(buffer, relRsp)
 				if err != nil {
 					return nil, err
@@ -1035,7 +1036,7 @@ func (cncHdlr *PlayerConcernHandler) DecodeResult(
 
 func (cncHdlr *PlayerConcernHandler) DecodeRelatedRequest(
 	ctx context.Context,
-	relReq *rkcy.RelatedRequest,
+	relReq *rkcypb.RelatedRequest,
 ) (*rkcy.ResultProto, error) {
 	resProto := &rkcy.ResultProto{}
 

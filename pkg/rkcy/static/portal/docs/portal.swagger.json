@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "rkcy/portal.proto",
+    "title": "portal.proto",
     "version": "version not set"
   },
   "consumes": [

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
@@ -21,12 +22,12 @@ import (
 
 type Character struct{}
 
-func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.CharacterRelated, *rkcy.CompoundOffset, error) {
+func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.CharacterRelated, *rkcypb.CompoundOffset, error) {
 	inst := &pb.Character{
 		Currency: &pb.Character_Currency{},
 	}
 	var relB64 string
-	cmpdOffset := rkcy.CompoundOffset{}
+	cmpdOffset := rkcypb.CompoundOffset{}
 	err := pool.QueryRow(
 		ctx,
 		`SELECT c.id,
@@ -62,7 +63,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil, nil, rkcy.NewError(rkcy.Code_NOT_FOUND, err.Error())
+			return nil, nil, nil, rkcy.NewError(rkcypb.Code_NOT_FOUND, err.Error())
 		}
 		return nil, nil, nil, err
 	}
@@ -86,7 +87,7 @@ func (c *Character) Read(ctx context.Context, key string) (*pb.Character, *pb.Ch
 	return inst, rel, &cmpdOffset, nil
 }
 
-func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcy.CompoundOffset) (*pb.Character, error) {
+func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *rkcypb.CompoundOffset) (*pb.Character, error) {
 	if inst.Id == "" {
 		inst.Id = uuid.NewString()
 	}
@@ -97,11 +98,11 @@ func (c *Character) Create(ctx context.Context, inst *pb.Character, cmpdOffset *
 	return inst, nil
 }
 
-func (c *Character) Update(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
+func (c *Character) Update(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcypb.CompoundOffset) error {
 	return c.upsert(ctx, inst, rel, cmpdOffset)
 }
 
-func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcy.CompoundOffset) error {
+func (*Character) Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error {
 	log.Warn().Msgf("Character DELETE %s", key)
 	_, err := pool.Exec(
 		ctx,
@@ -144,7 +145,7 @@ func (*Character) hasItem(id string, items []*pb.Character_Item) bool {
 	return false
 }
 
-func (c *Character) upsert(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcy.CompoundOffset) error {
+func (c *Character) upsert(ctx context.Context, inst *pb.Character, rel *pb.CharacterRelated, cmpdOffset *rkcypb.CompoundOffset) error {
 	var relB64 string
 	if rel != nil {
 		relBytes, err := proto.Marshal(rel)

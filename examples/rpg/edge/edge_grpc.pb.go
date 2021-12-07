@@ -5,7 +5,7 @@ package edge
 import (
 	context "context"
 	pb "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
-	rkcy "github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	rkcypb "github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -28,7 +28,7 @@ type RpgServiceClient interface {
 	UpdateCharacter(ctx context.Context, in *pb.Character, opts ...grpc.CallOption) (*pb.Character, error)
 	DeleteCharacter(ctx context.Context, in *RpgRequest, opts ...grpc.CallOption) (*pb.Character, error)
 	FundCharacter(ctx context.Context, in *pb.FundingRequest, opts ...grpc.CallOption) (*pb.Character, error)
-	ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error)
+	ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcypb.Void, error)
 }
 
 type rpgServiceClient struct {
@@ -120,8 +120,8 @@ func (c *rpgServiceClient) FundCharacter(ctx context.Context, in *pb.FundingRequ
 	return out, nil
 }
 
-func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcy.Void, error) {
-	out := new(rkcy.Void)
+func (c *rpgServiceClient) ConductTrade(ctx context.Context, in *pb.TradeRequest, opts ...grpc.CallOption) (*rkcypb.Void, error) {
+	out := new(rkcypb.Void)
 	err := c.cc.Invoke(ctx, "/edge.RpgService/ConductTrade", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ type RpgServiceServer interface {
 	UpdateCharacter(context.Context, *pb.Character) (*pb.Character, error)
 	DeleteCharacter(context.Context, *RpgRequest) (*pb.Character, error)
 	FundCharacter(context.Context, *pb.FundingRequest) (*pb.Character, error)
-	ConductTrade(context.Context, *pb.TradeRequest) (*rkcy.Void, error)
+	ConductTrade(context.Context, *pb.TradeRequest) (*rkcypb.Void, error)
 	mustEmbedUnimplementedRpgServiceServer()
 }
 
@@ -177,7 +177,7 @@ func (UnimplementedRpgServiceServer) DeleteCharacter(context.Context, *RpgReques
 func (UnimplementedRpgServiceServer) FundCharacter(context.Context, *pb.FundingRequest) (*pb.Character, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FundCharacter not implemented")
 }
-func (UnimplementedRpgServiceServer) ConductTrade(context.Context, *pb.TradeRequest) (*rkcy.Void, error) {
+func (UnimplementedRpgServiceServer) ConductTrade(context.Context, *pb.TradeRequest) (*rkcypb.Void, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConductTrade not implemented")
 }
 func (UnimplementedRpgServiceServer) mustEmbedUnimplementedRpgServiceServer() {}

@@ -10,13 +10,15 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type OfflinePlatform struct {
 	name         string
 	environment  string
 	telem        *Telemetry
-	system       System
+	system       rkcypb.System
 	adminBrokers string
 
 	concernHandlers ConcernHandlers
@@ -45,11 +47,11 @@ func (oplat *OfflinePlatform) Telem() *Telemetry {
 	return oplat.telem
 }
 
-func (oplat *OfflinePlatform) System() System {
+func (oplat *OfflinePlatform) System() rkcypb.System {
 	return oplat.system
 }
 
-func (oplat *OfflinePlatform) SetSystem(system System) {
+func (oplat *OfflinePlatform) SetSystem(system rkcypb.System) {
 	oplat.system = system
 }
 
@@ -72,7 +74,7 @@ func (oplat *OfflinePlatform) InstanceStore() *InstanceStore {
 
 func (oplat *OfflinePlatform) NewApecsProducer(
 	ctx context.Context,
-	respTarget *TopicTarget,
+	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
 ) ApecsProducer {
 	return nil
@@ -116,13 +118,13 @@ type ApecsOfflineProducer struct {
 func NewApecsOfflineProducer(
 	ctx context.Context,
 	plat *Platform,
-	respTarget *TopicTarget,
+	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
 ) *ApecsOfflineProducer {
 	return &ApecsOfflineProducer{}
 }
 
-func (aoprod *ApecsOfflineProducer) ResponseTarget() *TopicTarget {
+func (aoprod *ApecsOfflineProducer) ResponseTarget() *rkcypb.TopicTarget {
 	return nil
 }
 

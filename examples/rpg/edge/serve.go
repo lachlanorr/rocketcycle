@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/logic/txn"
@@ -245,7 +246,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb
 	return resProto.Instance.(*pb.Character), nil
 }
 
-func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.Void, error) {
+func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcypb.Void, error) {
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
@@ -261,7 +262,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcy.
 		rkcy.RecordSpanError(span, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &rkcy.Void{}, nil
+	return &rkcypb.Void{}, nil
 }
 
 func runServer(
@@ -296,7 +297,7 @@ func serve(plat rkcy.Platform) {
 
 	aprod := plat.NewApecsProducer(
 		ctx,
-		&rkcy.TopicTarget{
+		&rkcypb.TopicTarget{
 			Brokers:   settings.ConsumerBrokers,
 			Topic:     settings.Topic,
 			Partition: settings.Partition,

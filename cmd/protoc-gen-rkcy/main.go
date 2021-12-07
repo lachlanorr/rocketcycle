@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 //go:embed templates
@@ -212,7 +213,7 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 			rel.HasConfigs = true
 		}
 
-		rltn := proto.GetExtension(pbField.Options, rkcy.E_Relation).(*rkcy.Relation)
+		rltn := proto.GetExtension(pbField.Options, rkcypb.E_Relation).(*rkcypb.Relation)
 		if rltn == nil {
 			return nil, fmt.Errorf("Related field lacking 'rkcy.relation' option: %s.%s", msg.Name, *pbField.Name)
 		}
@@ -296,7 +297,7 @@ func findField(pbMsg *descriptorpb.DescriptorProto, fieldName string) *descripto
 func findKeyField(pbMsg *descriptorpb.DescriptorProto) (string, string, error) {
 	keyField := ""
 	for _, pbField := range pbMsg.Field {
-		if proto.GetExtension(pbField.Options, rkcy.E_IsKey).(bool) {
+		if proto.GetExtension(pbField.Options, rkcypb.E_IsKey).(bool) {
 			if *pbField.Type != descriptorpb.FieldDescriptorProto_TYPE_STRING {
 				return "", "", fmt.Errorf("Non string field with is_key=true: %s.%ss", *pbMsg.Name, *pbField.Name)
 			}
@@ -328,8 +329,8 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 			}
 			cat.MessageMap[msg.Name] = msg
 
-			msg.IsConfig = proto.GetExtension(pbMsg.Options, rkcy.E_IsConfig).(bool)
-			msg.IsConcern = proto.GetExtension(pbMsg.Options, rkcy.E_IsConcern).(bool)
+			msg.IsConfig = proto.GetExtension(pbMsg.Options, rkcypb.E_IsConfig).(bool)
+			msg.IsConcern = proto.GetExtension(pbMsg.Options, rkcypb.E_IsConcern).(bool)
 			if msg.IsConfig && msg.IsConcern {
 				return nil, fmt.Errorf("Message cannot be both a config and concern: %s", *pbMsg.Name)
 			}

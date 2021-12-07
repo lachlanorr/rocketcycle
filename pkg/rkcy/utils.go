@@ -23,6 +23,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 var gExists struct{}
@@ -117,12 +119,12 @@ func findHeader(msg *kafka.Message, key string) []byte {
 	return nil
 }
 
-func GetDirective(msg *kafka.Message) Directive {
+func GetDirective(msg *kafka.Message) rkcypb.Directive {
 	val := findHeader(msg, DIRECTIVE_HEADER)
 	if val != nil {
-		return Directive(BytesToInt(val))
+		return rkcypb.Directive(BytesToInt(val))
 	} else {
-		return Directive_UNSPECIFIED
+		return rkcypb.Directive_UNSPECIFIED
 	}
 }
 
@@ -245,7 +247,7 @@ func createPlatformTopics(
 	return nil
 }
 
-func standardHeaders(directive Directive, traceParent string) []kafka.Header {
+func standardHeaders(directive rkcypb.Directive, traceParent string) []kafka.Header {
 	if TraceParentIsValid(traceParent) {
 		return []kafka.Header{
 			{
@@ -314,7 +316,7 @@ func BytesToInt(arr []byte) int {
 	return val
 }
 
-func OffsetGT(lhs *CompoundOffset, rhs *CompoundOffset) bool {
+func OffsetGT(lhs *rkcypb.CompoundOffset, rhs *rkcypb.CompoundOffset) bool {
 	if lhs.Generation == rhs.Generation {
 		if lhs.Partition == rhs.Partition {
 			return lhs.Offset > rhs.Offset
@@ -325,7 +327,7 @@ func OffsetGT(lhs *CompoundOffset, rhs *CompoundOffset) bool {
 	}
 }
 
-func OffsetGTE(lhs *CompoundOffset, rhs *CompoundOffset) bool {
+func OffsetGTE(lhs *rkcypb.CompoundOffset, rhs *rkcypb.CompoundOffset) bool {
 	if lhs.Generation == rhs.Generation {
 		if lhs.Partition == rhs.Partition {
 			return lhs.Offset >= rhs.Offset

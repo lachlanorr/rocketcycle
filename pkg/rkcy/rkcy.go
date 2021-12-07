@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 const (
@@ -40,7 +42,7 @@ const (
 
 type StorageInit func(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error
 
-func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType Concern_Type) string {
+func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType rkcypb.Concern_Type) string {
 	if !IsValidName(platformName) {
 		log.Fatal().Msgf("Invalid platformName: %s", platformName)
 	}
@@ -66,7 +68,7 @@ func BuildTopicName(topicNamePrefix string, name string, generation int32) strin
 	return fmt.Sprintf("%s.%s.%04d", topicNamePrefix, name, generation)
 }
 
-func BuildFullTopicName(platformName string, environment string, concernName string, concernType Concern_Type, name string, generation int32) string {
+func BuildFullTopicName(platformName string, environment string, concernName string, concernType rkcypb.Concern_Type, name string, generation int32) string {
 	if !IsValidName(platformName) {
 		log.Fatal().Msgf("Invalid platformName: %s", platformName)
 	}
@@ -94,8 +96,8 @@ type TopicParts struct {
 	Environment string
 	Concern     string
 	Topic       string
-	System      System
-	ConcernType Concern_Type
+	System      rkcypb.System
+	ConcernType rkcypb.Concern_Type
 	Generation  int32
 }
 
@@ -126,20 +128,20 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	}
 
 	if tp.Topic == PROCESS {
-		tp.System = System_PROCESS
+		tp.System = rkcypb.System_PROCESS
 	} else if tp.Topic == STORAGE {
-		tp.System = System_STORAGE
+		tp.System = rkcypb.System_STORAGE
 	} else if tp.Topic == STORAGE_SCND {
-		tp.System = System_STORAGE_SCND
+		tp.System = rkcypb.System_STORAGE_SCND
 	} else {
-		tp.System = System_NO_SYSTEM
+		tp.System = rkcypb.System_NO_SYSTEM
 	}
 
-	concernType, ok := Concern_Type_value[parts[4]]
+	concernType, ok := rkcypb.Concern_Type_value[parts[4]]
 	if !ok {
 		return nil, fmt.Errorf("Invalid rkcy topic, unable to parse ConcernType: %s", fullTopic)
 	}
-	tp.ConcernType = Concern_Type(concernType)
+	tp.ConcernType = rkcypb.Concern_Type(concernType)
 
 	generation, err := strconv.Atoi(parts[6])
 	if err != nil {
@@ -153,28 +155,28 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	return &tp, nil
 }
 
-func (rslt *ApecsTxn_Step_Result) Log(sev Severity, format string, args ...interface{}) {
+func LogResult(rslt *rkcypb.ApecsTxn_Step_Result, sev rkcypb.Severity, format string, args ...interface{}) {
 	rslt.LogEvents = append(
 		rslt.LogEvents,
-		&LogEvent{
+		&rkcypb.LogEvent{
 			Sev: sev,
 			Msg: fmt.Sprintf(format, args...),
 		},
 	)
 }
 
-func (rslt *ApecsTxn_Step_Result) LogDebug(format string, args ...interface{}) {
-	rslt.Log(Severity_DBG, format, args...)
+func LogResultDebug(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
+	LogResult(rslt, rkcypb.Severity_DBG, format, args...)
 }
 
-func (rslt *ApecsTxn_Step_Result) LogInfo(format string, args ...interface{}) {
-	rslt.Log(Severity_INF, format, args...)
+func LogResultInfo(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
+	LogResult(rslt, rkcypb.Severity_INF, format, args...)
 }
 
-func (rslt *ApecsTxn_Step_Result) LogWarn(format string, args ...interface{}) {
-	rslt.Log(Severity_WRN, format, args...)
+func LogResultWarn(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
+	LogResult(rslt, rkcypb.Severity_WRN, format, args...)
 }
 
-func (rslt *ApecsTxn_Step_Result) LogError(format string, args ...interface{}) {
-	rslt.Log(Severity_ERR, format, args...)
+func LogResultError(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
+	LogResult(rslt, rkcypb.Severity_ERR, format, args...)
 }

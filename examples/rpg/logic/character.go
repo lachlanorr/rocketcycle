@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
@@ -16,7 +17,7 @@ type Character struct{}
 
 func (*Character) ValidateCreate(ctx context.Context, inst *pb.Character) (*pb.Character, error) {
 	if len(inst.Fullname) < 2 {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Fullname too short")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Fullname too short")
 	}
 	return inst, nil
 }
@@ -27,7 +28,7 @@ func (c *Character) ValidateUpdate(ctx context.Context, original *pb.Character, 
 
 func (Character) Fund(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot fund with negative currency")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Cannot fund with negative currency")
 	}
 
 	if inst.Currency == nil {
@@ -44,7 +45,7 @@ func (Character) Fund(ctx context.Context, inst *pb.Character, relCnc *pb.Charac
 
 func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot debit with negative currency")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Cannot debit with negative currency")
 	}
 
 	if payload.Currency.Gold > inst.Currency.Gold ||
@@ -52,7 +53,7 @@ func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, relCnc *pb
 		payload.Currency.Faction_1 > inst.Currency.Faction_0 ||
 		payload.Currency.Faction_2 > inst.Currency.Faction_0 {
 
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Insufficient funds")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Insufficient funds")
 	}
 
 	inst.Currency.Gold -= payload.Currency.Gold
@@ -65,7 +66,7 @@ func (*Character) DebitFunds(ctx context.Context, inst *pb.Character, relCnc *pb
 
 func (*Character) CreditFunds(ctx context.Context, inst *pb.Character, relCnc *pb.CharacterRelated, payload *pb.FundingRequest) (*pb.Character, error) {
 	if payload.Currency.Gold < 0 || payload.Currency.Faction_0 < 0 || payload.Currency.Faction_1 < 0 || payload.Currency.Faction_2 < 0 {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Cannot credit with negative currency")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Cannot credit with negative currency")
 	}
 
 	inst.Currency.Gold += payload.Currency.Gold

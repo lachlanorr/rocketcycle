@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
@@ -16,14 +17,14 @@ type Player struct{}
 
 func (*Player) ValidateCreate(ctx context.Context, inst *pb.Player) (*pb.Player, error) {
 	if len(inst.Username) < 4 {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Username too short")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Username too short")
 	}
 	return inst, nil
 }
 
 func (p *Player) ValidateUpdate(ctx context.Context, original *pb.Player, updated *pb.Player) (*pb.Player, error) {
 	if original.Username != updated.Username {
-		return nil, rkcy.NewError(rkcy.Code_INVALID_ARGUMENT, "Username may not be changed")
+		return nil, rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Username may not be changed")
 	}
 	return p.ValidateCreate(ctx, updated)
 }

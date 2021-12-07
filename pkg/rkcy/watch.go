@@ -20,6 +20,7 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -91,7 +92,7 @@ func (wt *watchTopic) consume(ctx context.Context, watchDecode bool, concernHand
 					Str("TxnId", GetTraceId(msg)).
 					Int("Offset", int(msg.TopicPartition.Offset)).
 					Msg(wt.topicName)
-				txn := &ApecsTxn{}
+				txn := &rkcypb.ApecsTxn{}
 				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
 					if watchDecode {
@@ -141,7 +142,7 @@ func getAllWatchTopics(rtPlatDef *rtPlatformDef) []*watchTopic {
 	return wts
 }
 
-func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, concernHandlers ConcernHandlers, pjOpts *protojson.MarshalOptions) ([]byte, error) {
+func DecodeTxnOpaques(ctx context.Context, txn *rkcypb.ApecsTxn, concernHandlers ConcernHandlers, pjOpts *protojson.MarshalOptions) ([]byte, error) {
 	txnJson, err := pjOpts.Marshal(txn)
 	if err != nil {
 		return nil, err
@@ -176,11 +177,11 @@ func DecodeTxnOpaques(ctx context.Context, txn *ApecsTxn, concernHandlers Concer
 					if !ok {
 						continue
 					}
-					systemInt32, ok := System_value[systemStr]
+					systemInt32, ok := rkcypb.System_value[systemStr]
 					if !ok {
 						continue
 					}
-					system := System(systemInt32)
+					system := rkcypb.System(systemInt32)
 
 					iCommand, ok := step.Get("command")
 					if !ok {
@@ -309,7 +310,7 @@ func watchResultTopics(
 				Msg("watchResultTopics exiting, ctx.Done()")
 			return
 		case platMsg := <-platformCh:
-			if (platMsg.Directive & Directive_PLATFORM) != Directive_PLATFORM {
+			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
 				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 				continue
 			}
