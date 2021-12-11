@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/config"
+	"github.com/lachlanorr/rocketcycle/pkg/consumer"
 	"github.com/lachlanorr/rocketcycle/pkg/producer"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
@@ -170,14 +172,6 @@ func (kplat *KafkaPlatform) NewApecsProducer(
 	return rkcy.ApecsProducer(kprod)
 }
 
-func (kplat *KafkaPlatform) GetProducerCh(
-	ctx context.Context,
-	brokers string,
-	wg *sync.WaitGroup,
-) rkcy.ProducerCh {
-	return kplat.bprod.GetProducerCh(ctx, brokers, wg)
-}
-
 func (kplat *KafkaPlatform) NewProducer(
 	ctx context.Context,
 	concernName string,
@@ -186,17 +180,29 @@ func (kplat *KafkaPlatform) NewProducer(
 ) rkcy.Producer {
 	pdc := producer.NewKafkaProducer(
 		ctx,
-		kplat.bprod,
-		kplat.AdminBrokers(),
-		kplat.Name(),
-		kplat.Environment(),
+		rkcy.Platform(kplat),
 		concernName,
 		topicName,
-		kplat.AdminPingInterval(),
 		wg,
 	)
 
 	return rkcy.Producer(pdc)
+}
+
+func (kplat *KafkaPlatform) GetProducerCh(
+	ctx context.Context,
+	brokers string,
+	wg *sync.WaitGroup,
+) rkcy.ProducerCh {
+	return kplat.bprod.GetProducerCh(ctx, brokers, wg)
+}
+
+func (*KafkaPlatform) NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
+	kcons, err := consumer.NewKafkaConsumer(bootstrapServers, groupName, logCh)
+	if err != nil {
+		return nil, err
+	}
+	return rkcy.Consumer(kcons), nil
 }
 
 func (kplat *KafkaPlatform) RegisterLogicHandler(concern string, handler interface{}) {
@@ -227,9 +233,7 @@ func (kplat *KafkaPlatform) InitConfigMgr(ctx context.Context, wg *sync.WaitGrou
 	}
 	kplat.configMgr = config.NewConfigMgr(
 		ctx,
-		kplat.adminBrokers,
-		kplat.name,
-		kplat.environment,
+		rkcy.Platform(kplat),
 		wg,
 	)
 	kplat.configRdr = rkcy.ConfigRdr(config.NewConfigMgrRdr(kplat.configMgr))

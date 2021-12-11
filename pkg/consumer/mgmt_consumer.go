@@ -40,6 +40,7 @@ const (
 )
 
 func findMostRecentMatching(
+	plat rkcy.Platform,
 	bootstrapServers string,
 	topic string,
 	partition int32,
@@ -54,15 +55,7 @@ func findMostRecentMatching(
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
 
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        bootstrapServers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false,
-		"enable.auto.offset.store": false,
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cons, err := plat.NewConsumer(bootstrapServers, groupName, kafkaLogCh)
 	if err != nil {
 		return STOP, 0, err
 	}
@@ -136,6 +129,7 @@ func findMostRecentMatching(
 }
 
 func FindMostRecentMatching(
+	plat rkcy.Platform,
 	bootstrapServers string,
 	topic string,
 	partition int32,
@@ -153,6 +147,7 @@ func FindMostRecentMatching(
 
 	for delta < MAX_DELTA {
 		found, mro, err = findMostRecentMatching(
+			plat,
 			bootstrapServers,
 			topic,
 			partition,
@@ -189,7 +184,7 @@ func FindMostRecentMatching(
 // producers, and config topics.
 func ConsumeMgmtTopic(
 	ctx context.Context,
-	adminBrokers string,
+	plat rkcy.Platform,
 	topic string,
 	match rkcypb.Directive,
 	startMatchLoc MatchLoc,
@@ -208,7 +203,8 @@ func ConsumeMgmtTopic(
 		Logger()
 
 	found, lastMatchOff, err := FindMostRecentMatching(
-		adminBrokers,
+		plat,
+		plat.AdminBrokers(),
 		topic,
 		0,
 		match,
@@ -226,15 +222,7 @@ func ConsumeMgmtTopic(
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        adminBrokers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false,
-		"enable.auto.offset.store": false,
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cons, err := plat.NewConsumer(plat.AdminBrokers(), groupName, kafkaLogCh)
 	if err != nil {
 		slog.Error().
 			Err(err).
@@ -305,9 +293,7 @@ func ConsumeMgmtTopic(
 // definition.
 func ConsumeACETopic(
 	ctx context.Context,
-	adminBrokers string,
-	platformName string,
-	environment string,
+	plat rkcy.Platform,
 	concern string,
 	aceTopic rkcy.StandardTopicName,
 
@@ -334,10 +320,8 @@ func ConsumeACETopic(
 	platCh := make(chan *rkcy.PlatformMessage)
 	ConsumePlatformTopic(
 		ctx,
+		plat,
 		platCh,
-		adminBrokers,
-		platformName,
-		environment,
 		nil,
 		wg,
 	)
@@ -384,7 +368,7 @@ func ConsumeACETopic(
 				wgACE.Add(1)
 				go ConsumeMgmtTopic(
 					ctxACE,
-					adminBrokers,
+					plat,
 					topicACE,
 					match,
 					startMatchLoc,

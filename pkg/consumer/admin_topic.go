@@ -25,19 +25,15 @@ type ConcernAdminMessage struct {
 
 func ConsumeConcernAdminTopic(
 	ctx context.Context,
+	plat rkcy.Platform,
 	ch chan<- *ConcernAdminMessage,
-	adminBrokers string,
-	platformName string,
-	environment string,
 	concern string,
 	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	go ConsumeACETopic(
 		ctx,
-		adminBrokers,
-		platformName,
-		environment,
+		plat,
 		concern,
 		rkcy.ADMIN,
 		rkcypb.Directive_CONCERN_ADMIN,

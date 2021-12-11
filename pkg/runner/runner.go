@@ -238,10 +238,7 @@ func defaultArgs(adminBrokers string, otelcolEndpoint string) []string {
 
 func startAdmin(
 	ctx context.Context,
-	adminBrokers string,
-	otelcolEndpoint string,
-	platformName string,
-	environment string,
+	plat rkcy.Platform,
 	running map[string]*rtProgram,
 	printCh chan<- string,
 ) {
@@ -251,10 +248,10 @@ func startAdmin(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + platformName,
-				Args:   append([]string{"admin"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
+				Name:   "./" + plat.Name(),
+				Args:   append([]string{"admin"}, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...),
 				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", platformName, environment)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", plat.Name(), plat.Environment())},
 			},
 		},
 		printCh,
@@ -263,10 +260,7 @@ func startAdmin(
 
 func startPortalServer(
 	ctx context.Context,
-	adminBrokers string,
-	otelcolEndpoint string,
-	platformName string,
-	environment string,
+	plat rkcy.Platform,
 	running map[string]*rtProgram,
 	printCh chan<- string,
 ) {
@@ -276,10 +270,10 @@ func startPortalServer(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + platformName,
-				Args:   append([]string{"portal", "serve"}, defaultArgs(adminBrokers, otelcolEndpoint)...),
+				Name:   "./" + plat.Name(),
+				Args:   append([]string{"portal", "serve"}, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...),
 				Abbrev: "portal",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", platformName, environment)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", plat.Name(), plat.Environment())},
 			},
 		},
 		printCh,
@@ -288,11 +282,8 @@ func startPortalServer(
 
 func startWatch(
 	ctx context.Context,
+	plat rkcy.Platform,
 	watchDecode bool,
-	adminBrokers string,
-	otelcolEndpoint string,
-	platformName string,
-	environment string,
 	running map[string]*rtProgram,
 	printCh chan<- string,
 ) {
@@ -300,7 +291,7 @@ func startWatch(
 	if watchDecode {
 		args = append(args, "-d")
 	}
-	args = append(args, defaultArgs(adminBrokers, otelcolEndpoint)...)
+	args = append(args, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...)
 
 	updateRunning(
 		ctx,
@@ -308,10 +299,10 @@ func startWatch(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + platformName,
+				Name:   "./" + plat.Name(),
 				Args:   args,
 				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", platformName, environment)},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", plat.Name(), plat.Environment())},
 			},
 		},
 		printCh,
@@ -320,21 +311,16 @@ func startWatch(
 
 func RunConsumerPrograms(
 	ctx context.Context,
+	plat rkcy.Platform,
 	watchDecode bool,
-	adminBrokers string,
-	otelcolEndpoint string,
-	platformName string,
-	environment string,
 	wg *sync.WaitGroup,
 ) {
 	consCh := make(chan *consumer.ConsumerMessage)
 
 	consumer.ConsumeConsumersTopic(
 		ctx,
+		plat,
 		consCh,
-		adminBrokers,
-		platformName,
-		environment,
 		nil,
 		wg,
 	)
@@ -344,9 +330,9 @@ func RunConsumerPrograms(
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, printCh, wg)
-	startAdmin(ctx, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
-	startPortalServer(ctx, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
-	startWatch(ctx, watchDecode, adminBrokers, otelcolEndpoint, platformName, environment, running, printCh)
+	startAdmin(ctx, plat, running, printCh)
+	startPortalServer(ctx, plat, running, printCh)
+	startWatch(ctx, plat, watchDecode, running, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 
@@ -388,11 +374,8 @@ func Start(plat rkcy.Platform, watchDecode bool) {
 	wg.Add(1)
 	go RunConsumerPrograms(
 		ctx,
+		plat,
 		watchDecode,
-		plat.AdminBrokers(),
-		plat.Telem().OtelcolEndpoint,
-		plat.Name(),
-		plat.Environment(),
 		&wg,
 	)
 	for {

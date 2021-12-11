@@ -53,6 +53,13 @@ type Platform interface {
 	SetPlatformDef(rtPlatDef *RtPlatformDef)
 	ConfigRdr() ConfigRdr
 
+	NewProducer(
+		ctx context.Context,
+		concernName string,
+		topicName string,
+		wg *sync.WaitGroup,
+	) Producer
+
 	NewApecsProducer(
 		ctx context.Context,
 		respTarget *rkcypb.TopicTarget,
@@ -65,12 +72,7 @@ type Platform interface {
 		wg *sync.WaitGroup,
 	) ProducerCh
 
-	NewProducer(
-		ctx context.Context,
-		concernName string,
-		topicName string,
-		wg *sync.WaitGroup,
-	) Producer
+	NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (Consumer, error)
 
 	SetStorageInit(name string, storageInit StorageInit)
 	RegisterLogicHandler(concern string, handler interface{})

@@ -141,10 +141,8 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelT
 	platCh := make(chan *rkcy.PlatformMessage)
 	consumer.ConsumePlatformTopic(
 		ctx,
+		srv.plat,
 		platCh,
-		srv.plat.AdminBrokers(),
-		srv.plat.Name(),
-		srv.plat.Environment(),
 		nil,
 		wg,
 	)
@@ -239,10 +237,8 @@ func managePlatform(
 	platCh := make(chan *rkcy.PlatformMessage)
 	consumer.ConsumePlatformTopic(
 		ctx,
+		plat,
 		platCh,
-		plat.AdminBrokers(),
-		plat.Name(),
-		plat.Environment(),
 		nil,
 		wg,
 	)

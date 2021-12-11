@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
@@ -116,6 +117,15 @@ func (oplat *OfflinePlatform) NewApecsProducer(
 	return nil
 }
 
+func (oplat *OfflinePlatform) NewProducer(
+	ctx context.Context,
+	concernName string,
+	topicName string,
+	wg *sync.WaitGroup,
+) rkcy.Producer {
+	return nil
+}
+
 func (oplat *OfflinePlatform) GetProducerCh(
 	ctx context.Context,
 	brokers string,
@@ -124,13 +134,8 @@ func (oplat *OfflinePlatform) GetProducerCh(
 	return nil
 }
 
-func (oplat *OfflinePlatform) NewProducer(
-	ctx context.Context,
-	concernName string,
-	topicName string,
-	wg *sync.WaitGroup,
-) rkcy.Producer {
-	return nil
+func (*OfflinePlatform) NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
+	return nil, nil
 }
 
 func (oplat *OfflinePlatform) AppendCobraCommand(cmd *cobra.Command) {

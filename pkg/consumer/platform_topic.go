@@ -17,10 +17,8 @@ import (
 
 func ConsumePlatformTopic(
 	ctx context.Context,
+	plat rkcy.Platform,
 	ch chan<- *rkcy.PlatformMessage,
-	adminBrokers string,
-	platformName string,
-	environment string,
 	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
@@ -29,8 +27,8 @@ func ConsumePlatformTopic(
 	wg.Add(1)
 	go ConsumeMgmtTopic(
 		ctx,
-		adminBrokers,
-		rkcy.PlatformTopic(platformName, environment),
+		plat,
+		rkcy.PlatformTopic(plat.Name(), plat.Environment()),
 		rkcypb.Directive_PLATFORM,
 		AT_LAST_MATCH,
 		func(rawMsg *RawMessage) {
@@ -43,7 +41,7 @@ func ConsumePlatformTopic(
 				return
 			}
 
-			rtPlatDef, err := rkcy.NewRtPlatformDef(platDef, platformName, environment)
+			rtPlatDef, err := rkcy.NewRtPlatformDef(platDef, plat.Name(), plat.Environment())
 			if err != nil {
 				log.Error().
 					Err(err).

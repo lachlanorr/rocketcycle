@@ -18,6 +18,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/lachlanorr/rocketcycle/pkg/consumer"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
@@ -76,9 +77,7 @@ type ConfigMgr struct {
 
 func NewConfigMgr(
 	ctx context.Context,
-	adminBrokers string,
-	platformName string,
-	environment string,
+	plat rkcy.Platform,
 	wg *sync.WaitGroup,
 ) *ConfigMgr {
 	confMgr := &ConfigMgr{
@@ -87,9 +86,7 @@ func NewConfigMgr(
 
 	go confMgr.manageConfigTopic(
 		ctx,
-		adminBrokers,
-		platformName,
-		environment,
+		plat,
 		wg,
 	)
 
@@ -299,19 +296,15 @@ func (confMgr *ConfigMgr) SetComplexBytes(msgType string, key string, val []byte
 
 func (confMgr *ConfigMgr) manageConfigTopic(
 	ctx context.Context,
-	adminBrokers string,
-	platformName string,
-	environment string,
+	plat rkcy.Platform,
 	wg *sync.WaitGroup,
 ) {
 	confPubCh := make(chan *consumer.ConfigPublishMessage)
 
 	consumer.ConsumeConfigTopic(
 		ctx,
+		plat,
 		confPubCh,
-		adminBrokers,
-		platformName,
-		environment,
 		nil,
 		wg,
 	)

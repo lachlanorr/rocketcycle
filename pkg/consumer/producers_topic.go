@@ -25,18 +25,16 @@ type ProducerMessage struct {
 
 func ConsumeProducersTopic(
 	ctx context.Context,
+	plat rkcy.Platform,
 	ch chan<- *ProducerMessage,
-	adminBrokers string,
-	platformName string,
-	environment string,
 	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	wg.Add(1)
 	go ConsumeMgmtTopic(
 		ctx,
-		adminBrokers,
-		rkcy.ProducersTopic(platformName, environment),
+		plat,
+		rkcy.ProducersTopic(plat.Name(), plat.Environment()),
 		rkcypb.Directive_PRODUCER,
 		PAST_LAST_MATCH,
 		func(rawMsg *RawMessage) {

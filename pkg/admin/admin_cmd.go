@@ -46,7 +46,7 @@ func Start(plat rkcy.Platform) {
 	}()
 
 	var wg sync.WaitGroup
-	go managePlatform(ctx, adminCmd, &wg)
+	go managePlatform(ctx, plat, adminCmd, &wg)
 
 	select {
 	case <-interruptCh:
@@ -60,6 +60,7 @@ func Start(plat rkcy.Platform) {
 
 func managePlatform(
 	ctx context.Context,
+	plat rkcy.Platform,
 	adminCmd *AdminCmd,
 	wg *sync.WaitGroup,
 ) {
@@ -69,10 +70,8 @@ func managePlatform(
 	platCh := make(chan *rkcy.PlatformMessage)
 	consumer.ConsumePlatformTopic(
 		ctx,
+		plat,
 		platCh,
-		adminCmd.plat.AdminBrokers(),
-		adminCmd.plat.Name(),
-		adminCmd.plat.Environment(),
 		nil,
 		wg,
 	)
@@ -80,10 +79,8 @@ func managePlatform(
 	prodCh := make(chan *consumer.ProducerMessage)
 	consumer.ConsumeProducersTopic(
 		ctx,
+		plat,
 		prodCh,
-		adminCmd.plat.AdminBrokers(),
-		adminCmd.plat.Name(),
-		adminCmd.plat.Environment(),
 		nil,
 		wg,
 	)

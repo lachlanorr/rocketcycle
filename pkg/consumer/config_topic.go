@@ -25,18 +25,16 @@ type ConfigPublishMessage struct {
 
 func ConsumeConfigTopic(
 	ctx context.Context,
+	plat rkcy.Platform,
 	chPublish chan<- *ConfigPublishMessage,
-	adminBrokers string,
-	platformName string,
-	environment string,
 	readyCh chan<- bool,
 	wg *sync.WaitGroup,
 ) {
 	wg.Add(1)
 	go ConsumeMgmtTopic(
 		ctx,
-		adminBrokers,
-		rkcy.ConfigTopic(platformName, environment),
+		plat,
+		rkcy.ConfigTopic(plat.Name(), plat.Environment()),
 		rkcypb.Directive_CONFIG,
 		AT_LAST_MATCH,
 		func(rawMsg *RawMessage) {

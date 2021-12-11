@@ -37,25 +37,17 @@ func (wt *watchTopic) String() string {
 	return fmt.Sprintf("%s__%s", wt.clusterName, wt.topicName)
 }
 
-func (wt *watchTopic) consume(ctx context.Context, watchDecode bool, concernHandlers rkcy.ConcernHandlers) {
+func (wt *watchTopic) consume(ctx context.Context, plat rkcy.Platform, watchDecode bool) {
 	groupName := rkcy.UncommittedGroupNameAllPartitions(wt.topicName)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        wt.brokers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false,
-		"enable.auto.offset.store": false,
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cons, err := plat.NewConsumer(wt.brokers, groupName, kafkaLogCh)
 	if err != nil {
 		log.Error().
 			Err(err).
-			Str("BoostrapServers", wt.brokers).
+			Str("BootstrapServers", wt.brokers).
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 		return
@@ -97,7 +89,7 @@ func (wt *watchTopic) consume(ctx context.Context, watchDecode bool, concernHand
 				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
 					if watchDecode {
-						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, concernHandlers, &pjOpts)
+						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, plat.ConcernHandlers(), &pjOpts)
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -282,11 +274,8 @@ func DecodeTxnOpaques(ctx context.Context, txn *rkcypb.ApecsTxn, concernHandlers
 
 func WatchResultTopics(
 	ctx context.Context,
+	plat rkcy.Platform,
 	watchDecode bool,
-	adminBrokers string,
-	platformName string,
-	environment string,
-	concernHandlers rkcy.ConcernHandlers,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -296,10 +285,8 @@ func WatchResultTopics(
 	platformCh := make(chan *rkcy.PlatformMessage)
 	consumer.ConsumePlatformTopic(
 		ctx,
+		plat,
 		platformCh,
-		adminBrokers,
-		platformName,
-		environment,
 		nil,
 		wg,
 	)
@@ -322,7 +309,7 @@ func WatchResultTopics(
 				_, ok := wtMap[wt.String()]
 				if !ok {
 					wtMap[wt.String()] = true
-					go wt.consume(ctx, watchDecode, concernHandlers)
+					go wt.consume(ctx, plat, watchDecode)
 				}
 			}
 		}
@@ -347,11 +334,8 @@ func Start(plat rkcy.Platform, watchDecode bool) {
 	wg.Add(1)
 	go WatchResultTopics(
 		ctx,
+		plat,
 		watchDecode,
-		plat.AdminBrokers(),
-		plat.Name(),
-		plat.Environment(),
-		plat.ConcernHandlers(),
 		&wg,
 	)
 

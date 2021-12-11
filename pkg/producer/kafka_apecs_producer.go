@@ -59,7 +59,7 @@ func NewApecsKafkaProducer(
 		var respConsumerCtx context.Context
 		respConsumerCtx, akprod.respConsumerClose = context.WithCancel(akprod.ctx)
 		wg.Add(1)
-		go akprod.consumeResponseTopic(respConsumerCtx, wg)
+		go consumeResponseTopic(respConsumerCtx, plat, akprod.respTarget, akprod.respRegisterCh, wg)
 	}
 
 	return akprod
@@ -117,7 +117,7 @@ func (akprod *ApecsKafkaProducer) GetProducer(
 	return rkcy.Producer(pdc), nil
 }
 
-func respondThroughChannel(txnId string, respCh chan *rkcypb.ApecsTxn, txn *rkcypb.ApecsTxn) {
+func respondThroughChannel(txnId string, respCh chan<- *rkcypb.ApecsTxn, txn *rkcypb.ApecsTxn) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -128,39 +128,34 @@ func respondThroughChannel(txnId string, respCh chan *rkcypb.ApecsTxn, txn *rkcy
 	respCh <- txn
 }
 
-func (akprod *ApecsKafkaProducer) consumeResponseTopic(
+func consumeResponseTopic(
 	ctx context.Context,
+	plat rkcy.Platform,
+	respTarget *rkcypb.TopicTarget,
+	respRegisterCh <-chan *rkcy.RespChan,
 	wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
 
 	reqMap := make(map[string]*rkcy.RespChan)
 
-	groupName := fmt.Sprintf("rkcy_response_%s", akprod.respTarget.Topic)
+	groupName := fmt.Sprintf("rkcy_response_%s", respTarget.Topic)
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
 
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        akprod.respTarget.Brokers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false,
-		"enable.auto.offset.store": false,
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cons, err := plat.NewConsumer(respTarget.Brokers, groupName, kafkaLogCh)
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Str("BoostrapServers", akprod.respTarget.Brokers).
+			Str("BootstrapServers", respTarget.Brokers).
 			Str("GroupId", groupName).
 			Msg("Unable to kafka.NewConsumer")
 	}
 	shouldCommit := false
 	defer func() {
 		log.Warn().
-			Str("Topic", akprod.respTarget.Topic).
+			Str("Topic", respTarget.Topic).
 			Msgf("CONSUMER Closing...")
 		if shouldCommit {
 			_, err = cons.Commit()
@@ -173,14 +168,14 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 		}
 		cons.Close()
 		log.Warn().
-			Str("Topic", akprod.respTarget.Topic).
+			Str("Topic", respTarget.Topic).
 			Msgf("CONSUMER CLOSED")
 	}()
 
 	err = cons.Assign([]kafka.TopicPartition{
 		{
-			Topic:     &akprod.respTarget.Topic,
-			Partition: akprod.respTarget.Partition,
+			Topic:     &respTarget.Topic,
+			Partition: respTarget.Partition,
 			Offset:    kafka.OffsetStored,
 		},
 	})
@@ -227,7 +222,7 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 			moreRegistrations := true
 			for moreRegistrations {
 				select {
-				case rch := <-akprod.respRegisterCh:
+				case rch := <-respRegisterCh:
 					_, ok := reqMap[rch.TxnId]
 					if ok {
 						log.Error().
@@ -253,29 +248,29 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 				if firstMessage {
 					firstMessage = false
 					log.Debug().
-						Str("Topic", akprod.respTarget.Topic).
-						Int32("Partition", akprod.respTarget.Partition).
+						Str("Topic", respTarget.Topic).
+						Int32("Partition", respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
 						Msg("Initial commit to current offset")
 
 					comOffs, err := cons.CommitOffsets([]kafka.TopicPartition{
 						{
-							Topic:     &akprod.respTarget.Topic,
-							Partition: akprod.respTarget.Partition,
+							Topic:     &respTarget.Topic,
+							Partition: respTarget.Partition,
 							Offset:    msg.TopicPartition.Offset,
 						},
 					})
 					if err != nil {
 						log.Fatal().
 							Err(err).
-							Str("Topic", akprod.respTarget.Topic).
-							Int32("Partition", akprod.respTarget.Partition).
+							Str("Topic", respTarget.Topic).
+							Int32("Partition", respTarget.Partition).
 							Int64("Offset", int64(msg.TopicPartition.Offset)).
 							Msgf("Unable to commit initial offset")
 					}
 					log.Debug().
-						Str("Topic", akprod.respTarget.Topic).
-						Int32("Partition", akprod.respTarget.Partition).
+						Str("Topic", respTarget.Topic).
+						Int32("Partition", respTarget.Partition).
 						Int64("Offset", int64(msg.TopicPartition.Offset)).
 						Msgf("Initial offset committed: %+v", comOffs)
 				}
@@ -309,15 +304,15 @@ func (akprod *ApecsKafkaProducer) consumeResponseTopic(
 
 				_, err = cons.StoreOffsets([]kafka.TopicPartition{
 					{
-						Topic:     &akprod.respTarget.Topic,
-						Partition: akprod.respTarget.Partition,
+						Topic:     &respTarget.Topic,
+						Partition: respTarget.Partition,
 						Offset:    msg.TopicPartition.Offset + 1,
 					},
 				})
 				if err != nil {
 					log.Fatal().
 						Err(err).
-						Msgf("Unable to store offsets %s/%d/%d", akprod.respTarget.Topic, akprod.respTarget.Partition, msg.TopicPartition.Offset+1)
+						Msgf("Unable to store offsets %s/%d/%d", respTarget.Topic, respTarget.Partition, msg.TopicPartition.Offset+1)
 				}
 				shouldCommit = true
 			}

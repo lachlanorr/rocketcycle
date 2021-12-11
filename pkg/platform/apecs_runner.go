@@ -478,7 +478,6 @@ func advanceApecsTxn(
 func consumeApecsTopic(
 	ctx context.Context,
 	plat rkcy.Platform,
-	adminBrokers string,
 	consumerBrokers string,
 	fullTopic string,
 	partition int32,
@@ -491,10 +490,8 @@ func consumeApecsTopic(
 	platCh := make(chan *rkcy.PlatformMessage)
 	consumer.ConsumePlatformTopic(
 		ctx,
+		plat,
 		platCh,
-		plat.AdminBrokers(),
-		tp.Platform,
-		tp.Environment,
 		nil,
 		wg,
 	)
@@ -505,16 +502,14 @@ func consumeApecsTopic(
 	cncAdminCh := make(chan *consumer.ConcernAdminMessage)
 	consumer.ConsumeConcernAdminTopic(
 		ctx,
+		plat,
 		cncAdminCh,
-		plat.AdminBrokers(),
-		tp.Platform,
-		tp.Environment,
 		tp.Concern,
 		cncAdminReadyCh,
 		wg,
 	)
 
-	confMgr := config.NewConfigMgr(ctx, adminBrokers, tp.Platform, tp.Environment, wg)
+	confMgr := config.NewConfigMgr(ctx, plat, wg)
 	confRdr := config.NewConfigMgrRdr(confMgr)
 
 	aprod := plat.NewApecsProducer(ctx, nil, wg)
@@ -528,15 +523,7 @@ func consumeApecsTopic(
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
-	cons, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":        consumerBrokers,
-		"group.id":                 groupName,
-		"enable.auto.commit":       false,
-		"enable.auto.offset.store": false,
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cons, err := plat.NewConsumer(consumerBrokers, groupName, kafkaLogCh)
 	if err != nil {
 		log.Fatal().
 			Err(err).
@@ -778,7 +765,6 @@ func startApecsRunner(
 	go consumeApecsTopic(
 		ctx,
 		plat,
-		adminBrokers,
 		consumerBrokers,
 		fullTopic,
 		partition,
