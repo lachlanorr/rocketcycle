@@ -24,8 +24,12 @@ import (
 {{- end }}
 {{- if .HasConfigsOrConcerns }}
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+{{- if .HasConfigs }}
+	"github.com/lachlanorr/rocketcycle/pkg/config"
+{{- end }}
 {{- if .HasConcerns }}
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 {{- end }}
 {{- end }}
@@ -65,7 +69,7 @@ func (*{{ $conf.Name }}ConfigHandler) UnmarshalJson(b []byte) (proto.Message, er
 }
 
 func init() {
-	rkcy.RegisterComplexConfigHandler("{{ $conf.Name }}", &{{ $conf.Name }}ConfigHandler{})
+	config.RegisterComplexConfigHandler("{{ $conf.Name }}", &{{ $conf.Name }}ConfigHandler{})
 }
 
 // -----------------------------------------------------------------------------
@@ -85,7 +89,7 @@ func init() {
 // Concern {{ $cnc.Name }}
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&{{ $cnc.Name }}ConcernHandler{})
+	platform.RegisterGlobalConcernHandler(&{{ $cnc.Name }}ConcernHandler{})
 }
 
 func (inst *{{ $cnc.Name }}) Key() string {
@@ -424,7 +428,7 @@ func (cncHdlr *{{ $cnc.Name }}ConcernHandler) HandleLogicCommand(
 	direction rkcypb.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-	confRdr *rkcy.ConfigRdr,
+	confRdr rkcy.ConfigRdr,
 ) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	var err error
 	rslt := &rkcypb.ApecsTxn_Step_Result{}

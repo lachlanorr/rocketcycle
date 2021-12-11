@@ -13,7 +13,7 @@ import (
 
 func Fund(fr *pb.FundingRequest) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: consts.Character,
@@ -27,7 +27,7 @@ func Fund(fr *pb.FundingRequest) *rkcy.Txn {
 
 func Trade(tr *pb.TradeRequest) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Character",
@@ -59,7 +59,7 @@ func Trade(tr *pb.TradeRequest) *rkcy.Txn {
 
 func ReadCharacter(id string) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.NonRevertable,
+		Revert: rkcy.NON_REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Character",
@@ -72,7 +72,7 @@ func ReadCharacter(id string) *rkcy.Txn {
 
 func CreateCharacter(inst *pb.Character) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Character",
@@ -85,7 +85,7 @@ func CreateCharacter(inst *pb.Character) *rkcy.Txn {
 
 func UpdateCharacter(inst *pb.Character) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Character",
@@ -98,7 +98,7 @@ func UpdateCharacter(inst *pb.Character) *rkcy.Txn {
 
 func DeleteCharacter(id string) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Character",

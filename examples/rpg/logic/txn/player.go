@@ -12,7 +12,7 @@ import (
 
 func ReadPlayer(id string) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.NonRevertable,
+		Revert: rkcy.NON_REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Player",
@@ -25,7 +25,7 @@ func ReadPlayer(id string) *rkcy.Txn {
 
 func CreatePlayer(inst *pb.Player) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Player",
@@ -38,7 +38,7 @@ func CreatePlayer(inst *pb.Player) *rkcy.Txn {
 
 func UpdatePlayer(inst *pb.Player) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Player",
@@ -51,7 +51,7 @@ func UpdatePlayer(inst *pb.Player) *rkcy.Txn {
 
 func DeletePlayer(id string) *rkcy.Txn {
 	return &rkcy.Txn{
-		Revert: rkcy.Revertable,
+		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
 				Concern: "Player",

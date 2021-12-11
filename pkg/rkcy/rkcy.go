@@ -5,11 +5,10 @@
 package rkcy
 
 import (
-	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 
@@ -40,7 +39,27 @@ const (
 	STORAGE_SCND                   = "storage-scnd"
 )
 
-type StorageInit func(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error
+var nameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z\-]{1,15}$`)
+
+func IsValidName(name string) bool {
+	return nameRe.MatchString(name)
+}
+
+func PlatformTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.platform", RKCY, platformName, environment)
+}
+
+func ConfigTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.config", RKCY, platformName, environment)
+}
+
+func ProducersTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.producers", RKCY, platformName, environment)
+}
+
+func ConsumersTopic(platformName string, environment string) string {
+	return fmt.Sprintf("%s.%s.%s.consumers", RKCY, platformName, environment)
+}
 
 func BuildTopicNamePrefix(platformName string, environment string, concernName string, concernType rkcypb.Concern_Type) string {
 	if !IsValidName(platformName) {
@@ -155,28 +174,30 @@ func ParseFullTopicName(fullTopic string) (*TopicParts, error) {
 	return &tp, nil
 }
 
-func LogResult(rslt *rkcypb.ApecsTxn_Step_Result, sev rkcypb.Severity, format string, args ...interface{}) {
-	rslt.LogEvents = append(
-		rslt.LogEvents,
-		&rkcypb.LogEvent{
-			Sev: sev,
-			Msg: fmt.Sprintf(format, args...),
-		},
-	)
+type Error struct {
+	Code rkcypb.Code
+	Msg  string
 }
 
-func LogResultDebug(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
-	LogResult(rslt, rkcypb.Severity_DBG, format, args...)
+func (e *Error) Error() string {
+	return fmt.Sprintf("%s: %s", rkcypb.Code_name[int32(e.Code)], e.Msg)
 }
 
-func LogResultInfo(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
-	LogResult(rslt, rkcypb.Severity_INF, format, args...)
+func NewError(code rkcypb.Code, msg string) *Error {
+	return &Error{Code: code, Msg: msg}
 }
 
-func LogResultWarn(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
-	LogResult(rslt, rkcypb.Severity_WRN, format, args...)
-}
-
-func LogResultError(rslt *rkcypb.ApecsTxn_Step_Result, format string, args ...interface{}) {
-	LogResult(rslt, rkcypb.Severity_ERR, format, args...)
+func SetStepResult(rslt *rkcypb.ApecsTxn_Step_Result, err error) {
+	if err == nil {
+		rslt.Code = rkcypb.Code_OK
+	} else {
+		rkcyErr, ok := err.(*Error)
+		if ok {
+			rslt.Code = rkcyErr.Code
+			rslt.LogEvents = append(rslt.LogEvents, &rkcypb.LogEvent{Sev: rkcypb.Severity_ERR, Msg: rkcyErr.Msg})
+		} else {
+			rslt.Code = rkcypb.Code_INTERNAL
+			rslt.LogEvents = append(rslt.LogEvents, &rkcypb.LogEvent{Sev: rkcypb.Severity_ERR, Msg: err.Error()})
+		}
+	}
 }

@@ -8,7 +8,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcycmd"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
@@ -21,7 +22,7 @@ import (
 func main() {
 	offline, _ := strconv.ParseBool(os.Getenv("RKCY_OFFLINE"))
 
-	plat, err := rkcy.NewPlatform(
+	plat, err := platform.NewPlatform(
 		consts.Platform,
 		os.Getenv("RKCY_ENVIRONMENT"),
 		offline,
@@ -29,9 +30,6 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
-
-	plat.AppendCobraCommand(edge.CobraCommand(plat))
-	plat.AppendCobraCommand(sim.CobraCommand())
 
 	plat.SetStorageInit("postgresql", postgresql.InitPostgresqlPool)
 
@@ -41,5 +39,8 @@ func main() {
 	plat.RegisterLogicHandler("Character", &logic.Character{})
 	plat.RegisterCrudHandler("postgresql", "Character", &postgresql.Character{})
 
-	plat.Start()
+	rkcyCmd := rkcycmd.NewRkcyCmd(plat)
+	rkcyCmd.AppendCobraCommand(edge.CobraCommand(plat))
+	rkcyCmd.AppendCobraCommand(sim.CobraCommand())
+	rkcyCmd.Start()
 }

@@ -6,34 +6,16 @@ package rkcy
 
 import (
 	"google.golang.org/protobuf/proto"
+
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
-type ConfigRdr struct {
-	mgr *ConfigMgr
-}
+type ConfigRdr interface {
+	GetString(key string) (string, bool)
+	GetBool(key string) (bool, bool)
+	GetFloat64(key string) (float64, bool)
+	GetComplexMsg(msgType string, key string) (proto.Message, bool)
+	GetComplexBytes(msgType string, key string) ([]byte, bool)
 
-func NewConfigRdr(mgr *ConfigMgr) *ConfigRdr {
-	return &ConfigRdr{
-		mgr: mgr,
-	}
-}
-
-func (rdr *ConfigRdr) GetString(key string) (string, bool) {
-	return rdr.mgr.GetString(key)
-}
-
-func (rdr *ConfigRdr) GetBool(key string) (bool, bool) {
-	return rdr.mgr.GetBool(key)
-}
-
-func (rdr *ConfigRdr) GetFloat64(key string) (float64, bool) {
-	return rdr.mgr.GetFloat64(key)
-}
-
-func (rdr *ConfigRdr) GetComplexMsg(msgType string, key string) (proto.Message, bool) {
-	return rdr.mgr.GetComplexMsg(msgType, key)
-}
-
-func (rdr *ConfigRdr) GetComplexBytes(msgType string, key string) ([]byte, bool) {
-	return rdr.mgr.GetComplexBytes(msgType, key)
+	BuildConfigResponse() *rkcypb.ConfigReadResponse
 }

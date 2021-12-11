@@ -16,8 +16,7 @@ package pb
 import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/config"
 )
 
 // -----------------------------------------------------------------------------
@@ -53,7 +52,7 @@ func (*TradeCategoryConfigHandler) UnmarshalJson(b []byte) (proto.Message, error
 }
 
 func init() {
-	rkcy.RegisterComplexConfigHandler("TradeCategory", &TradeCategoryConfigHandler{})
+	config.RegisterComplexConfigHandler("TradeCategory", &TradeCategoryConfigHandler{})
 }
 
 // -----------------------------------------------------------------------------

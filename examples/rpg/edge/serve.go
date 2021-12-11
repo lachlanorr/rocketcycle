@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/lachlanorr/rocketcycle/pkg/portal"
+	"github.com/lachlanorr/rocketcycle/pkg/producer"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
@@ -79,7 +81,7 @@ func (srv server) ReadPlayer(ctx context.Context, req *RpgRequest) (*PlayerRespo
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -98,7 +100,7 @@ func (srv server) CreatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -117,7 +119,7 @@ func (srv server) UpdatePlayer(ctx context.Context, plyr *pb.Player) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -136,7 +138,7 @@ func (srv server) DeletePlayer(ctx context.Context, req *RpgRequest) (*pb.Player
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -155,7 +157,7 @@ func (srv server) ReadCharacter(ctx context.Context, req *RpgRequest) (*Characte
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -174,7 +176,7 @@ func (srv server) CreateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -193,7 +195,7 @@ func (srv server) UpdateCharacter(ctx context.Context, plyr *pb.Character) (*pb.
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -212,7 +214,7 @@ func (srv server) DeleteCharacter(ctx context.Context, req *RpgRequest) (*pb.Cha
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -231,7 +233,7 @@ func (srv server) FundCharacter(ctx context.Context, fr *pb.FundingRequest) (*pb
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	resProto, err := rkcy.ExecuteTxnSync(
+	resProto, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -250,7 +252,7 @@ func (srv server) ConductTrade(ctx context.Context, tr *pb.TradeRequest) (*rkcyp
 	ctx, span := srv.plat.Telem().StartFunc(ctx)
 	defer span.End()
 
-	_, err := rkcy.ExecuteTxnSync(
+	_, err := producer.ExecuteTxnSync(
 		ctx,
 		srv.plat,
 		srv.aprod,
@@ -276,7 +278,7 @@ func runServer(
 		aprod: aprod,
 		wg:    wg,
 	}
-	rkcy.ServeGrpcGateway(ctx, srv)
+	portal.ServeGrpcGateway(ctx, srv)
 }
 
 func serve(plat rkcy.Platform) {

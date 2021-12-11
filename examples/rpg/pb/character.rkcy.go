@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
@@ -22,7 +22,7 @@ import (
 // Concern Character
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&CharacterConcernHandler{})
+	platform.RegisterGlobalConcernHandler(&CharacterConcernHandler{})
 }
 
 func (inst *Character) Key() string {
@@ -250,7 +250,7 @@ func (cncHdlr *CharacterConcernHandler) HandleLogicCommand(
 	direction rkcypb.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-	confRdr *rkcy.ConfigRdr,
+	confRdr rkcy.ConfigRdr,
 ) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	var err error
 	rslt := &rkcypb.ApecsTxn_Step_Result{}

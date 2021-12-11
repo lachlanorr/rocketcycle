@@ -13,7 +13,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-
+	"github.com/lachlanorr/rocketcycle/pkg/config"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
@@ -51,7 +52,7 @@ func (*LimitsConfigHandler) UnmarshalJson(b []byte) (proto.Message, error) {
 }
 
 func init() {
-	rkcy.RegisterComplexConfigHandler("Limits", &LimitsConfigHandler{})
+	config.RegisterComplexConfigHandler("Limits", &LimitsConfigHandler{})
 }
 
 // -----------------------------------------------------------------------------
@@ -62,7 +63,7 @@ func init() {
 // Concern Player
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&PlayerConcernHandler{})
+	platform.RegisterGlobalConcernHandler(&PlayerConcernHandler{})
 }
 
 func (inst *Player) Key() string {
@@ -299,7 +300,7 @@ func (cncHdlr *PlayerConcernHandler) HandleLogicCommand(
 	direction rkcypb.Direction,
 	args *rkcy.StepArgs,
 	instanceStore *rkcy.InstanceStore,
-	confRdr *rkcy.ConfigRdr,
+	confRdr rkcy.ConfigRdr,
 ) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step) {
 	var err error
 	rslt := &rkcypb.ApecsTxn_Step_Result{}

@@ -25,7 +25,7 @@ import (
 //go:embed templates
 var templates embed.FS
 
-type templateData struct {
+type TemplateData struct {
 	Package              string
 	LeadingComments      string
 	HasConfigs           bool
@@ -33,18 +33,18 @@ type templateData struct {
 	HasConcernCommands   bool
 	HasConfigsOrConcerns bool
 
-	Configs  []*config
-	Concerns []*concern
+	Configs  []*Config
+	Concerns []*Concern
 }
 
-type catalog struct {
-	MessageMap map[string]*message
-	ServiceMap map[string]*service
-	Configs    []*config
-	Concerns   []*concern
+type Catalog struct {
+	MessageMap map[string]*Message
+	ServiceMap map[string]*Service
+	Configs    []*Config
+	Concerns   []*Concern
 }
 
-type message struct {
+type Message struct {
 	Name       string
 	FilePb     *descriptorpb.FileDescriptorProto
 	MsgPb      *descriptorpb.DescriptorProto
@@ -55,39 +55,39 @@ type message struct {
 	IsRelated  bool
 }
 
-type service struct {
+type Service struct {
 	Name   string
 	FilePb *descriptorpb.FileDescriptorProto
 	SvcPb  *descriptorpb.ServiceDescriptorProto
 }
 
-type config struct {
+type Config struct {
 	Name string
-	Msg  *message
+	Msg  *Message
 }
 
-type concern struct {
+type Concern struct {
 	Name     string
-	Msg      *message
-	Svc      *service
-	Related  *related
-	Commands []*command
+	Msg      *Message
+	Svc      *Service
+	Related  *Related
+	Commands []*Command
 }
 
-type related struct {
-	Msg            *message
-	Fields         []*relatedField
+type Related struct {
+	Msg            *Message
+	Fields         []*RelatedField
 	HasFwdCncs     bool
 	HasRvsCncs     bool
 	HasPureRelCncs bool
 	HasConfigs     bool
 }
 
-type relatedField struct {
+type RelatedField struct {
 	Name       string
 	NameGo     string
-	TypeMsg    *message
-	TypeMsgRel *message
+	TypeMsg    *Message
+	TypeMsgRel *Message
 
 	IdField   string
 	IdFieldGo string
@@ -97,13 +97,13 @@ type relatedField struct {
 
 	IsPureRelCnc bool
 
-	PairedWith *relatedField
+	PairedWith *RelatedField
 
 	IsRepeated bool
 	FieldPb    *descriptorpb.FieldDescriptorProto
 }
 
-type command struct {
+type Command struct {
 	Name       string
 	HasInput   bool
 	InputType  string
@@ -123,7 +123,7 @@ func debugPrintMessage(msg proto.Message) {
 	printError(reqJson)
 }
 
-func printCatalogDestructive(cat *catalog) {
+func printCatalogDestructive(cat *Catalog) {
 	for _, msg := range cat.MessageMap {
 		msg.FilePb = nil
 		msg.MsgPb = nil
@@ -152,14 +152,14 @@ func printCatalogDestructive(cat *catalog) {
 	os.Exit(1)
 }
 
-func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*related, error) {
+func buildRelated(cat *Catalog, cnc *Concern, msg *Message, pkg string) (*Related, error) {
 	var err error
 	msg.KeyField, msg.KeyFieldGo, err = findKeyField(msg.MsgPb)
 	if err != nil {
 		return nil, err
 	}
 
-	rel := &related{
+	rel := &Related{
 		Msg: msg,
 	}
 	cnc.Related = rel
@@ -176,7 +176,7 @@ func buildRelated(cat *catalog, cnc *concern, msg *message, pkg string) (*relate
 			return nil, fmt.Errorf("Related field is not a message type: %s.%s", msg.Name, *pbField.Name)
 		}
 
-		field := &relatedField{
+		field := &RelatedField{
 			Name:    *pbField.Name,
 			NameGo:  GoCamelCase(*pbField.Name),
 			FieldPb: pbField,
@@ -314,15 +314,15 @@ func findKeyField(pbMsg *descriptorpb.DescriptorProto) (string, string, error) {
 	return keyField, GoCamelCase(keyField), nil
 }
 
-func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error) {
-	cat := &catalog{
-		MessageMap: make(map[string]*message),
-		ServiceMap: make(map[string]*service),
+func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*Catalog, error) {
+	cat := &Catalog{
+		MessageMap: make(map[string]*Message),
+		ServiceMap: make(map[string]*Service),
 	}
 
 	for _, pbFile := range pbFiles {
 		for _, pbMsg := range pbFile.MessageType {
-			msg := &message{
+			msg := &Message{
 				Name:   *pbMsg.Name,
 				FilePb: pbFile,
 				MsgPb:  pbMsg,
@@ -342,13 +342,13 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 				}
 			}
 			if msg.IsConfig {
-				conf := &config{
+				conf := &Config{
 					Name: *pbMsg.Name,
 					Msg:  msg,
 				}
 				cat.Configs = append(cat.Configs, conf)
 			} else if msg.IsConcern {
-				cnc := &concern{
+				cnc := &Concern{
 					Name: *pbMsg.Name,
 					Msg:  msg,
 				}
@@ -361,7 +361,7 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 		}
 
 		for _, pbSvc := range pbFile.Service {
-			svc := &service{
+			svc := &Service{
 				Name:   *pbSvc.Name,
 				FilePb: pbFile,
 				SvcPb:  pbSvc,
@@ -393,7 +393,7 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 					return nil, fmt.Errorf("Reserved name used as Command: %s.%s", logicSvc.Name, *method.Name)
 				}
 
-				cmd := &command{}
+				cmd := &Command{}
 
 				cmd.Name = *method.Name
 
@@ -422,8 +422,8 @@ func buildCatalog(pbFiles []*descriptorpb.FileDescriptorProto) (*catalog, error)
 	return cat, nil
 }
 
-func buildTemplateData(pbFile *descriptorpb.FileDescriptorProto, cat *catalog, rkcyPackage string) *templateData {
-	tmplData := &templateData{}
+func buildTemplateData(pbFile *descriptorpb.FileDescriptorProto, cat *Catalog, rkcyPackage string) *TemplateData {
+	tmplData := &TemplateData{}
 
 	packageParts := strings.Split(*pbFile.Package, ".")
 	if rkcyPackage != "" {
@@ -531,7 +531,7 @@ func main() {
 
 	cat, err := buildCatalog(pbFilesToGen)
 	if err != nil {
-		printError("Unable to build catalog: %s", err.Error())
+		printError("Unable to build Catalog: %s", err.Error())
 		panic(err)
 	}
 
