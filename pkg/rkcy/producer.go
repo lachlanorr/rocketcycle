@@ -20,6 +20,13 @@ type RespChan struct {
 }
 
 type Producer interface {
+	Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error
+	Close()
+	Events() chan kafka.Event
+	Flush(timeoutMs int) int
+}
+
+type ManagedProducer interface {
 	Produce(
 		directive rkcypb.Directive,
 		traceParent string,
@@ -35,9 +42,9 @@ type ApecsProducer interface {
 	ResponseTarget() *rkcypb.TopicTarget
 	RegisterResponseChannel(respCh *RespChan)
 
-	GetProducer(
+	GetManagedProducer(
 		concernName string,
 		topicName StandardTopicName,
 		wg *sync.WaitGroup,
-	) (Producer, error)
+	) (ManagedProducer, error)
 }

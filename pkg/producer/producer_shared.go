@@ -297,7 +297,7 @@ func ProduceError(
 	if step == nil {
 		step = rtxn.FirstForwardStep()
 		if step == nil {
-			return fmt.Errorf("ApecsKafkaProducer.error TxnId=%s: failed to get FirstForwardStep", rtxn.Txn.Id)
+			return fmt.Errorf("ApecsProducer.error TxnId=%s: failed to get FirstForwardStep", rtxn.Txn.Id)
 		}
 		msg = "DEFAULTING TO FIRST FORWARD STEP FOR LOGGING!!! - " + msg
 	}
@@ -320,7 +320,7 @@ func ProduceError(
 		)
 	}
 
-	prd, err := aprod.GetProducer(step.Concern, rkcy.ERROR, wg)
+	mprod, err := aprod.GetManagedProducer(step.Concern, rkcy.ERROR, wg)
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func ProduceError(
 		return err
 	}
 
-	prd.Produce(rkcypb.Directive_APECS_TXN, rtxn.TraceParent, []byte(step.Key), txnSer, nil)
+	mprod.Produce(rkcypb.Directive_APECS_TXN, rtxn.TraceParent, []byte(step.Key), txnSer, nil)
 
 	if rtxn.Txn.ResponseTarget != nil {
 		err = ProduceResponse(ctx, aprod.Platform(), rtxn.Txn.ResponseTarget.Brokers, rtxn, wg)
@@ -352,10 +352,10 @@ func ProduceComplete(
 	// first step, which I think makes sense in most cases
 	step := rtxn.FirstForwardStep()
 	if step == nil {
-		return fmt.Errorf("ApecsKafkaProducer.complete TxnId=%s: failed to get FirstForwardStep", rtxn.Txn.Id)
+		return fmt.Errorf("ApecsProducer.complete TxnId=%s: failed to get FirstForwardStep", rtxn.Txn.Id)
 	}
 
-	prd, err := aprod.GetProducer(step.Concern, rkcy.COMPLETE, wg)
+	mprod, err := aprod.GetManagedProducer(step.Concern, rkcy.COMPLETE, wg)
 	if err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ func ProduceComplete(
 		return err
 	}
 
-	prd.Produce(rkcypb.Directive_APECS_TXN, rtxn.TraceParent, []byte(step.Key), txnSer, nil)
+	mprod.Produce(rkcypb.Directive_APECS_TXN, rtxn.TraceParent, []byte(step.Key), txnSer, nil)
 
 	if rtxn.Txn.ResponseTarget != nil {
 		err = ProduceResponse(ctx, aprod.Platform(), rtxn.Txn.ResponseTarget.Brokers, rtxn, wg)
@@ -390,13 +390,13 @@ func ProduceCurrentStep(
 
 	step := rtxn.CurrentStep()
 
-	var prod rkcy.Producer = nil
+	var mprod rkcy.ManagedProducer = nil
 	topicName, ok := gSystemToTopic[step.System]
 	if !ok {
-		return fmt.Errorf("ApecsKafkaProducer.produceCurrentStep TxnId=%s System=%s: Invalid System", rtxn.Txn.Id, step.System.String())
+		return fmt.Errorf("ProduceCurrentStep TxnId=%s System=%s: Invalid System", rtxn.Txn.Id, step.System.String())
 	}
 
-	prod, err = aprod.GetProducer(step.Concern, topicName, wg)
+	mprod, err = aprod.GetManagedProducer(step.Concern, topicName, wg)
 	if err != nil {
 		return err
 	}
@@ -412,11 +412,11 @@ func ProduceCurrentStep(
 	} else {
 		uid, err := uuid.NewRandom() // use a new randomized string
 		if err != nil {
-			return fmt.Errorf("ApecsKafkaProducer.produceCurrentStep TxnId=%s System=%s: uuid.NewRandom error: %s", rtxn.Txn.Id, step.System.String(), err.Error())
+			return fmt.Errorf("ProduceCurrentStep TxnId=%s System=%s: uuid.NewRandom error: %s", rtxn.Txn.Id, step.System.String(), err.Error())
 		}
 		hashKey = uid[:]
 	}
 
-	prod.Produce(rkcypb.Directive_APECS_TXN, traceParent, hashKey, txnSer, nil)
+	mprod.Produce(rkcypb.Directive_APECS_TXN, traceParent, hashKey, txnSer, nil)
 	return nil
 }

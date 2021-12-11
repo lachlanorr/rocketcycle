@@ -57,14 +57,7 @@ func ConfigReplace(plat rkcy.Platform, configFilePath string) {
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
 
-	prod, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  plat.AdminBrokers(),
-		"acks":               -1,     // acks required from all in-sync replicas
-		"message.timeout.ms": 600000, // 10 minutes
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	prod, err := plat.NewProducer(plat.AdminBrokers(), kafkaLogCh)
 	if err != nil {
 		slog.Fatal().
 			Err(err).

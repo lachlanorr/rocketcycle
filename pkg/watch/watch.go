@@ -49,7 +49,7 @@ func (wt *watchTopic) consume(ctx context.Context, plat rkcy.Platform, watchDeco
 			Err(err).
 			Str("BootstrapServers", wt.brokers).
 			Str("GroupId", groupName).
-			Msg("Unable to kafka.NewConsumer")
+			Msg("Unable to plat.NewConsumer")
 		return
 	}
 	defer cons.Close()

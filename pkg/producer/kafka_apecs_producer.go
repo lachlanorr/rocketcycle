@@ -18,103 +18,103 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
-type ApecsKafkaProducer struct {
+type KafkaApecsProducer struct {
 	ctx               context.Context
 	plat              rkcy.Platform
 	respTarget        *rkcypb.TopicTarget
-	producers         map[string]map[rkcy.StandardTopicName]rkcy.Producer
+	producers         map[string]map[rkcy.StandardTopicName]rkcy.ManagedProducer
 	producersMtx      sync.Mutex
 	respRegisterCh    chan *rkcy.RespChan
 	respConsumerClose context.CancelFunc
 }
 
-func (akprod *ApecsKafkaProducer) Platform() rkcy.Platform {
-	return akprod.plat
+func (kaprod *KafkaApecsProducer) Platform() rkcy.Platform {
+	return kaprod.plat
 }
 
-func (akprod *ApecsKafkaProducer) ResponseTarget() *rkcypb.TopicTarget {
-	return akprod.respTarget
+func (kaprod *KafkaApecsProducer) ResponseTarget() *rkcypb.TopicTarget {
+	return kaprod.respTarget
 }
 
-func (akprod *ApecsKafkaProducer) RegisterResponseChannel(respCh *rkcy.RespChan) {
-	akprod.respRegisterCh <- respCh
+func (kaprod *KafkaApecsProducer) RegisterResponseChannel(respCh *rkcy.RespChan) {
+	kaprod.respRegisterCh <- respCh
 }
 
-func NewApecsKafkaProducer(
+func NewKafkaApecsProducer(
 	ctx context.Context,
 	plat rkcy.Platform,
 	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
-) *ApecsKafkaProducer {
-	akprod := &ApecsKafkaProducer{
+) *KafkaApecsProducer {
+	kaprod := &KafkaApecsProducer{
 		ctx:        ctx,
 		plat:       plat,
 		respTarget: respTarget,
 
-		producers:      make(map[string]map[rkcy.StandardTopicName]rkcy.Producer),
+		producers:      make(map[string]map[rkcy.StandardTopicName]rkcy.ManagedProducer),
 		respRegisterCh: make(chan *rkcy.RespChan, 10),
 	}
 
 	if respTarget != nil {
 		var respConsumerCtx context.Context
-		respConsumerCtx, akprod.respConsumerClose = context.WithCancel(akprod.ctx)
+		respConsumerCtx, kaprod.respConsumerClose = context.WithCancel(kaprod.ctx)
 		wg.Add(1)
-		go consumeResponseTopic(respConsumerCtx, plat, akprod.respTarget, akprod.respRegisterCh, wg)
+		go consumeResponseTopic(respConsumerCtx, plat, kaprod.respTarget, kaprod.respRegisterCh, wg)
 	}
 
-	return akprod
+	return kaprod
 }
 
-func (akprod *ApecsKafkaProducer) Close() {
-	if akprod.respTarget != nil {
-		akprod.respConsumerClose()
+func (kaprod *KafkaApecsProducer) Close() {
+	if kaprod.respTarget != nil {
+		kaprod.respConsumerClose()
 	}
 
-	akprod.producersMtx.Lock()
-	defer akprod.producersMtx.Unlock()
-	for _, concernProds := range akprod.producers {
+	kaprod.producersMtx.Lock()
+	defer kaprod.producersMtx.Unlock()
+	for _, concernProds := range kaprod.producers {
 		for _, pdc := range concernProds {
 			pdc.Close()
 		}
 	}
 
-	akprod.producers = make(map[string]map[rkcy.StandardTopicName]rkcy.Producer)
+	kaprod.producers = make(map[string]map[rkcy.StandardTopicName]rkcy.ManagedProducer)
 }
 
-func (akprod *ApecsKafkaProducer) GetProducer(
+func (kaprod *KafkaApecsProducer) GetManagedProducer(
 	concernName string,
 	topicName rkcy.StandardTopicName,
 	wg *sync.WaitGroup,
-) (rkcy.Producer, error) {
-	akprod.producersMtx.Lock()
-	defer akprod.producersMtx.Unlock()
+) (rkcy.ManagedProducer, error) {
+	kaprod.producersMtx.Lock()
+	defer kaprod.producersMtx.Unlock()
 
-	concernProds, ok := akprod.producers[concernName]
+	concernProds, ok := kaprod.producers[concernName]
 	if !ok {
-		concernProds = make(map[rkcy.StandardTopicName]rkcy.Producer)
-		akprod.producers[concernName] = concernProds
+		concernProds = make(map[rkcy.StandardTopicName]rkcy.ManagedProducer)
+		kaprod.producers[concernName] = concernProds
 	}
-	pdc, ok := concernProds[topicName]
+	mprod, ok := concernProds[topicName]
 	if !ok {
-		pdc = akprod.plat.NewProducer(
-			akprod.ctx,
+		mprod = kaprod.plat.NewManagedProducer(
+			kaprod.ctx,
 			concernName,
 			string(topicName),
 			wg,
 		)
 
-		if pdc == nil {
+		if mprod == nil {
 			return nil, fmt.Errorf(
-				"ApecsKafkaProducer.GetProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
-				akprod.plat.AdminBrokers(),
-				akprod.plat.Name(),
+				"KafkaApecsProducer.GetManagedProducer Brokers=%s Platform=%s Concern=%s Topic=%s: Failed to create Producer",
+				kaprod.plat.AdminBrokers(),
+				kaprod.plat.Name(),
 				concernName,
 				topicName,
 			)
 		}
-		concernProds[topicName] = pdc
+		concernProds[topicName] = mprod
 	}
-	return rkcy.Producer(pdc), nil
+	return mprod, nil
 }
 
 func respondThroughChannel(txnId string, respCh chan<- *rkcypb.ApecsTxn, txn *rkcypb.ApecsTxn) {
@@ -150,7 +150,7 @@ func consumeResponseTopic(
 			Err(err).
 			Str("BootstrapServers", respTarget.Brokers).
 			Str("GroupId", groupName).
-			Msg("Unable to kafka.NewConsumer")
+			Msg("Unable to plat.NewConsumer")
 	}
 	shouldCommit := false
 	defer func() {

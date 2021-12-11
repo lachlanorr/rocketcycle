@@ -53,12 +53,14 @@ type Platform interface {
 	SetPlatformDef(rtPlatDef *RtPlatformDef)
 	ConfigRdr() ConfigRdr
 
-	NewProducer(
+	NewProducer(boostrapServers string, logCh chan kafka.LogEvent) (Producer, error)
+
+	NewManagedProducer(
 		ctx context.Context,
 		concernName string,
 		topicName string,
 		wg *sync.WaitGroup,
-	) Producer
+	) ManagedProducer
 
 	NewApecsProducer(
 		ctx context.Context,

@@ -8,7 +8,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/lachlanorr/rocketcycle/pkg/offline"
 	"github.com/lachlanorr/rocketcycle/pkg/platform"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcycmd"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
@@ -20,15 +22,28 @@ import (
 )
 
 func main() {
-	offline, _ := strconv.ParseBool(os.Getenv("RKCY_OFFLINE"))
+	rkcyEnvironment := os.Getenv("RKCY_ENVIRONMENT")
+	if rkcyEnvironment == "" {
+		panic("RKCY_ENVIRONMENT not defined")
+	}
+	rkcyOffline, _ := strconv.ParseBool(os.Getenv("RKCY_OFFLINE"))
 
-	plat, err := platform.NewPlatform(
-		consts.Platform,
-		os.Getenv("RKCY_ENVIRONMENT"),
-		offline,
-	)
-	if err != nil {
-		panic(err.Error())
+	var plat rkcy.Platform
+
+	if !rkcyOffline {
+		var err error
+		plat, err = platform.NewKafkaPlatform(
+			consts.Platform,
+			rkcyEnvironment,
+		)
+		if err != nil {
+			panic(err.Error())
+		}
+	} else {
+		plat = offline.NewOfflinePlatform(
+			consts.Platform,
+			rkcyEnvironment,
+		)
 	}
 
 	plat.SetStorageInit("postgresql", postgresql.InitPostgresqlPool)

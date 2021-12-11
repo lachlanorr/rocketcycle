@@ -2,14 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package platform
+package offline
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/spf13/cobra"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -109,20 +108,24 @@ func (oplat *OfflinePlatform) InitConfigMgr(ctx context.Context, wg *sync.WaitGr
 	// no op?
 }
 
+func (oplat *OfflinePlatform) NewProducer(bootstrapServers string, logCh chan kafka.LogEvent) (rkcy.Producer, error) {
+	return nil, nil
+}
+
+func (oplat *OfflinePlatform) NewManagedProducer(
+	ctx context.Context,
+	concernName string,
+	topicName string,
+	wg *sync.WaitGroup,
+) rkcy.ManagedProducer {
+	return nil
+}
+
 func (oplat *OfflinePlatform) NewApecsProducer(
 	ctx context.Context,
 	respTarget *rkcypb.TopicTarget,
 	wg *sync.WaitGroup,
 ) rkcy.ApecsProducer {
-	return nil
-}
-
-func (oplat *OfflinePlatform) NewProducer(
-	ctx context.Context,
-	concernName string,
-	topicName string,
-	wg *sync.WaitGroup,
-) rkcy.Producer {
 	return nil
 }
 
@@ -136,9 +139,6 @@ func (oplat *OfflinePlatform) GetProducerCh(
 
 func (*OfflinePlatform) NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
 	return nil, nil
-}
-
-func (oplat *OfflinePlatform) AppendCobraCommand(cmd *cobra.Command) {
 }
 
 func (oplat *OfflinePlatform) SetStorageInit(name string, storageInit rkcy.StorageInit) {

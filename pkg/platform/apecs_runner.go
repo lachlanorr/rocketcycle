@@ -527,7 +527,7 @@ func consumeApecsTopic(
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Msg("failed to kafka.NewConsumer")
+			Msg("failed to plat.NewConsumer")
 	}
 	shouldCommit := false
 	defer func() {

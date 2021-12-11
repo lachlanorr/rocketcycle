@@ -15,16 +15,20 @@ import (
 )
 
 type ChanneledProducer struct {
+	plat    rkcy.Platform
 	brokers string
-	telem   *rkcy.Telem
 	ch      rkcy.ProducerCh
-	prod    *kafka.Producer
+	prod    rkcy.Producer
 }
 
-func NewChanneledProducer(ctx context.Context, brokers string, telem *rkcy.Telem) (*ChanneledProducer, error) {
+func NewChanneledProducer(
+	ctx context.Context,
+	plat rkcy.Platform,
+	brokers string,
+) (*ChanneledProducer, error) {
 	cp := &ChanneledProducer{
+		plat:    plat,
 		brokers: brokers,
-		telem:   telem,
 		ch:      make(rkcy.ProducerCh),
 	}
 
@@ -32,14 +36,7 @@ func NewChanneledProducer(ctx context.Context, brokers string, telem *rkcy.Telem
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
 
 	var err error
-	cp.prod, err = kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers":  brokers,
-		"acks":               -1,     // acks required from all in-sync replicas
-		"message.timeout.ms": 600000, // 10 minutes
-
-		"go.logs.channel.enable": true,
-		"go.logs.channel":        kafkaLogCh,
-	})
+	cp.prod, err = plat.NewProducer(brokers, kafkaLogCh)
 
 	if err != nil {
 		return nil, err
@@ -51,7 +48,7 @@ func NewChanneledProducer(ctx context.Context, brokers string, telem *rkcy.Telem
 				if ev.TopicPartition.Error != nil {
 					traceId := rkcy.GetTraceId(ev)
 					if traceId != "" {
-						cp.telem.RecordProduceError(
+						cp.plat.Telem().RecordProduceError(
 							"Delivery",
 							traceId,
 							*ev.TopicPartition.Topic,
@@ -100,7 +97,7 @@ func (cp *ChanneledProducer) Run(ctx context.Context, wg *sync.WaitGroup) {
 			if err != nil {
 				traceId := rkcy.GetTraceId(msg)
 				if traceId != "" {
-					cp.telem.RecordProduceError(
+					cp.plat.Telem().RecordProduceError(
 						"Produce",
 						traceId,
 						*msg.TopicPartition.Topic,

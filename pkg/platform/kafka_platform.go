@@ -43,23 +43,6 @@ type KafkaPlatform struct {
 	instanceStore *rkcy.InstanceStore
 }
 
-func NewPlatform(
-	name string,
-	environment string,
-	offline bool,
-) (rkcy.Platform, error) {
-	if !offline {
-		kplat, err := NewKafkaPlatform(name, environment)
-		if err != nil {
-			return nil, err
-		}
-		return rkcy.Platform(kplat), nil
-	} else {
-		oplat := NewOfflinePlatform(name, environment)
-		return rkcy.Platform(oplat), nil
-	}
-}
-
 func NewKafkaPlatform(
 	name string,
 	environment string,
@@ -107,7 +90,7 @@ func (kplat *KafkaPlatform) Init(
 			return err
 		}
 	}
-	kplat.bprod = producer.NewBrokersProducer(kplat.telem)
+	kplat.bprod = producer.NewBrokersProducer(kplat)
 	return nil
 }
 
@@ -163,22 +146,17 @@ func (kplat *KafkaPlatform) SetStorageInit(name string, storageInit rkcy.Storage
 	kplat.storageInits[name] = storageInit
 }
 
-func (kplat *KafkaPlatform) NewApecsProducer(
-	ctx context.Context,
-	respTarget *rkcypb.TopicTarget,
-	wg *sync.WaitGroup,
-) rkcy.ApecsProducer {
-	kprod := producer.NewApecsKafkaProducer(ctx, kplat, respTarget, wg)
-	return rkcy.ApecsProducer(kprod)
+func (kplat *KafkaPlatform) NewProducer(bootstrapServers string, logCh chan kafka.LogEvent) (rkcy.Producer, error) {
+	return producer.NewKafkaProducer(bootstrapServers, logCh)
 }
 
-func (kplat *KafkaPlatform) NewProducer(
+func (kplat *KafkaPlatform) NewManagedProducer(
 	ctx context.Context,
 	concernName string,
 	topicName string,
 	wg *sync.WaitGroup,
-) rkcy.Producer {
-	pdc := producer.NewKafkaProducer(
+) rkcy.ManagedProducer {
+	pdc := producer.NewKafkaManagedProducer(
 		ctx,
 		rkcy.Platform(kplat),
 		concernName,
@@ -186,7 +164,16 @@ func (kplat *KafkaPlatform) NewProducer(
 		wg,
 	)
 
-	return rkcy.Producer(pdc)
+	return rkcy.ManagedProducer(pdc)
+}
+
+func (kplat *KafkaPlatform) NewApecsProducer(
+	ctx context.Context,
+	respTarget *rkcypb.TopicTarget,
+	wg *sync.WaitGroup,
+) rkcy.ApecsProducer {
+	kprod := producer.NewKafkaApecsProducer(ctx, kplat, respTarget, wg)
+	return rkcy.ApecsProducer(kprod)
 }
 
 func (kplat *KafkaPlatform) GetProducerCh(

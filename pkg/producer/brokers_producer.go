@@ -14,16 +14,16 @@ import (
 )
 
 type BrokersProducer struct {
+	plat      rkcy.Platform
 	cprods    map[string]*ChanneledProducer
 	cprodsMtx *sync.Mutex
-	telem     *rkcy.Telem
 }
 
-func NewBrokersProducer(telem *rkcy.Telem) *BrokersProducer {
+func NewBrokersProducer(plat rkcy.Platform) *BrokersProducer {
 	return &BrokersProducer{
+		plat:      plat,
 		cprods:    make(map[string]*ChanneledProducer),
 		cprodsMtx: &sync.Mutex{},
-		telem:     telem,
 	}
 }
 
@@ -37,7 +37,7 @@ func (bprod *BrokersProducer) GetProducerCh(ctx context.Context, brokers string,
 	}
 
 	var err error
-	cp, err = NewChanneledProducer(ctx, brokers, bprod.telem)
+	cp, err = NewChanneledProducer(ctx, bprod.plat, brokers)
 	if err != nil {
 		log.Fatal().
 			Err(err).

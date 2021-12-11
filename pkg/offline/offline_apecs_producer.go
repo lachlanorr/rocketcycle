@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-package producer
+package offline
 
 import (
 	"context"
@@ -37,11 +37,11 @@ func (oaprod *OfflineApecsProducer) ResponseChannel(
 	return nil
 }
 
-func (oaprod *OfflineApecsProducer) GetProducer(
+func (oaprod *OfflineApecsProducer) GetManagedProducer(
 	concernName string,
 	topicName rkcy.StandardTopicName,
 	wg *sync.WaitGroup,
-) (rkcy.Producer, error) {
+) (rkcy.ManagedProducer, error) {
 	return nil, nil
 }
 
