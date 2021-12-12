@@ -12,7 +12,7 @@ import (
 
 type Consumer interface {
 	Assign(partitions []kafka.TopicPartition) error
-	Close()
+	Close() error
 	Commit() ([]kafka.TopicPartition, error)
 	CommitOffsets(offsets []kafka.TopicPartition) ([]kafka.TopicPartition, error)
 	QueryWatermarkOffsets(topic string, partition int32, timeoutMs int) (int64, int64, error)

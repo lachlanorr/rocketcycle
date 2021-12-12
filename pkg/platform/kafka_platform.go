@@ -15,7 +15,6 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/config"
-	"github.com/lachlanorr/rocketcycle/pkg/consumer"
 	"github.com/lachlanorr/rocketcycle/pkg/producer"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
@@ -147,7 +146,20 @@ func (kplat *KafkaPlatform) SetStorageInit(name string, storageInit rkcy.Storage
 }
 
 func (kplat *KafkaPlatform) NewProducer(bootstrapServers string, logCh chan kafka.LogEvent) (rkcy.Producer, error) {
-	return producer.NewKafkaProducer(bootstrapServers, logCh)
+	kprod, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers":  bootstrapServers,
+		"acks":               -1,     // acks required from all in-sync replicas
+		"message.timeout.ms": 600000, // 10 minutes
+
+		"go.logs.channel.enable": true,
+		"go.logs.channel":        logCh,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return kprod, nil
 }
 
 func (kplat *KafkaPlatform) NewManagedProducer(
@@ -185,11 +197,20 @@ func (kplat *KafkaPlatform) GetProducerCh(
 }
 
 func (*KafkaPlatform) NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
-	kcons, err := consumer.NewKafkaConsumer(bootstrapServers, groupName, logCh)
+	kcons, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers":        bootstrapServers,
+		"group.id":                 groupName,
+		"enable.auto.commit":       false,
+		"enable.auto.offset.store": false,
+
+		"go.logs.channel.enable": true,
+		"go.logs.channel":        logCh,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return rkcy.Consumer(kcons), nil
+
+	return kcons, nil
 }
 
 func (kplat *KafkaPlatform) RegisterLogicHandler(concern string, handler interface{}) {

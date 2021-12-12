@@ -166,7 +166,13 @@ func consumeResponseTopic(
 					Msgf("Unable to commit")
 			}
 		}
-		cons.Close()
+		err := cons.Close()
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("Topic", respTarget.Topic).
+				Msgf("Error during consumer.Close()")
+		}
 		log.Warn().
 			Str("Topic", respTarget.Topic).
 			Msgf("CONSUMER CLOSED")
