@@ -146,7 +146,7 @@ func (kplat *KafkaPlatform) SetStorageInit(name string, storageInit rkcy.Storage
 }
 
 func (kplat *KafkaPlatform) NewProducer(bootstrapServers string, logCh chan kafka.LogEvent) (rkcy.Producer, error) {
-	kprod, err := kafka.NewProducer(&kafka.ConfigMap{
+	return kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":  bootstrapServers,
 		"acks":               -1,     // acks required from all in-sync replicas
 		"message.timeout.ms": 600000, // 10 minutes
@@ -154,12 +154,6 @@ func (kplat *KafkaPlatform) NewProducer(bootstrapServers string, logCh chan kafk
 		"go.logs.channel.enable": true,
 		"go.logs.channel":        logCh,
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return kprod, nil
 }
 
 func (kplat *KafkaPlatform) NewManagedProducer(
@@ -197,7 +191,7 @@ func (kplat *KafkaPlatform) GetProducerCh(
 }
 
 func (*KafkaPlatform) NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
-	kcons, err := kafka.NewConsumer(&kafka.ConfigMap{
+	return kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        bootstrapServers,
 		"group.id":                 groupName,
 		"enable.auto.commit":       false,
@@ -206,11 +200,12 @@ func (*KafkaPlatform) NewConsumer(bootstrapServers string, groupName string, log
 		"go.logs.channel.enable": true,
 		"go.logs.channel":        logCh,
 	})
-	if err != nil {
-		return nil, err
-	}
+}
 
-	return kcons, nil
+func (*KafkaPlatform) NewAdminClient(bootstrapServers string) (rkcy.AdminClient, error) {
+	return kafka.NewAdminClient(&kafka.ConfigMap{
+		"bootstrap.servers": bootstrapServers,
+	})
 }
 
 func (kplat *KafkaPlatform) RegisterLogicHandler(concern string, handler interface{}) {

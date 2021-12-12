@@ -62,7 +62,7 @@ func PlatformReplace(plat rkcy.Platform, platformFilePath string) {
 		Msg("Platform parsed")
 
 	// connect to kafka and make sure we have our platform topics
-	err = rkcy.CreatePlatformTopics(context.Background(), plat.AdminBrokers(), platDef.Name, platDef.Environment)
+	err = rkcy.CreatePlatformTopics(context.Background(), plat)
 	if err != nil {
 		slog.Fatal().
 			Err(err).

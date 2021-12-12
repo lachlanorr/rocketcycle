@@ -38,7 +38,7 @@ func ConfigReplace(plat rkcy.Platform, configFilePath string) {
 	}
 
 	// connect to kafka and make sure we have our platform topics
-	err = rkcy.CreatePlatformTopics(context.Background(), plat.AdminBrokers(), plat.Name(), plat.Environment())
+	err = rkcy.CreatePlatformTopics(context.Background(), plat)
 	if err != nil {
 		slog.Fatal().
 			Err(err).

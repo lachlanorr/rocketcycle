@@ -141,6 +141,10 @@ func (*OfflinePlatform) NewConsumer(bootstrapServers string, groupName string, l
 	return nil, nil
 }
 
+func (*OfflinePlatform) NewAdminClient(bootstrapServers string) (rkcy.AdminClient, error) {
+	return nil, nil
+}
+
 func (oplat *OfflinePlatform) SetStorageInit(name string, storageInit rkcy.StorageInit) {
 }
 

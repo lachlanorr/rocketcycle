@@ -21,7 +21,7 @@ import (
 
 type clusterInfo struct {
 	cluster        *rkcypb.Cluster
-	admin          *kafka.AdminClient
+	admin          rkcy.AdminClient
 	existingTopics map[string]bool
 	brokerCount    int
 }
@@ -69,14 +69,11 @@ func createTopic(ci *clusterInfo, name string, numPartitions int) error {
 	return nil
 }
 
-func newClusterInfo(cluster *rkcypb.Cluster) (*clusterInfo, error) {
+func newClusterInfo(plat rkcy.Platform, cluster *rkcypb.Cluster) (*clusterInfo, error) {
 	var ci = clusterInfo{}
 
-	config := make(kafka.ConfigMap)
-	config.SetKey("bootstrap.servers", cluster.Brokers)
-
 	var err error
-	ci.admin, err = kafka.NewAdminClient(&config)
+	ci.admin, err = plat.NewAdminClient(cluster.Brokers)
 	if err != nil {
 		return nil, err
 	}

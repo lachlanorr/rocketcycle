@@ -109,7 +109,7 @@ func managePlatform(
 				Msg("Platform Replaced")
 
 			platDiff := adminCmd.plat.PlatformDef().Diff(platMsg.OldRtPlatDef, adminCmd.plat.AdminBrokers(), adminCmd.plat.Telem().OtelcolEndpoint)
-			updateTopics(adminCmd.plat.PlatformDef())
+			updateTopics(adminCmd.plat)
 			updateRunner(ctx, adminCmd.plat, adminProdCh, consumersTopic, platDiff)
 		case prodMsg := <-prodCh:
 			if (prodMsg.Directive & rkcypb.Directive_PRODUCER_STATUS) != rkcypb.Directive_PRODUCER_STATUS {
@@ -122,11 +122,11 @@ func managePlatform(
 	}
 }
 
-func updateTopics(rtPlatDef *rkcy.RtPlatformDef) {
+func updateTopics(plat rkcy.Platform) {
 	// start admin connections to all clusters
 	clusterInfos := make(map[string]*clusterInfo)
-	for _, cluster := range rtPlatDef.PlatformDef.Clusters {
-		ci, err := newClusterInfo(cluster)
+	for _, cluster := range plat.PlatformDef().PlatformDef.Clusters {
+		ci, err := newClusterInfo(plat, cluster)
 
 		if err != nil {
 			log.Printf("Unable to connect to cluster '%s', brokers '%s': %s", cluster.Name, cluster.Brokers, err.Error())
@@ -143,11 +143,11 @@ func updateTopics(rtPlatDef *rkcy.RtPlatformDef) {
 
 	var concernTypesAutoCreate = []string{"GENERAL", "APECS"}
 
-	for _, concern := range rtPlatDef.PlatformDef.Concerns {
+	for _, concern := range plat.PlatformDef().PlatformDef.Concerns {
 		if rkcy.Contains(concernTypesAutoCreate, rkcypb.Concern_Type_name[int32(concern.Type)]) {
 			for _, topics := range concern.Topics {
 				createMissingTopics(
-					rkcy.BuildTopicNamePrefix(rtPlatDef.PlatformDef.Name, rtPlatDef.PlatformDef.Environment, concern.Name, concern.Type),
+					rkcy.BuildTopicNamePrefix(plat.PlatformDef().PlatformDef.Name, plat.PlatformDef().PlatformDef.Environment, concern.Name, concern.Type),
 					topics,
 					clusterInfos)
 			}

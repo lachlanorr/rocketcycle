@@ -16,21 +16,17 @@ import (
 
 func CreatePlatformTopics(
 	ctx context.Context,
-	bootstrapServers string,
-	platformName string,
-	environment string,
+	plat Platform,
 ) error {
 	topicNames := []string{
-		PlatformTopic(platformName, environment),
-		ConfigTopic(platformName, environment),
-		ProducersTopic(platformName, environment),
-		ConsumersTopic(platformName, environment),
+		PlatformTopic(plat.Name(), plat.Environment()),
+		ConfigTopic(plat.Name(), plat.Environment()),
+		ProducersTopic(plat.Name(), plat.Environment()),
+		ConsumersTopic(plat.Name(), plat.Environment()),
 	}
 
 	// connect to kafka and make sure we have our platform topic
-	admin, err := kafka.NewAdminClient(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-	})
+	admin, err := plat.NewAdminClient(plat.AdminBrokers())
 	if err != nil {
 		return errors.New("Failed to NewAdminClient")
 	}

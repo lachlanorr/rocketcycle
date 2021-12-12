@@ -76,6 +76,8 @@ type Platform interface {
 
 	NewConsumer(bootstrapServers string, groupName string, logCh chan kafka.LogEvent) (Consumer, error)
 
+	NewAdminClient(bootstrapServers string) (AdminClient, error)
+
 	SetStorageInit(name string, storageInit StorageInit)
 	RegisterLogicHandler(concern string, handler interface{})
 	RegisterCrudHandler(storageType string, concern string, handler interface{})
