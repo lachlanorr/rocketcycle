@@ -16,6 +16,7 @@ package pb
 import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 

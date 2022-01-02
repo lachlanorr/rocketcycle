@@ -23,8 +23,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 {{- end }}
 {{- if .HasConfigsOrConcerns }}
-
-{{- if .HasConcerns }}
+{{ if .HasConcerns }}
 	"github.com/lachlanorr/rocketcycle/pkg/apecs"
 {{- end }}
 {{- if .HasConfigsOrConcerns }}
