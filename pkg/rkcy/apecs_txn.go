@@ -132,7 +132,11 @@ func NewRtApecsTxn(txn *rkcypb.ApecsTxn, traceParent string) (*RtApecsTxn, error
 	return &rtxn, nil
 }
 
-func ApecsTxnResult(ctx context.Context, plat Platform, txn *rkcypb.ApecsTxn) (bool, *ResultProto, *rkcypb.ApecsTxn_Step_Result) {
+func ApecsTxnResult(
+	ctx context.Context,
+	cncHdlrs ConcernHandlers,
+	txn *rkcypb.ApecsTxn,
+) (bool, *ResultProto, *rkcypb.ApecsTxn_Step_Result) {
 	step := ApecsTxnCurrentStep(txn)
 	success := txn.Direction == rkcypb.Direction_FORWARD &&
 		txn.CurrentStepIdx == int32(len(txn.ForwardSteps)-1) &&
@@ -141,7 +145,7 @@ func ApecsTxnResult(ctx context.Context, plat Platform, txn *rkcypb.ApecsTxn) (b
 	var resProto *ResultProto
 	if step.Result != nil && step.Result.Payload != nil {
 		var err error
-		resProto, _, err = plat.ConcernHandlers().DecodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
+		resProto, _, err = cncHdlrs.DecodeResultPayload(ctx, step.Concern, step.System, step.Command, step.Result.Payload)
 		if err != nil {
 			log.Error().
 				Err(err).

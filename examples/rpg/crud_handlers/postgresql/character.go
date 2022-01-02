@@ -16,9 +16,10 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
+
+const ZERO_UUID string = "00000000-0000-0000-0000-000000000000"
 
 type Character struct{}
 
@@ -202,7 +203,7 @@ func (c *Character) upsert(ctx context.Context, inst *pb.Character, rel *pb.Char
 				ctx,
 				"CALL rpg.sp_upsert_character_item($1, $2, $3, $4, $5, $6)",
 				dbItem.Id,
-				consts.ZeroUuid,
+				ZERO_UUID,
 				dbItem.Description,
 				cmpdOffset.Generation,
 				cmpdOffset.Partition,

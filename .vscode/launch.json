@@ -9,10 +9,30 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/examples/rpg/rpg",
-            "cwd": "${workspaceFolder}/examples/rpg/rpg",
+            "program": "${workspaceFolder}/examples/rpg",
+            "cwd": "${workspaceFolder}/examples/rpg",
             "env": {},
             "args": ["admin", "serve", "rpg"]
+        },
+        {
+            "name": "platform replace",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/examples/rpg",
+            "cwd": "${workspaceFolder}/examples/rpg",
+            "env": {},
+            "args": ["platform", "replace", "-e", "dev"]
+        },
+        {
+            "name": "process",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/examples/rpg",
+            "cwd": "${workspaceFolder}/examples/rpg",
+            "env": {},
+            "args": ["process", "-e", "dev", "--otelcol_endpoint", "localhost:4317", "--admin_brokers", "localhost:9092", "--consumer_brokers", "localhost:9092", "-t", "rkcy.rpg.dev.Player.APECS.process.0001", "-p", "0"]
         },
         {
             "name": "storage",
@@ -32,7 +52,7 @@
             "program": "${workspaceFolder}/examples/rpg",
             "cwd": "${workspaceFolder}/examples/rpg",
             "env": {},
-            "args": ["edge", "serve", "-p", "0", "-t", "rkcy.rpg.edge.GENERAL.response.0001"]
+            "args": ["edge", "serve", "-e", "dev", "--edge", "-t", "rkcy.rpg.dev.edge.GENERAL.response.0001", "-p", "0", "--admin_brokers", "localhost:9092", "--consumer_brokers", "localhost:9092", "--http_addr", ":11350", "--grpc_addr", ":11360", "--otelcol_endpoint", "localhost:4317"]
         },
         {
             "name": "create player",

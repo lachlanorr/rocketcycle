@@ -9,8 +9,6 @@ import (
 	"embed"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
 	"sync"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -20,9 +18,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/lachlanorr/rocketcycle/pkg/consumer"
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/telem"
 	"github.com/lachlanorr/rocketcycle/version"
 )
 
@@ -32,7 +32,7 @@ var gDocsFiles embed.FS
 type portalServer struct {
 	rkcypb.UnimplementedPortalServiceServer
 
-	plat     rkcy.Platform
+	plat     *platform.Platform
 	httpAddr string
 	grpcAddr string
 }
@@ -67,8 +67,8 @@ func (portalServer) RegisterHandlerFromEndpoint(
 }
 
 func (srv portalServer) PlatformDef(ctx context.Context, pa *rkcypb.Void) (*rkcypb.PlatformDef, error) {
-	if srv.plat.PlatformDef() != nil {
-		return srv.plat.PlatformDef().PlatformDef, nil
+	if srv.plat.RtPlatformDef != nil {
+		return srv.plat.RtPlatformDef.PlatformDef, nil
 	}
 	return nil, status.Error(codes.FailedPrecondition, "platform not yet initialized")
 }
@@ -78,7 +78,7 @@ func (srv portalServer) ConfigRead(ctx context.Context, pa *rkcypb.Void) (*rkcyp
 }
 
 func (srv portalServer) DecodeInstance(ctx context.Context, args *rkcypb.DecodeInstanceArgs) (*rkcypb.DecodeResponse, error) {
-	jsonBytes, err := srv.plat.ConcernHandlers().DecodeInstance64Json(ctx, args.Concern, args.Payload64)
+	jsonBytes, err := srv.plat.ConcernHandlers.DecodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func resultProto2DecodeResponse(resProto *rkcy.ResultProto) (*rkcypb.DecodeRespo
 }
 
 func (srv portalServer) DecodeArgPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
-	resProto, _, err := srv.plat.ConcernHandlers().DecodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.plat.ConcernHandlers.DecodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (srv portalServer) DecodeArgPayload(ctx context.Context, args *rkcypb.Decod
 }
 
 func (srv portalServer) DecodeResultPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
-	resProto, _, err := srv.plat.ConcernHandlers().DecodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.plat.ConcernHandlers.DecodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (srv portalServer) DecodeResultPayload(ctx context.Context, args *rkcypb.De
 }
 
 func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelTxnRequest) (*rkcypb.Void, error) {
-	ctx, traceId, span := srv.plat.Telem().StartRequest(ctx)
+	ctx, traceId, span := telem.StartRequest(ctx)
 	defer span.End()
 
 	log.Warn().Msgf("CancelTxn %s", cancelTxn.TxnId)
@@ -138,13 +138,16 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelT
 
 	wg := &sync.WaitGroup{}
 
-	platCh := make(chan *rkcy.PlatformMessage)
-	consumer.ConsumePlatformTopic(
+	platCh := make(chan *mgmt.PlatformMessage)
+	mgmt.ConsumePlatformTopic(
 		ctx,
-		srv.plat,
+		wg,
+		srv.plat.StreamProvider(),
+		srv.plat.Args.Platform,
+		srv.plat.Args.Environment,
+		srv.plat.Args.AdminBrokers,
 		platCh,
 		nil,
-		wg,
 	)
 
 	platMsg := <-platCh
@@ -162,7 +165,7 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelT
 			}
 			log.Info().Msgf("%s - %s", cluster.Brokers, adminRtTopics.CurrentTopic)
 
-			prodCh := srv.plat.GetProducerCh(ctx, cluster.Brokers, wg)
+			prodCh := srv.plat.GetProducerCh(ctx, wg, cluster.Brokers)
 			msg, err := rkcy.NewKafkaMessage(
 				&adminRtTopics.CurrentTopic,
 				0,
@@ -182,22 +185,22 @@ func (srv portalServer) CancelTxn(ctx context.Context, cancelTxn *rkcypb.CancelT
 
 func serveGrpc(
 	ctx context.Context,
-	plat rkcy.Platform,
+	plat *platform.Platform,
 	httpAddr string,
 	grpcAddr string,
-	wg *sync.WaitGroup,
 ) {
 	srv := portalServer{
 		plat:     plat,
 		httpAddr: httpAddr,
 		grpcAddr: grpcAddr,
 	}
-	plat.InitConfigMgr(ctx, wg)
+	plat.InitConfigMgr(ctx)
 	ServeGrpcGateway(ctx, srv)
 }
 
 func Serve(
-	plat rkcy.Platform,
+	ctx context.Context,
+	plat *platform.Platform,
 	httpAddr string,
 	grpcAddr string,
 ) {
@@ -205,49 +208,43 @@ func Serve(
 		Str("GitCommit", version.GitCommit).
 		Msg("portal server started")
 
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
-	defer func() {
-		signal.Stop(interruptCh)
-		cancel()
-	}()
+	go serveGrpc(ctx, plat, httpAddr, grpcAddr)
 
-	var wg sync.WaitGroup
-	go serveGrpc(ctx, plat, httpAddr, grpcAddr, &wg)
+	go managePlatform(ctx, plat)
 
-	go managePlatform(ctx, plat, &wg)
-
+	plat.WaitGroup().Add(1)
 	select {
-	case <-interruptCh:
-		log.Warn().
-			Msg("portal server stopped")
-		cancel()
-		wg.Wait()
+	case <-ctx.Done():
+		log.Info().
+			Msg("portal stopped")
+		plat.WaitGroup().Done()
 		return
 	}
 }
 
 func managePlatform(
 	ctx context.Context,
-	plat rkcy.Platform,
-	wg *sync.WaitGroup,
+	plat *platform.Platform,
 ) {
-	platCh := make(chan *rkcy.PlatformMessage)
-	consumer.ConsumePlatformTopic(
+	platCh := make(chan *mgmt.PlatformMessage)
+	mgmt.ConsumePlatformTopic(
 		ctx,
-		plat,
+		plat.WaitGroup(),
+		plat.StreamProvider(),
+		plat.Args.Platform,
+		plat.Args.Environment,
+		plat.Args.AdminBrokers,
 		platCh,
 		nil,
-		wg,
 	)
 
+	plat.WaitGroup().Add(1)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Warn().
 				Msg("managePlatform exiting, ctx.Done()")
+			plat.WaitGroup().Done()
 			return
 		case platMsg := <-platCh:
 			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
@@ -255,7 +252,7 @@ func managePlatform(
 				continue
 			}
 
-			plat.SetPlatformDef(platMsg.NewRtPlatDef)
+			plat.RtPlatformDef = platMsg.NewRtPlatDef
 		}
 	}
 }

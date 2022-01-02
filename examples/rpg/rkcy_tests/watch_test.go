@@ -11,8 +11,10 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/lachlanorr/rocketcycle/pkg/jsonutils"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy/jsonutils"
+	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/watch"
 
 	_ "github.com/lachlanorr/rocketcycle/examples/rpg/logic"
 	_ "github.com/lachlanorr/rocketcycle/examples/rpg/pb"
@@ -20,7 +22,7 @@ import (
 
 func TestMarshalTxn(t *testing.T) {
 	// get a protobuf from our sample json so we have a good start
-	txn := &rkcy.ApecsTxn{}
+	txn := &rkcypb.ApecsTxn{}
 	err := protojson.Unmarshal(testTxnJson, txn)
 	if err != nil {
 		t.Fatal(err)
@@ -53,14 +55,14 @@ func TestDecodeTxnOpaques(t *testing.T) {
 	ctx := context.Background()
 
 	// get a protobuf from our sample json so we have a good start
-	txn := &rkcy.ApecsTxn{}
+	txn := &rkcypb.ApecsTxn{}
 	err := protojson.Unmarshal(testTxnJson, txn)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
-	marTxnJson, err := rkcy.DecodeTxnOpaques(ctx, txn, &pjOpts)
+	marTxnJson, err := watch.DecodeTxnOpaques(ctx, txn, rkcy.GlobalConcernHandlerRegistry(), &pjOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +73,32 @@ func TestDecodeTxnOpaques(t *testing.T) {
 }
 
 var testTxnJson = []byte(`{
-  "id": "a521d9c32d92af0d5f27104e2b6be121",
-  "assocTxns": [],
+  "id": "251a272b59ceefeb5bff6df5252a5805",
+  "assocTxns": [
+    {
+      "id": "7f79dae03a46446c91623829a7fd1406",
+      "type": "SECONDARY_STORAGE"
+    },
+    {
+      "id": "71ee52c7e81044449a2babcd7bb33f7f",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "71ee52c7e81044449a2babcd7bb33f7f",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "288725b97df44c2dbd793b76f52d172c",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "288725b97df44c2dbd793b76f52d172c",
+      "type": "GENERATED_STORAGE"
+    }
+  ],
   "responseTarget": {
     "brokers": "localhost:9092",
-    "topic": "rkcy.rpg.edge.GENERAL.response.0001",
+    "topic": "rkcy.rpg.dev.edge.GENERAL.response.0001",
     "partition": 0
   },
   "currentStepIdx": 4,
@@ -87,19 +110,20 @@ var testTxnJson = []byte(`{
       "concern": "Character",
       "command": "ValidateCreate",
       "key": "",
-      "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "0"
+        "offset": "123"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.660973Z",
+        "processedTime": "2021-12-13T12:29:42.535509Z",
         "logEvents": [],
         "key": "",
-        "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+        "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
         "instance": "",
         "cmpdOffset": null
       }
@@ -109,24 +133,25 @@ var testTxnJson = []byte(`{
       "concern": "Character",
       "command": "Create",
       "key": "",
-      "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "0"
+        "offset": "123"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.747558Z",
+        "processedTime": "2021-12-13T12:29:42.615506Z",
         "logEvents": [],
-        "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-        "payload": "CiQ4YjY1ZWI5Yy0xNDU0LTQ1NDctOGE0Yi1iZGUzY2Q0NTQ4NWMSJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhoTRnVsbG5hbWVfMTM5NzEwNjEzMSABKgwI60YQizgY6j0g8EI=",
+        "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "instance": "",
         "cmpdOffset": {
           "generation": 1,
           "partition": 0,
-          "offset": "0"
+          "offset": "123"
         }
       }
     },
@@ -134,20 +159,21 @@ var testTxnJson = []byte(`{
       "system": "PROCESS",
       "concern": "Character",
       "command": "RefreshInstance",
-      "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-      "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQg==",
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+      "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "1"
+        "offset": "124"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.875846Z",
+        "processedTime": "2021-12-13T12:29:42.700188Z",
         "logEvents": [],
         "key": "",
-        "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQg==",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "instance": "",
         "cmpdOffset": null
       }
@@ -156,20 +182,21 @@ var testTxnJson = []byte(`{
       "system": "PROCESS",
       "concern": "Player",
       "command": "RequestRelated",
-      "key": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-      "payload": "CglDaGFyYWN0ZXISJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxoIUGxheWVySWQicQokOGI2NWViOWMtMTQ1NC00NTQ3LThhNGItYmRlM2NkNDU0ODVjEiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+      "key": "a431b998-c11c-485e-a946-2791d03eab6e",
+      "payload": "CglDaGFyYWN0ZXISJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBoGUGxheWVyInlya2N5eQAAAAokYjAwZDZiMmEtOWM2ZC00NDlkLTkzNTYtNjVjYWRjNjQyMzdkEiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
       "effectiveTime": null,
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "2"
+        "offset": "118"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.923031Z",
+        "processedTime": "2021-12-13T12:29:42.740913Z",
         "logEvents": [],
         "key": "",
-        "payload": "CgZQbGF5ZXISCFBsYXllcklkGjgKJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhIOVXNlcl83MjE3NDkxMjEYAQ==",
+        "payload": "CgZQbGF5ZXISBlBsYXllchq0AXJrY3lBAAAACiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgBEnEKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "instance": "",
         "cmpdOffset": null
       }
@@ -178,20 +205,21 @@ var testTxnJson = []byte(`{
       "system": "PROCESS",
       "concern": "Character",
       "command": "RefreshRelated",
-      "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-      "payload": "CgZQbGF5ZXISCFBsYXllcklkGjgKJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhIOVXNlcl83MjE3NDkxMjEYAQ==",
-      "effectiveTime": "2021-10-26T18:16:15.923486Z",
+      "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+      "payload": "CgZQbGF5ZXISBlBsYXllchq0AXJrY3lBAAAACiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgBEnEKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
+      "effectiveTime": "2021-12-13T12:29:42.741088Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "2"
+        "offset": "125"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.989488Z",
+        "processedTime": "2021-12-13T12:29:42.781459Z",
         "logEvents": [],
         "key": "",
-        "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQgo4CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKhI5CiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgB",
         "instance": "",
         "cmpdOffset": null
       }
@@ -201,11 +229,32 @@ var testTxnJson = []byte(`{
 }`)
 
 var testTxnJsonDec = []byte(`{
-  "id": "a521d9c32d92af0d5f27104e2b6be121",
-  "assocTxns": [],
+  "id": "251a272b59ceefeb5bff6df5252a5805",
+  "assocTxns": [
+    {
+      "id": "7f79dae03a46446c91623829a7fd1406",
+      "type": "SECONDARY_STORAGE"
+    },
+    {
+      "id": "71ee52c7e81044449a2babcd7bb33f7f",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "71ee52c7e81044449a2babcd7bb33f7f",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "288725b97df44c2dbd793b76f52d172c",
+      "type": "GENERATED_STORAGE"
+    },
+    {
+      "id": "288725b97df44c2dbd793b76f52d172c",
+      "type": "GENERATED_STORAGE"
+    }
+  ],
   "responseTarget": {
     "brokers": "localhost:9092",
-    "topic": "rkcy.rpg.edge.GENERAL.response.0001",
+    "topic": "rkcy.rpg.dev.edge.GENERAL.response.0001",
     "partition": 0
   },
   "currentStepIdx": 4,
@@ -217,47 +266,48 @@ var testTxnJsonDec = []byte(`{
       "concern": "Character",
       "command": "ValidateCreate",
       "key": "",
-      "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+      "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
       "payloadDec": {
         "type": "Character",
         "instance": {
           "id": "",
-          "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-          "fullname": "Fullname_1397106131",
+          "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+          "fullname": "Fullname_1658789383",
           "active": true,
           "currency": {
-            "gold": 9067,
-            "faction0": 7179,
-            "faction1": 7914,
-            "faction2": 8560
+            "gold": 2454,
+            "faction0": 1976,
+            "faction1": 5448,
+            "faction2": 5422
           },
           "items": []
         }
       },
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "0"
+        "offset": "123"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.660973Z",
+        "processedTime": "2021-12-13T12:29:42.535509Z",
         "logEvents": [],
         "key": "",
-        "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+        "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
         "payloadDec": {
           "type": "Character",
           "instance": {
             "id": "",
-            "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-            "fullname": "Fullname_1397106131",
+            "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+            "fullname": "Fullname_1658789383",
             "active": true,
             "currency": {
-              "gold": 9067,
-              "faction0": 7179,
-              "faction1": 7914,
-              "faction2": 8560
+              "gold": 2454,
+              "faction0": 1976,
+              "faction1": 5448,
+              "faction2": 5422
             },
             "items": []
           }
@@ -271,56 +321,58 @@ var testTxnJsonDec = []byte(`{
       "concern": "Character",
       "command": "Create",
       "key": "",
-      "payload": "EiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+      "payload": "EiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
       "payloadDec": {
         "type": "Character",
         "instance": {
           "id": "",
-          "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-          "fullname": "Fullname_1397106131",
+          "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+          "fullname": "Fullname_1658789383",
           "active": true,
           "currency": {
-            "gold": 9067,
-            "faction0": 7179,
-            "faction1": 7914,
-            "faction2": 8560
+            "gold": 2454,
+            "faction0": 1976,
+            "faction1": 5448,
+            "faction2": 5422
           },
           "items": []
         }
       },
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "0"
+        "offset": "123"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.747558Z",
+        "processedTime": "2021-12-13T12:29:42.615506Z",
         "logEvents": [],
-        "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-        "payload": "CiQ4YjY1ZWI5Yy0xNDU0LTQ1NDctOGE0Yi1iZGUzY2Q0NTQ4NWMSJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhoTRnVsbG5hbWVfMTM5NzEwNjEzMSABKgwI60YQizgY6j0g8EI=",
+        "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "payloadDec": {
           "type": "Character",
           "instance": {
-            "id": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-            "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-            "fullname": "Fullname_1397106131",
+            "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+            "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+            "fullname": "Fullname_1658789383",
             "active": true,
             "currency": {
-              "gold": 9067,
-              "faction0": 7179,
-              "faction1": 7914,
-              "faction2": 8560
+              "gold": 2454,
+              "faction0": 1976,
+              "faction1": 5448,
+              "faction2": 5422
             },
             "items": []
-          }
+          },
+          "related": {}
         },
         "instance": "",
         "cmpdOffset": {
           "generation": 1,
           "partition": 0,
-          "offset": "0"
+          "offset": "123"
         }
       }
     },
@@ -328,51 +380,54 @@ var testTxnJsonDec = []byte(`{
       "system": "PROCESS",
       "concern": "Character",
       "command": "RefreshInstance",
-      "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-      "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQg==",
+      "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+      "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
       "payloadDec": {
         "type": "Character",
         "instance": {
-          "id": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-          "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-          "fullname": "Fullname_1397106131",
+          "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+          "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+          "fullname": "Fullname_1658789383",
           "active": true,
           "currency": {
-            "gold": 9067,
-            "faction0": 7179,
-            "faction1": 7914,
-            "faction2": 8560
+            "gold": 2454,
+            "faction0": 1976,
+            "faction1": 5448,
+            "faction2": 5422
           },
           "items": []
-        }
+        },
+        "related": {}
       },
-      "effectiveTime": "2021-10-26T18:16:15.576872Z",
+      "effectiveTime": "2021-12-13T12:29:42.486718Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "1"
+        "offset": "124"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.875846Z",
+        "processedTime": "2021-12-13T12:29:42.700188Z",
         "logEvents": [],
         "key": "",
-        "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQg==",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "payloadDec": {
           "type": "Character",
           "instance": {
-            "id": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-            "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-            "fullname": "Fullname_1397106131",
+            "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+            "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+            "fullname": "Fullname_1658789383",
             "active": true,
             "currency": {
-              "gold": 9067,
-              "faction0": 7179,
-              "faction1": 7914,
-              "faction2": 8560
+              "gold": 2454,
+              "faction0": 1976,
+              "faction1": 5448,
+              "faction2": 5422
             },
             "items": []
-          }
+          },
+          "related": {}
         },
         "instance": "",
         "cmpdOffset": null
@@ -382,17 +437,30 @@ var testTxnJsonDec = []byte(`{
       "system": "PROCESS",
       "concern": "Player",
       "command": "RequestRelated",
-      "key": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-      "payload": "CglDaGFyYWN0ZXISJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxoIUGxheWVySWQicQokOGI2NWViOWMtMTQ1NC00NTQ3LThhNGItYmRlM2NkNDU0ODVjEiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjIaE0Z1bGxuYW1lXzEzOTcxMDYxMzEgASoMCOtGEIs4GOo9IPBC",
+      "key": "a431b998-c11c-485e-a946-2791d03eab6e",
+      "payload": "CglDaGFyYWN0ZXISJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBoGUGxheWVyInlya2N5eQAAAAokYjAwZDZiMmEtOWM2ZC00NDlkLTkzNTYtNjVjYWRjNjQyMzdkEiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
       "payloadDec": {
         "type": "RelatedRequest",
         "instance": {
           "concern": "Character",
-          "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-          "field": "PlayerId",
-          "payload": "CiQ4YjY1ZWI5Yy0xNDU0LTQ1NDctOGE0Yi1iZGUzY2Q0NTQ4NWMSJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhoTRnVsbG5hbWVfMTM5NzEwNjEzMSABKgwI60YQizgY6j0g8EI=",
+          "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+          "field": "Player",
+          "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
           "payloadDec": {
-            "type": "Player Note: need to add this to codegen!!!"
+            "type": "Character",
+            "instance": {
+              "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+              "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+              "fullname": "Fullname_1658789383",
+              "active": true,
+              "currency": {
+                "gold": 2454,
+                "faction0": 1976,
+                "faction1": 5448,
+                "faction2": 5422
+              },
+              "items": []
+            }
           }
         }
       },
@@ -400,22 +468,45 @@ var testTxnJsonDec = []byte(`{
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "2"
+        "offset": "118"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.923031Z",
+        "processedTime": "2021-12-13T12:29:42.740913Z",
         "logEvents": [],
         "key": "",
-        "payload": "CgZQbGF5ZXISCFBsYXllcklkGjgKJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhIOVXNlcl83MjE3NDkxMjEYAQ==",
+        "payload": "CgZQbGF5ZXISBlBsYXllchq0AXJrY3lBAAAACiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgBEnEKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
         "payloadDec": {
           "type": "RelatedResponse",
           "instance": {
             "concern": "Player",
-            "field": "PlayerId",
-            "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+            "field": "Player",
+            "payload": "cmtjeUEAAAAKJGE0MzFiOTk4LWMxMWMtNDg1ZS1hOTQ2LTI3OTFkMDNlYWI2ZRIPVXNlcl8xMTc2NjkyOTQ3GAEScQokYjAwZDZiMmEtOWM2ZC00NDlkLTkzNTYtNjVjYWRjNjQyMzdkEiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
             "payloadDec": {
-              "type": "Player Note: need to add this to codegen!!!"
+              "type": "Player",
+              "instance": {
+                "id": "a431b998-c11c-485e-a946-2791d03eab6e",
+                "username": "User_1176692947",
+                "active": true,
+                "limitsId": ""
+              },
+              "related": {
+                "characters": [
+                  {
+                    "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+                    "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+                    "fullname": "Fullname_1658789383",
+                    "active": true,
+                    "currency": {
+                      "gold": 2454,
+                      "faction0": 1976,
+                      "faction1": 5448,
+                      "faction2": 5422
+                    }
+                  }
+                ]
+              }
             }
           }
         },
@@ -427,50 +518,73 @@ var testTxnJsonDec = []byte(`{
       "system": "PROCESS",
       "concern": "Character",
       "command": "RefreshRelated",
-      "key": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-      "payload": "CgZQbGF5ZXISCFBsYXllcklkGjgKJDBlNTg3MDZiLWRhY2EtNDQzNy1iMWM2LTM3NmI4ZDU3ZDJmMhIOVXNlcl83MjE3NDkxMjEYAQ==",
+      "key": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+      "payload": "CgZQbGF5ZXISBlBsYXllchq0AXJrY3lBAAAACiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgBEnEKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKg==",
       "payloadDec": {
         "type": "RelatedResponse",
         "instance": {
           "concern": "Player",
-          "field": "PlayerId",
-          "payload": "CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+          "field": "Player",
+          "payload": "cmtjeUEAAAAKJGE0MzFiOTk4LWMxMWMtNDg1ZS1hOTQ2LTI3OTFkMDNlYWI2ZRIPVXNlcl8xMTc2NjkyOTQ3GAEScQokYjAwZDZiMmEtOWM2ZC00NDlkLTkzNTYtNjVjYWRjNjQyMzdkEiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUaE0Z1bGxuYW1lXzE2NTg3ODkzODMgASoMCJYTELgPGMgqIK4q",
           "payloadDec": {
-            "type": "Character Note: need to add this to codegen!!!"
+            "type": "Player",
+            "instance": {
+              "id": "a431b998-c11c-485e-a946-2791d03eab6e",
+              "username": "User_1176692947",
+              "active": true,
+              "limitsId": ""
+            },
+            "related": {
+              "characters": [
+                {
+                  "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+                  "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+                  "fullname": "Fullname_1658789383",
+                  "active": true,
+                  "currency": {
+                    "gold": 2454,
+                    "faction0": 1976,
+                    "faction1": 5448,
+                    "faction2": 5422
+                  }
+                }
+              ]
+            }
           }
         }
       },
-      "effectiveTime": "2021-10-26T18:16:15.923486Z",
+      "effectiveTime": "2021-12-13T12:29:42.741088Z",
       "cmpdOffset": {
         "generation": 1,
         "partition": 0,
-        "offset": "2"
+        "offset": "125"
       },
+      "instance": "",
       "result": {
         "code": "OK",
-        "processedTime": "2021-10-26T18:16:15.989488Z",
+        "processedTime": "2021-12-13T12:29:42.781459Z",
         "logEvents": [],
         "key": "",
-        "payload": "cmtjeXkAAAAKJDhiNjVlYjljLTE0NTQtNDU0Ny04YTRiLWJkZTNjZDQ1NDg1YxIkMGU1ODcwNmItZGFjYS00NDM3LWIxYzYtMzc2YjhkNTdkMmYyGhNGdWxsbmFtZV8xMzk3MTA2MTMxIAEqDAjrRhCLOBjqPSDwQgo4CiQwZTU4NzA2Yi1kYWNhLTQ0MzctYjFjNi0zNzZiOGQ1N2QyZjISDlVzZXJfNzIxNzQ5MTIxGAE=",
+        "payload": "cmtjeXkAAAAKJGIwMGQ2YjJhLTljNmQtNDQ5ZC05MzU2LTY1Y2FkYzY0MjM3ZBIkYTQzMWI5OTgtYzExYy00ODVlLWE5NDYtMjc5MWQwM2VhYjZlGhNGdWxsbmFtZV8xNjU4Nzg5MzgzIAEqDAiWExC4DxjIKiCuKhI5CiRhNDMxYjk5OC1jMTFjLTQ4NWUtYTk0Ni0yNzkxZDAzZWFiNmUSD1VzZXJfMTE3NjY5Mjk0NxgB",
         "payloadDec": {
           "type": "Character",
           "instance": {
-            "id": "8b65eb9c-1454-4547-8a4b-bde3cd45485c",
-            "playerId": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-            "fullname": "Fullname_1397106131",
+            "id": "b00d6b2a-9c6d-449d-9356-65cadc64237d",
+            "playerId": "a431b998-c11c-485e-a946-2791d03eab6e",
+            "fullname": "Fullname_1658789383",
             "active": true,
             "currency": {
-              "gold": 9067,
-              "faction0": 7179,
-              "faction1": 7914,
-              "faction2": 8560
+              "gold": 2454,
+              "faction0": 1976,
+              "faction1": 5448,
+              "faction2": 5422
             },
             "items": []
           },
           "related": {
             "player": {
-              "id": "0e58706b-daca-4437-b1c6-376b8d57d2f2",
-              "username": "User_721749121",
+              "id": "a431b998-c11c-485e-a946-2791d03eab6e",
+              "username": "User_1176692947",
               "active": true
             }
           }

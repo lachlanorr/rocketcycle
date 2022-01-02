@@ -5,15 +5,10 @@
 package main
 
 import (
-	"os"
-	"strconv"
+	"context"
 
-	"github.com/lachlanorr/rocketcycle/pkg/offline"
-	"github.com/lachlanorr/rocketcycle/pkg/platform"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcycmd"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
 
@@ -22,40 +17,18 @@ import (
 )
 
 func main() {
-	rkcyEnvironment := os.Getenv("RKCY_ENVIRONMENT")
-	if rkcyEnvironment == "" {
-		panic("RKCY_ENVIRONMENT not defined")
-	}
-	rkcyOffline, _ := strconv.ParseBool(os.Getenv("RKCY_OFFLINE"))
+	rkcyCmd := rkcycmd.NewRkcyCmd(context.Background(), "rpg")
 
-	var plat rkcy.Platform
+	rkcyCmd.AddStorageInit("postgresql", postgresql.InitPostgresqlPool)
 
-	if !rkcyOffline {
-		var err error
-		plat, err = platform.NewKafkaPlatform(
-			consts.Platform,
-			rkcyEnvironment,
-		)
-		if err != nil {
-			panic(err.Error())
-		}
-	} else {
-		plat = offline.NewOfflinePlatform(
-			consts.Platform,
-			rkcyEnvironment,
-		)
-	}
+	rkcyCmd.AddLogicHandler("Player", &logic.Player{})
+	rkcyCmd.AddLogicHandler("Character", &logic.Character{})
 
-	plat.SetStorageInit("postgresql", postgresql.InitPostgresqlPool)
+	rkcyCmd.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
+	rkcyCmd.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
 
-	plat.RegisterLogicHandler("Player", &logic.Player{})
-	plat.RegisterCrudHandler("postgresql", "Player", &postgresql.Player{})
+	rkcyCmd.AddCobraEdgeCommand(edge.CobraCommand(rkcyCmd.PlatformFunc()))
+	rkcyCmd.AddCobraCommand(sim.CobraCommand())
 
-	plat.RegisterLogicHandler("Character", &logic.Character{})
-	plat.RegisterCrudHandler("postgresql", "Character", &postgresql.Character{})
-
-	rkcyCmd := rkcycmd.NewRkcyCmd(plat)
-	rkcyCmd.AppendCobraCommand(edge.CobraCommand(plat))
-	rkcyCmd.AppendCobraCommand(sim.CobraCommand())
 	rkcyCmd.Start()
 }

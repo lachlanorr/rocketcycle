@@ -6,143 +6,159 @@ package admin
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"sort"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/telem"
+	"github.com/lachlanorr/rocketcycle/version"
 )
 
-type clusterInfo struct {
-	cluster        *rkcypb.Cluster
-	admin          rkcy.AdminClient
-	existingTopics map[string]bool
-	brokerCount    int
+type AdminCmd struct {
+	plat            *platform.Platform
+	producerTracker *ProducerTracker
+	otelcolEndpoint string
 }
 
-func (ci *clusterInfo) Close() {
-	ci.admin.Close()
-}
-
-func createTopic(ci *clusterInfo, name string, numPartitions int) error {
-	replicationFactor := rkcy.Mini(3, ci.brokerCount)
-
-	topicSpec := []kafka.TopicSpecification{
-		{
-			Topic:             name,
-			NumPartitions:     numPartitions,
-			ReplicationFactor: replicationFactor,
-		},
-	}
-
-	timeout, _ := time.ParseDuration("30s")
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	result, err := ci.admin.CreateTopics(ctx, topicSpec, nil)
-	if err != nil {
-		return fmt.Errorf("Unable to create topic: %s", name)
-	}
-
-	var errs []string
-	for _, res := range result {
-		if res.Error.Code() != kafka.ErrNoError {
-			errs = append(errs, fmt.Sprintf("createTopic error for topic %s: %s", res.Topic, res.Error.Error()))
-		}
-	}
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "\n"))
-	}
+func Start(
+	ctx context.Context,
+	plat *platform.Platform,
+	otelcolEndpoint string,
+) {
 	log.Info().
-		Str("Cluster", ci.cluster.Name).
-		Str("Topic", name).
-		Int("NumPartitions", numPartitions).
-		Int("ReplicationFactor", replicationFactor).
-		Msg("Topic created")
+		Str("GitCommit", version.GitCommit).
+		Msg("admin started")
 
-	return nil
-}
-
-func newClusterInfo(plat rkcy.Platform, cluster *rkcypb.Cluster) (*clusterInfo, error) {
-	var ci = clusterInfo{}
-
-	var err error
-	ci.admin, err = plat.NewAdminClient(cluster.Brokers)
-	if err != nil {
-		return nil, err
-	}
-	ci.cluster = cluster
-
-	ci.existingTopics = make(map[string]bool)
-
-	md, err := ci.admin.GetMetadata(nil, true, 1000)
-
-	if err != nil {
-		defer ci.admin.Close()
-		return nil, err
+	adminCmd := &AdminCmd{
+		plat:            plat,
+		producerTracker: NewProducerTracker(plat.Args.Platform, plat.Args.Environment),
+		otelcolEndpoint: otelcolEndpoint,
 	}
 
-	sortedTopics := make([]string, 0, len(md.Topics))
-	ci.brokerCount = len(md.Brokers)
-	for _, tp := range md.Topics {
-		sortedTopics = append(sortedTopics, tp.Topic)
-		ci.existingTopics[tp.Topic] = true
-	}
+	go managePlatform(ctx, plat.WaitGroup(), adminCmd)
 
-	sort.Strings(sortedTopics)
-	for _, topicName := range sortedTopics {
-		log.Info().
-			Str("Cluster", cluster.Name).
-			Str("Topic", topicName).
-			Msg("Topic found")
-	}
-
-	return &ci, nil
-}
-
-func createMissingTopic(topicName string, topic *rkcypb.Concern_Topic, clusterInfos map[string]*clusterInfo) {
-	ci, ok := clusterInfos[topic.Cluster]
-	if !ok {
-		log.Error().
-			Str("Cluster", topic.Cluster).
-			Msg("Topic with invalid Cluster")
+	select {
+	case <-ctx.Done():
 		return
 	}
-	if !ci.existingTopics[topicName] {
-		err := createTopic(
-			ci,
-			topicName,
-			int(topic.PartitionCount))
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("Cluster", topic.Cluster).
-				Str("Topic", topicName).
-				Msg("Topic creation failure")
+}
+
+func managePlatform(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	adminCmd *AdminCmd,
+) {
+	consumersTopic := rkcy.ConsumersTopic(adminCmd.plat.Args.Platform, adminCmd.plat.Args.Environment)
+	adminProdCh := adminCmd.plat.GetProducerCh(ctx, wg, adminCmd.plat.Args.AdminBrokers)
+
+	platCh := make(chan *mgmt.PlatformMessage)
+	mgmt.ConsumePlatformTopic(
+		ctx,
+		wg,
+		adminCmd.plat.StreamProvider(),
+		adminCmd.plat.Args.Platform,
+		adminCmd.plat.Args.Environment,
+		adminCmd.plat.Args.AdminBrokers,
+		platCh,
+		nil,
+	)
+
+	prodCh := make(chan *mgmt.ProducerMessage)
+	mgmt.ConsumeProducersTopic(
+		ctx,
+		wg,
+		adminCmd.plat.StreamProvider(),
+		adminCmd.plat.Args.Platform,
+		adminCmd.plat.Args.Environment,
+		adminCmd.plat.Args.AdminBrokers,
+		prodCh,
+		nil,
+	)
+
+	cullInterval := adminCmd.plat.Args.AdminPingInterval * 10
+	cullTicker := time.NewTicker(cullInterval)
+
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case <-cullTicker.C:
+			// cull stale producers
+			adminCmd.producerTracker.cull(cullInterval)
+		case platMsg := <-platCh:
+			if (platMsg.Directive & rkcypb.Directive_PLATFORM) != rkcypb.Directive_PLATFORM {
+				log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
+				continue
+			}
+
+			adminCmd.plat.RtPlatformDef = platMsg.NewRtPlatDef
+
+			jsonBytes, _ := protojson.Marshal(proto.Message(adminCmd.plat.RtPlatformDef.PlatformDef))
+			log.Info().
+				Str("PlatformJson", string(jsonBytes)).
+				Msg("Platform Replaced")
+
+			platDiff := adminCmd.plat.RtPlatformDef.Diff(platMsg.OldRtPlatDef, adminCmd.plat.Args.AdminBrokers, adminCmd.otelcolEndpoint)
+			rkcy.UpdateTopics(ctx, adminCmd.plat.StreamProvider(), adminCmd.plat.RtPlatformDef.PlatformDef)
+			updateRunner(ctx, adminCmd.plat, adminProdCh, consumersTopic, platDiff)
+		case prodMsg := <-prodCh:
+			if (prodMsg.Directive & rkcypb.Directive_PRODUCER_STATUS) != rkcypb.Directive_PRODUCER_STATUS {
+				log.Error().Msgf("Invalid directive for ProducerTopic: %s", prodMsg.Directive.String())
+				continue
+			}
+
+			adminCmd.producerTracker.update(prodMsg.ProducerDirective, prodMsg.Timestamp, adminCmd.plat.Args.AdminPingInterval*2)
 		}
 	}
 }
 
-func createMissingTopics(topicNamePrefix string, topics *rkcypb.Concern_Topics, clusterInfos map[string]*clusterInfo) {
-	if topics != nil {
-		if topics.Current != nil {
-			createMissingTopic(
-				rkcy.BuildTopicName(topicNamePrefix, topics.Name, topics.Current.Generation),
-				topics.Current,
-				clusterInfos)
+func updateRunner(
+	ctx context.Context,
+	plat *platform.Platform,
+	adminProdCh rkcy.ProducerCh,
+	consumersTopic string,
+	platDiff *rkcy.PlatformDiff,
+) {
+	ctx, span := telem.StartFunc(ctx)
+	defer span.End()
+	traceParent := telem.ExtractTraceParent(ctx)
+
+	for _, p := range platDiff.ProgsToStop {
+		msg, err := rkcy.NewKafkaMessage(
+			&consumersTopic,
+			0,
+			&rkcypb.ConsumerDirective{Program: p},
+			rkcypb.Directive_CONSUMER_STOP,
+			traceParent,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
-		if topics.Future != nil {
-			createMissingTopic(
-				rkcy.BuildTopicName(topicNamePrefix, topics.Name, topics.Future.Generation),
-				topics.Future,
-				clusterInfos)
+
+		adminProdCh <- msg
+	}
+
+	for _, p := range platDiff.ProgsToStart {
+		msg, err := rkcy.NewKafkaMessage(
+			&consumersTopic,
+			0,
+			&rkcypb.ConsumerDirective{Program: p},
+			rkcypb.Directive_CONSUMER_START,
+			traceParent,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Failure in kafkaMessage during updateRunner")
+			return
 		}
+
+		adminProdCh <- msg
 	}
 }

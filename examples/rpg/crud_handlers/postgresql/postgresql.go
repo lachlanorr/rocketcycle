@@ -10,7 +10,7 @@ import (
 
 var pool *pgxpool.Pool = nil
 
-func InitPostgresqlPool(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error {
+func InitPostgresqlPool(ctx context.Context, wg *sync.WaitGroup, config map[string]string) error {
 	connString, ok := config["connString"]
 	if !ok {
 		return fmt.Errorf("No connString specified in config")

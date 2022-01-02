@@ -5,134 +5,62 @@
 package rkcycmd
 
 import (
-	"os"
-	"time"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/admin"
-	"github.com/lachlanorr/rocketcycle/pkg/config"
-	"github.com/lachlanorr/rocketcycle/pkg/platform"
+	"github.com/lachlanorr/rocketcycle/pkg/apecs"
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
 	"github.com/lachlanorr/rocketcycle/pkg/portal"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/pkg/runner"
 	"github.com/lachlanorr/rocketcycle/pkg/watch"
 )
 
-type RkcyCmd struct {
-	plat                rkcy.Platform
-	settings            Settings
-	customCobraCommands []*cobra.Command
+func (rkcyCmd *RkcyCmd) addPlatformFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVarP(&rkcyCmd.settings.Environment, "environment", "e", "", "Application defined environment name, e.g. dev, test, prod, etc")
+	cmd.MarkPersistentFlagRequired("environment")
+
+	cmd.PersistentFlags().StringVar(&rkcyCmd.settings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
+
+	cmd.PersistentFlags().UintVar(&rkcyCmd.settings.AdminPingIntervalSecs, "admin_ping_interval_secs", 10, "Kafka brokers for admin messages like platform updates")
 }
 
-type Settings struct {
-	PlatformFilePath string
-	ConfigFilePath   string
+func (rkcyCmd *RkcyCmd) addConsumerFlags(cmd *cobra.Command) {
+	rkcyCmd.addPlatformFlags(cmd)
 
-	OtelcolEndpoint string
+	cmd.PersistentFlags().StringVar(&rkcyCmd.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume response topic")
+	cmd.MarkPersistentFlagRequired("consumer_brokers")
 
-	AdminBrokers    string
-	ConsumerBrokers string
+	cmd.PersistentFlags().StringVarP(&rkcyCmd.settings.Topic, "topic", "t", "", "Response topic for synchronous apecs transactions")
+	cmd.MarkPersistentFlagRequired("topic")
 
-	HttpAddr string
-	GrpcAddr string
-
-	Topic     string
-	Partition int32
-
-	AdminPingIntervalSecs uint
-
-	StorageTarget string
-
-	WatchDecode bool
+	cmd.PersistentFlags().Int32VarP(&rkcyCmd.settings.Partition, "partition", "p", -1, "Partition index to consume")
+	cmd.MarkPersistentFlagRequired("partition")
 }
 
-func NewRkcyCmd(plat rkcy.Platform) *RkcyCmd {
-	return &RkcyCmd{
-		plat:                plat,
-		settings:            Settings{Partition: -1},
-		customCobraCommands: make([]*cobra.Command, 0),
-	}
-}
+func (rkcyCmd *RkcyCmd) addEdgeFlags(cmd *cobra.Command) {
+	rkcyCmd.addConsumerFlags(cmd)
 
-func (rkcyCmd *RkcyCmd) AppendCobraCommand(cmd *cobra.Command) {
-	rkcyCmd.customCobraCommands = append(rkcyCmd.customCobraCommands, cmd)
-}
-
-func (rkcyCmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
-	err := rkcyCmd.plat.Init(
-		rkcyCmd.settings.AdminBrokers,
-		time.Duration(rkcyCmd.settings.AdminPingIntervalSecs)*time.Second,
-		rkcyCmd.settings.StorageTarget,
-		rkcyCmd.settings.OtelcolEndpoint,
-	)
-	if err != nil {
-		log.Fatal().
-			Err(err).
-			Msg("Failed to initialize platform")
-	}
-}
-
-func (rkcyCmd *RkcyCmd) postrunCobra(cmd *cobra.Command, args []string) {
-	if rkcyCmd.plat.Telem() != nil {
-		rkcyCmd.plat.Telem().Close()
-	}
-}
-
-func (rkcyCmd *RkcyCmd) Start() {
-	prepLogging()
-	// validate all command handlers exist for each concern
-	if !rkcyCmd.plat.ConcernHandlers().ValidateConcernHandlers() {
-		log.Fatal().
-			Msg("ValidateConcernHandlers failed")
-	}
-	rkcyCmd.runCobra()
-}
-
-func prepLogging() {
-	logLevel := os.Getenv("RKCY_LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "info"
-	}
-
-	badParse := false
-	lvl, err := zerolog.ParseLevel(logLevel)
-	if err != nil {
-		lvl = zerolog.InfoLevel
-		badParse = true
-	}
-
-	zerolog.SetGlobalLevel(lvl)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
-
-	if badParse {
-		log.Error().
-			Msgf("Bad value for RKCY_LOG_LEVEL: %s", os.Getenv("RKCY_LOG_LEVEL"))
-	}
+	cmd.PersistentFlags().BoolVar(&rkcyCmd.settings.Edge, "edge", false, "Consume topic as response topic for ExecuteTxnSync operations")
 }
 
 func (rkcyCmd *RkcyCmd) runCobra() {
 	rootCmd := &cobra.Command{
-		Use:               rkcyCmd.plat.Name(),
-		Short:             "Rocketcycle Platform - " + rkcyCmd.plat.Name(),
-		PersistentPreRun:  rkcyCmd.prerunCobra,
-		PersistentPostRun: rkcyCmd.postrunCobra,
+		Use:              rkcyCmd.platform,
+		Short:            "Rocketcycle Platform - " + rkcyCmd.platform,
+		PersistentPreRun: rkcyCmd.prerunCobra,
 	}
 	rootCmd.PersistentFlags().StringVar(&rkcyCmd.settings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
-	rootCmd.PersistentFlags().StringVar(&rkcyCmd.settings.AdminBrokers, "admin_brokers", "localhost:9092", "Kafka brokers for admin messages like platform updates")
-	rootCmd.PersistentFlags().UintVar(&rkcyCmd.settings.AdminPingIntervalSecs, "admin_ping_interval_secs", 1, "Interval for producers to ping the management system")
 
 	// admin sub command
 	adminCmd := &cobra.Command{
 		Use:   "admin",
 		Short: "Admin service that manages topics and orchestration",
 		Run: func(*cobra.Command, []string) {
-			admin.Start(rkcyCmd.plat)
+			admin.Start(rkcyCmd.ctx, rkcyCmd.plat, rkcyCmd.settings.OtelcolEndpoint)
 		},
 	}
+	rkcyCmd.addPlatformFlags(adminCmd)
 	rootCmd.AddCommand(adminCmd)
 
 	// portal sub command
@@ -211,9 +139,10 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "Rocketcycle Portal Server",
 		Long:  "Host rest api",
 		Run: func(*cobra.Command, []string) {
-			portal.Serve(rkcyCmd.plat, rkcyCmd.settings.HttpAddr, rkcyCmd.settings.GrpcAddr)
+			portal.Serve(rkcyCmd.ctx, rkcyCmd.plat, rkcyCmd.settings.HttpAddr, rkcyCmd.settings.GrpcAddr)
 		},
 	}
+	rkcyCmd.addPlatformFlags(portalServeCmd)
 	portalServeCmd.PersistentFlags().StringVar(&rkcyCmd.settings.HttpAddr, "http_addr", ":11371", "Address to host http api")
 	portalServeCmd.PersistentFlags().StringVar(&rkcyCmd.settings.GrpcAddr, "grpc_addr", ":11381", "Address to host grpc api")
 	portalCmd.AddCommand(portalServeCmd)
@@ -231,9 +160,17 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "Replace config",
 		Long:  "WARNING: This will fully replace stored config with the file contents!!!! Publishes contents of config file to config topic and fully replaces it.",
 		Run: func(*cobra.Command, []string) {
-			config.ConfigReplace(rkcyCmd.plat, rkcyCmd.settings.ConfigFilePath)
+			mgmt.ConfigReplace(
+				rkcyCmd.ctx,
+				rkcyCmd.plat.StreamProvider(),
+				rkcyCmd.plat.Args.Platform,
+				rkcyCmd.plat.Args.Environment,
+				rkcyCmd.plat.Args.AdminBrokers,
+				rkcyCmd.settings.ConfigFilePath,
+			)
 		},
 	}
+	rkcyCmd.addPlatformFlags(configReplaceCmd)
 	configReplaceCmd.PersistentFlags().StringVarP(&rkcyCmd.settings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
 	configCmd.AddCommand(configReplaceCmd)
 
@@ -249,7 +186,7 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"concern", "base64_payload"},
 		Run: func(cmd *cobra.Command, args []string) {
-			platform.DecodeInstance(rkcyCmd.plat, args[0], args[1])
+			rkcy.DecodeInstance(rkcyCmd.plat.ConcernHandlers, args[0], args[1])
 		},
 	}
 	decodeCmd.AddCommand(decodeInstanceCmd)
@@ -260,21 +197,18 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "APECS processing mode",
 		Long:  "Runs a proc consumer against the partition specified",
 		Run: func(*cobra.Command, []string) {
-			platform.StartApecsConsumer(
+			apecs.StartApecsConsumer(
+				rkcyCmd.ctx,
 				rkcyCmd.plat,
+				"",
 				rkcyCmd.settings.ConsumerBrokers,
-				rkcypb.System_PROCESS,
 				rkcyCmd.settings.Topic,
 				rkcyCmd.settings.Partition,
+				rkcyCmd.bailoutCh,
 			)
 		},
 	}
-	procCmd.PersistentFlags().StringVar(&rkcyCmd.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
-	procCmd.MarkPersistentFlagRequired("consumer_brokers")
-	procCmd.PersistentFlags().StringVarP(&rkcyCmd.settings.Topic, "topic", "t", "", "Topic to consume")
-	procCmd.MarkPersistentFlagRequired("topic")
-	procCmd.PersistentFlags().Int32VarP(&rkcyCmd.settings.Partition, "partition", "p", -1, "Partition to consume")
-	procCmd.MarkPersistentFlagRequired("partition")
+	rkcyCmd.addConsumerFlags(procCmd)
 	rootCmd.AddCommand(procCmd)
 
 	// storage sub command
@@ -283,21 +217,18 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "APECS storage mode",
 		Long:  "Runs a storage consumer against the partition specified",
 		Run: func(*cobra.Command, []string) {
-			platform.StartApecsConsumer(
+			apecs.StartApecsConsumer(
+				rkcyCmd.ctx,
 				rkcyCmd.plat,
+				rkcyCmd.settings.StorageTarget,
 				rkcyCmd.settings.ConsumerBrokers,
-				rkcypb.System_STORAGE,
 				rkcyCmd.settings.Topic,
 				rkcyCmd.settings.Partition,
+				rkcyCmd.bailoutCh,
 			)
 		},
 	}
-	storageCmd.PersistentFlags().StringVar(&rkcyCmd.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
-	storageCmd.MarkPersistentFlagRequired("consumer_brokers")
-	storageCmd.PersistentFlags().StringVarP(&rkcyCmd.settings.Topic, "topic", "t", "", "Topic to consume")
-	storageCmd.MarkPersistentFlagRequired("topic")
-	storageCmd.PersistentFlags().Int32VarP(&rkcyCmd.settings.Partition, "partition", "p", -1, "Partition to consume")
-	storageCmd.MarkPersistentFlagRequired("partition")
+	rkcyCmd.addConsumerFlags(storageCmd)
 	storageCmd.PersistentFlags().StringVar(&rkcyCmd.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
 	storageCmd.MarkPersistentFlagRequired("storage_target")
 	rootCmd.AddCommand(storageCmd)
@@ -308,21 +239,18 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "APECS secondary storage mode",
 		Long:  "Runs a secondary storage consumer against the partition specified",
 		Run: func(*cobra.Command, []string) {
-			platform.StartApecsConsumer(
+			apecs.StartApecsConsumer(
+				rkcyCmd.ctx,
 				rkcyCmd.plat,
+				rkcyCmd.settings.StorageTarget,
 				rkcyCmd.settings.ConsumerBrokers,
-				rkcypb.System_STORAGE_SCND,
 				rkcyCmd.settings.Topic,
 				rkcyCmd.settings.Partition,
+				rkcyCmd.bailoutCh,
 			)
 		},
 	}
-	storageScndCmd.PersistentFlags().StringVar(&rkcyCmd.settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume topic")
-	storageScndCmd.MarkPersistentFlagRequired("consumer_brokers")
-	storageScndCmd.PersistentFlags().StringVarP(&rkcyCmd.settings.Topic, "topic", "t", "", "Topic to consume")
-	storageScndCmd.MarkPersistentFlagRequired("topic")
-	storageScndCmd.PersistentFlags().Int32VarP(&rkcyCmd.settings.Partition, "partition", "p", -1, "Partition to consume")
-	storageScndCmd.MarkPersistentFlagRequired("partition")
+	rkcyCmd.addConsumerFlags(storageScndCmd)
 	storageScndCmd.PersistentFlags().StringVar(&rkcyCmd.settings.StorageTarget, "storage_target", "", "One of the named storage targets defined within platform config")
 	storageScndCmd.MarkPersistentFlagRequired("storage_target")
 	rootCmd.AddCommand(storageScndCmd)
@@ -333,9 +261,19 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "APECS watch mode",
 		Long:  "Runs a watch consumer against all error/complete topics",
 		Run: func(*cobra.Command, []string) {
-			watch.Start(rkcyCmd.plat, rkcyCmd.settings.WatchDecode)
+			watch.Start(
+				rkcyCmd.ctx,
+				rkcyCmd.plat.WaitGroup(),
+				rkcyCmd.plat.StreamProvider(),
+				rkcyCmd.plat.Args.Platform,
+				rkcyCmd.plat.Args.Environment,
+				rkcyCmd.plat.Args.AdminBrokers,
+				rkcyCmd.plat.ConcernHandlers,
+				rkcyCmd.settings.WatchDecode,
+			)
 		},
 	}
+	rkcyCmd.addPlatformFlags(watchCmd)
 	watchCmd.PersistentFlags().BoolVarP(&rkcyCmd.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(watchCmd)
 
@@ -345,9 +283,19 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "Run all topic consumer programs",
 		Long:  "Orchestrates sub processes as specified by platform topics consumer programs",
 		Run: func(*cobra.Command, []string) {
-			runner.Start(rkcyCmd.plat, rkcyCmd.settings.WatchDecode)
+			runner.Start(
+				rkcyCmd.ctx,
+				rkcyCmd.plat.WaitGroup(),
+				rkcyCmd.plat.StreamProvider(),
+				rkcyCmd.plat.Args.Platform,
+				rkcyCmd.plat.Args.Environment,
+				rkcyCmd.plat.Args.AdminBrokers,
+				rkcyCmd.settings.OtelcolEndpoint,
+				rkcyCmd.settings.WatchDecode,
+			)
 		},
 	}
+	rkcyCmd.addPlatformFlags(runCmd)
 	runCmd.PersistentFlags().BoolVarP(&rkcyCmd.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
 	rootCmd.AddCommand(runCmd)
 
@@ -363,14 +311,22 @@ func (rkcyCmd *RkcyCmd) runCobra() {
 		Short: "Replace platform config",
 		Long:  "WARNING: Only use this to bootstrap a new platform!!!! Publishes contents of platform config file to platform topic and fully replaces platform. Creates platform topics if they do not already exist.",
 		Run: func(*cobra.Command, []string) {
-			platform.PlatformReplace(rkcyCmd.plat, rkcyCmd.settings.PlatformFilePath)
+			mgmt.PlatformReplace(
+				rkcyCmd.ctx,
+				rkcyCmd.plat.StreamProvider(),
+				rkcyCmd.plat.Args.Platform,
+				rkcyCmd.plat.Args.Environment,
+				rkcyCmd.plat.Args.AdminBrokers,
+				rkcyCmd.settings.PlatformFilePath,
+			)
 		},
 	}
+	rkcyCmd.addPlatformFlags(platReplaceCmd)
 	platReplaceCmd.PersistentFlags().StringVarP(&rkcyCmd.settings.PlatformFilePath, "platform_file_path", "p", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platReplaceCmd)
 
-	for _, custCmd := range rkcyCmd.customCobraCommands {
-		rootCmd.AddCommand(custCmd)
+	for _, cmd := range rkcyCmd.customCobraCommands {
+		rootCmd.AddCommand(cmd)
 	}
 
 	rootCmd.Execute()

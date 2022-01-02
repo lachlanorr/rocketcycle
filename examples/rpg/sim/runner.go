@@ -320,7 +320,7 @@ func compareStorage(ctx context.Context, storageTarget *StorageTarget, stateDb *
 	diffs := make([]*Difference, 0, 10)
 
 	wg := &sync.WaitGroup{}
-	storageTarget.Init(ctx, storageTarget.Config, wg)
+	storageTarget.Init(ctx, wg, storageTarget.Config)
 
 	playerPg := store_pg.Player{}
 	characterPg := store_pg.Character{}

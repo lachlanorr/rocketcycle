@@ -33,7 +33,7 @@ type ResultProto struct {
 	Related  proto.Message
 }
 
-type StorageInit func(ctx context.Context, config map[string]string, wg *sync.WaitGroup) error
+type StorageInit func(ctx context.Context, wg *sync.WaitGroup, config map[string]string) error
 type StorageTargetInit struct {
 	*rkcypb.StorageTarget
 	Init StorageInit
@@ -54,12 +54,12 @@ type ConcernHandler interface {
 	) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step)
 	HandleCrudCommand(
 		ctx context.Context,
+		wg *sync.WaitGroup,
 		system rkcypb.System,
 		command string,
 		direction rkcypb.Direction,
 		args *StepArgs,
 		storageType string,
-		wg *sync.WaitGroup,
 	) (*rkcypb.ApecsTxn_Step_Result, []*rkcypb.ApecsTxn_Step)
 	DecodeInstance(ctx context.Context, buffer []byte) (*ResultProto, error)
 	DecodeArg(ctx context.Context, system rkcypb.System, command string, buffer []byte) (*ResultProto, error)
@@ -100,7 +100,7 @@ func (concernHandlers ConcernHandlers) RegisterLogicHandler(concern string, hand
 	}
 }
 
-func (concernHandlers ConcernHandlers) RegisterCrudHandler(storageType string, concern string, handler interface{}) {
+func (concernHandlers ConcernHandlers) RegisterCrudHandler(concern string, storageType string, handler interface{}) {
 	cncHdlr, ok := concernHandlers[concern]
 	if !ok {
 		panic(fmt.Sprintf("%s concern handler not registered", concern))

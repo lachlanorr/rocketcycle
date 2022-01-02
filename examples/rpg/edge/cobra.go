@@ -7,29 +7,21 @@ package edge
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 )
 
 // Cobra sets these values based on command parsing
 type Settings struct {
-	AdminBrokers    string
-	ConsumerBrokers string
-
 	HttpAddr     string
 	GrpcAddr     string
 	EdgeHttpAddr string
 
-	Topic     string
-	Partition int32
-
 	TimeoutSecs int
 }
 
-var (
-	settings Settings = Settings{Partition: -1}
-)
+var settings Settings
 
-func CobraCommand(plat rkcy.Platform) *cobra.Command {
+func CobraCommand(platFunc func() *platform.Platform) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "edge",
 		Short: "RPG Edge Rest Api",
@@ -87,20 +79,13 @@ func CobraCommand(plat rkcy.Platform) *cobra.Command {
 		Short: "Rocketcycle Edge Api Server",
 		Long:  "Provides rest entrypoints into application",
 		Run: func(cmd *cobra.Command, args []string) {
-			serve(plat)
+			serve(platFunc)
 		},
 	}
 
-	serveCmd.PersistentFlags().StringVar(&settings.AdminBrokers, "admin_brokers", "localhost", "Kafka brokers for admin messages like platform updates")
-	serveCmd.PersistentFlags().StringVar(&settings.ConsumerBrokers, "consumer_brokers", "", "Kafka brokers against which to consume response topic")
-	serveCmd.MarkPersistentFlagRequired("consumer_brokers")
 	serveCmd.PersistentFlags().StringVarP(&settings.HttpAddr, "http_addr", "", ":11350", "Address to host http api")
 	serveCmd.PersistentFlags().StringVarP(&settings.GrpcAddr, "grpc_addr", "", ":11360", "Address to host grpc api")
-	serveCmd.PersistentFlags().StringVarP(&settings.Topic, "topic", "t", "", "Topic to consume")
-	serveCmd.MarkPersistentFlagRequired("topic")
-	serveCmd.PersistentFlags().Int32VarP(&settings.Partition, "partition", "p", -1, "Partition index to consume")
-	serveCmd.MarkPersistentFlagRequired("partition")
-	serveCmd.PersistentFlags().IntVar(&settings.TimeoutSecs, "timeout", 30, "Client timeout")
+	serveCmd.PersistentFlags().IntVar(&settings.TimeoutSecs, "timeout_secs", 30, "Client timeout")
 	rootCmd.AddCommand(serveCmd)
 
 	return rootCmd

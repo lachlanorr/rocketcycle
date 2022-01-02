@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
@@ -139,7 +140,7 @@ func initTopics(
 		case "process":
 			prog := &rkcypb.Program{
 				Name:   "./@platform",
-				Args:   []string{"process", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
+				Args:   []string{"process", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
 				Abbrev: "p/@concern/@partition",
 			}
 			topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -148,7 +149,7 @@ func initTopics(
 				if stgTgt.IsPrimary {
 					prog := &rkcypb.Program{
 						Name: "./@platform",
-						Args: []string{"storage", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+						Args: []string{"storage", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
 					}
 					prog.Abbrev = fmt.Sprintf("s/*%s/@concern/@partition", stgTgt.Name)
 					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -159,7 +160,7 @@ func initTopics(
 				if !stgTgt.IsPrimary {
 					prog := &rkcypb.Program{
 						Name: "./@platform",
-						Args: []string{"storage-scnd", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+						Args: []string{"storage-scnd", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
 					}
 					prog.Abbrev = fmt.Sprintf("s/%s/@concern/@partition", stgTgt.Name)
 					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -301,6 +302,19 @@ func NewRtPlatformDef(platDef *rkcypb.PlatformDef, platformName string, environm
 	return &rtPlatDef, nil
 }
 
+func NewRtPlatformDefFromJson(platDefJson []byte, platformName string, environment string) (*RtPlatformDef, error) {
+	platDef := &rkcypb.PlatformDef{}
+	err := protojson.Unmarshal(platDefJson, platDef)
+	if err != nil {
+		return nil, err
+	}
+
+	if !platDef.UpdateTime.IsValid() {
+		platDef.UpdateTime = timestamppb.Now()
+	}
+	return NewRtPlatformDef(platDef, platformName, environment)
+}
+
 var singlePartitionTopics = map[string]bool{
 	"admin":    true,
 	"error":    true,
@@ -440,11 +454,12 @@ func substStr(
 }
 
 var gStdTags map[string]string = map[string]string{
-	"service.name":   "rkcy.@platform.@environment.@concern.@system",
-	"rkcy.concern":   "@concern",
-	"rkcy.system":    "@system",
-	"rkcy.topic":     "@topic",
-	"rkcy.partition": "@partition",
+	"service.name":     "rkcy.@platform.@environment.@concern.@system",
+	"rkcy.environment": "@environment",
+	"rkcy.concern":     "@concern",
+	"rkcy.system":      "@system",
+	"rkcy.topic":       "@topic",
+	"rkcy.partition":   "@partition",
 }
 
 func expandProgs(

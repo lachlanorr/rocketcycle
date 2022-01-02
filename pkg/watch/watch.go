@@ -7,8 +7,6 @@ package watch
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"sync"
 	"time"
 
@@ -18,8 +16,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/consumer"
 	"github.com/lachlanorr/rocketcycle/pkg/jsonutils"
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 	"github.com/lachlanorr/rocketcycle/version"
@@ -37,19 +35,25 @@ func (wt *watchTopic) String() string {
 	return fmt.Sprintf("%s__%s", wt.clusterName, wt.topicName)
 }
 
-func (wt *watchTopic) consume(ctx context.Context, plat rkcy.Platform, watchDecode bool) {
+func (wt *watchTopic) consume(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	strmprov rkcy.StreamProvider,
+	cncHdlrs rkcy.ConcernHandlers,
+	watchDecode bool,
+) {
 	groupName := rkcy.UncommittedGroupNameAllPartitions(wt.topicName)
 	log.Info().Msgf("watching: %s", wt.topicName)
 
 	kafkaLogCh := make(chan kafka.LogEvent)
 	go rkcy.PrintKafkaLogs(ctx, kafkaLogCh)
-	cons, err := plat.NewConsumer(wt.brokers, groupName, kafkaLogCh)
+	cons, err := strmprov.NewConsumer(wt.brokers, groupName, kafkaLogCh)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("BootstrapServers", wt.brokers).
 			Str("GroupId", groupName).
-			Msg("Unable to plat.NewConsumer")
+			Msg("Unable to NewConsumer")
 		return
 	}
 	defer cons.Close()
@@ -66,11 +70,13 @@ func (wt *watchTopic) consume(ctx context.Context, plat rkcy.Platform, watchDeco
 
 	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
 
+	wg.Add(1)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Warn().
 				Msg("watchTopic.consume exiting, ctx.Done()")
+			wg.Done()
 			return
 		default:
 			msg, err := cons.ReadMessage(100 * time.Millisecond)
@@ -89,7 +95,7 @@ func (wt *watchTopic) consume(ctx context.Context, plat rkcy.Platform, watchDeco
 				err := proto.Unmarshal(msg.Value, txn)
 				if err == nil {
 					if watchDecode {
-						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, plat.ConcernHandlers(), &pjOpts)
+						txnJsonDec, err := DecodeTxnOpaques(ctx, txn, cncHdlrs, &pjOpts)
 						if err == nil {
 							log.WithLevel(wt.logLevel).
 								Msg(string(txnJsonDec))
@@ -274,21 +280,28 @@ func DecodeTxnOpaques(ctx context.Context, txn *rkcypb.ApecsTxn, concernHandlers
 
 func WatchResultTopics(
 	ctx context.Context,
-	plat rkcy.Platform,
-	watchDecode bool,
 	wg *sync.WaitGroup,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	cncHdlrs rkcy.ConcernHandlers,
+	watchDecode bool,
 ) {
 	defer wg.Done()
 
 	wtMap := make(map[string]bool)
 
-	platformCh := make(chan *rkcy.PlatformMessage)
-	consumer.ConsumePlatformTopic(
+	platformCh := make(chan *mgmt.PlatformMessage)
+	mgmt.ConsumePlatformTopic(
 		ctx,
-		plat,
+		wg,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
 		platformCh,
 		nil,
-		wg,
 	)
 
 	for {
@@ -309,42 +322,51 @@ func WatchResultTopics(
 				_, ok := wtMap[wt.String()]
 				if !ok {
 					wtMap[wt.String()] = true
-					go wt.consume(ctx, plat, watchDecode)
+					go wt.consume(
+						ctx,
+						wg,
+						strmprov,
+						cncHdlrs,
+						watchDecode,
+					)
 				}
 			}
 		}
 	}
 }
 
-func Start(plat rkcy.Platform, watchDecode bool) {
+func Start(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	cncHdlrs rkcy.ConcernHandlers,
+	watchDecode bool,
+) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("APECS WATCH started")
 
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
-	defer func() {
-		signal.Stop(interruptCh)
-		cancel()
-	}()
-
-	var wg sync.WaitGroup
 	wg.Add(1)
 	go WatchResultTopics(
 		ctx,
-		plat,
+		wg,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
+		cncHdlrs,
 		watchDecode,
-		&wg,
 	)
 
+	wg.Add(1)
 	select {
-	case <-interruptCh:
+	case <-ctx.Done():
 		log.Info().
-			Msg("APECS WATCH stopped")
-		cancel()
-		wg.Wait()
+			Msg("watch stopped")
+		wg.Done()
 		return
 	}
 }

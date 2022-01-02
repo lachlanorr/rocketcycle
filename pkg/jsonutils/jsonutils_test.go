@@ -421,35 +421,35 @@ func TestParseJsonToken(t *testing.T) {
 	{
 		mixed := []byte("\n \t{\"key0\": \"val0\"\t,\"key2\":123.45,\n\n\t   \"key3\":[1, 2, 3,563.23,true, false, null, \"string\\\"val\\\"\"] \t\t\n  }   \t")
 		toks := []*token{
-			&token{Type: ObjectStart},
-			&token{Type: String, Val: "key0"},
-			&token{Type: Colon},
-			&token{Type: String, Val: "val0"},
-			&token{Type: Comma},
-			&token{Type: String, Val: "key2"},
-			&token{Type: Colon},
-			&token{Type: Number, Val: 123.45},
-			&token{Type: Comma},
-			&token{Type: String, Val: "key3"},
-			&token{Type: Colon},
-			&token{Type: ArrayStart},
-			&token{Type: Number, Val: 1.0},
-			&token{Type: Comma},
-			&token{Type: Number, Val: 2.0},
-			&token{Type: Comma},
-			&token{Type: Number, Val: 3.0},
-			&token{Type: Comma},
-			&token{Type: Number, Val: 563.23},
-			&token{Type: Comma},
-			&token{Type: Bool, Val: true},
-			&token{Type: Comma},
-			&token{Type: Bool, Val: false},
-			&token{Type: Comma},
-			&token{Type: Null},
-			&token{Type: Comma},
-			&token{Type: String, Val: "string\"val\""},
-			&token{Type: ArrayEnd},
-			&token{Type: ObjectEnd},
+			&token{Type: OBJECT_START},
+			&token{Type: STRING, Val: "key0"},
+			&token{Type: COLON},
+			&token{Type: STRING, Val: "val0"},
+			&token{Type: COMMA},
+			&token{Type: STRING, Val: "key2"},
+			&token{Type: COLON},
+			&token{Type: NUMBER, Val: 123.45},
+			&token{Type: COMMA},
+			&token{Type: STRING, Val: "key3"},
+			&token{Type: COLON},
+			&token{Type: ARRAY_START},
+			&token{Type: NUMBER, Val: 1.0},
+			&token{Type: COMMA},
+			&token{Type: NUMBER, Val: 2.0},
+			&token{Type: COMMA},
+			&token{Type: NUMBER, Val: 3.0},
+			&token{Type: COMMA},
+			&token{Type: NUMBER, Val: 563.23},
+			&token{Type: COMMA},
+			&token{Type: BOOL, Val: true},
+			&token{Type: COMMA},
+			&token{Type: BOOL, Val: false},
+			&token{Type: COMMA},
+			&token{Type: NULL},
+			&token{Type: COMMA},
+			&token{Type: STRING, Val: "string\"val\""},
+			&token{Type: ARRAY_END},
+			&token{Type: OBJECT_END},
 		}
 		b := mixed
 		var tok *token
@@ -472,7 +472,7 @@ func TestParseJsonToken(t *testing.T) {
 		}
 	}
 
-	// String
+	// STRING
 	{
 		testVals := map[string]string{
 			`a string`: "a string",
@@ -514,18 +514,18 @@ func TestParseJsonToken(t *testing.T) {
 			qtv := fmt.Sprintf(`"%s"`, tv)
 			b, tok, err := nextToken([]byte(qtv))
 			if err != nil {
-				t.Errorf("String decode error %s, %s", err.Error(), tv)
+				t.Errorf("STRING decode error %s, %s", err.Error(), tv)
 			}
 			if len(b) != 0 {
-				t.Errorf("String decode returned non empty slice: %s", tv)
+				t.Errorf("STRING decode returned non empty slice: %s", tv)
 			}
 			if tok.Val.(string) != exp {
-				t.Errorf("String decode match failure: %s != %s", tok.Val.(string), exp)
+				t.Errorf("STRING decode match failure: %s != %s", tok.Val.(string), exp)
 			}
 		}
 	}
 
-	// Number
+	// NUMBER
 	{
 		testVals := map[string]float64{
 			"123":       123.0,
@@ -536,13 +536,13 @@ func TestParseJsonToken(t *testing.T) {
 		for tv, exp := range testVals {
 			b, tok, err := nextToken([]byte(tv))
 			if err != nil {
-				t.Errorf("Number decode error %s, %s", err.Error(), tv)
+				t.Errorf("NUMBER decode error %s, %s", err.Error(), tv)
 			}
 			if len(b) != 0 {
-				t.Errorf("Number decode returned non empty slice: %s", tv)
+				t.Errorf("NUMBER decode returned non empty slice: %s", tv)
 			}
 			if tok.Val.(float64) != exp {
-				t.Errorf("Number decode match failure: %f != %f", tok.Val.(float64), exp)
+				t.Errorf("NUMBER decode match failure: %f != %f", tok.Val.(float64), exp)
 			}
 		}
 	}

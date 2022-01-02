@@ -5,16 +5,38 @@
 package rkcy
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/lachlanorr/rocketcycle/pkg/jsonutils"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
+
+func DecodeInstance(cncHdlrs ConcernHandlers, concern string, payload64 string) {
+	ctx := context.Background()
+
+	jsonBytes, err := cncHdlrs.DecodeInstance64Json(ctx, concern, payload64)
+	if err != nil {
+		fmt.Printf("Failed to decode: %s\n", err.Error())
+		os.Stderr.WriteString(fmt.Sprintf("Failed to decode: %s\n", err.Error()))
+		os.Exit(1)
+	}
+
+	var indentJson bytes.Buffer
+	err = json.Indent(&indentJson, jsonBytes, "", "  ")
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("Failed to json.Indent: %s\n", err.Error()))
+		os.Exit(1)
+	}
+
+	fmt.Println(string(indentJson.Bytes()))
+}
 
 func (concernHandlers ConcernHandlers) DecodeInstance(ctx context.Context, concern string, buffer []byte) (*ResultProto, error) {
 	concernHandler, ok := concernHandlers[concern]

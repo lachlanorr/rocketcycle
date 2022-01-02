@@ -22,6 +22,9 @@ default: all
 .PHONY: all
 all: check protoc-gen-rkcy proto examples ## build everything
 
+.PHONY: all-with-tests
+all-with-tests: all tests ## build everything and tests
+
 .PHONY: check
 check: ## check license headers in files
 	@go run ./scripts/check_file_headers.go cmd internal pkg proto scratch scripts
@@ -44,6 +47,11 @@ protoc-gen-rkcy: proto ## compile rkcy mgmt app
 	-ldflags $(GO_LDFLAGS) \
 	-o $(BUILD_BIN_DIR)/protoc-gen-rkcy \
 	./cmd/protoc-gen-rkcy
+
+.PHONY: tests
+tests: proto
+	@echo "==> Testing $@..."
+	@go test ./...
 
 .PHONY: examples
 examples: rpg ## compile rpg example

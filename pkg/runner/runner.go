@@ -11,14 +11,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/lachlanorr/rocketcycle/pkg/consumer"
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
@@ -200,12 +199,14 @@ func updateRunning(
 	}
 }
 
-func printer(ctx context.Context, printCh <-chan string, wg *sync.WaitGroup) {
+func printer(ctx context.Context, wg *sync.WaitGroup, printCh <-chan string) {
 	defer wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info().
+				Msg("runner printer stopped")
 			return
 		case line := <-printCh:
 			fmt.Println(line)
@@ -229,16 +230,20 @@ func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh c
 	}
 }
 
-func defaultArgs(adminBrokers string, otelcolEndpoint string) []string {
+func defaultArgs(environment string, adminBrokers string, otelcolEndpoint string) []string {
 	return []string{
-		"--admin_brokers=" + adminBrokers,
-		"--otelcol_endpoint=" + otelcolEndpoint,
+		"-e", environment,
+		"--admin_brokers", adminBrokers,
+		"--otelcol_endpoint", otelcolEndpoint,
 	}
 }
 
 func startAdmin(
 	ctx context.Context,
-	plat rkcy.Platform,
+	platform string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
 	running map[string]*rtProgram,
 	printCh chan<- string,
 ) {
@@ -248,10 +253,10 @@ func startAdmin(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + plat.Name(),
-				Args:   append([]string{"admin"}, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...),
+				Name:   "./" + platform,
+				Args:   append([]string{"admin"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
 				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", plat.Name(), plat.Environment())},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", platform, environment)},
 			},
 		},
 		printCh,
@@ -260,7 +265,10 @@ func startAdmin(
 
 func startPortalServer(
 	ctx context.Context,
-	plat rkcy.Platform,
+	platform string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
 	running map[string]*rtProgram,
 	printCh chan<- string,
 ) {
@@ -270,10 +278,10 @@ func startPortalServer(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + plat.Name(),
-				Args:   append([]string{"portal", "serve"}, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...),
+				Name:   "./" + platform,
+				Args:   append([]string{"portal", "serve"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
 				Abbrev: "portal",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", plat.Name(), plat.Environment())},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", platform, environment)},
 			},
 		},
 		printCh,
@@ -282,7 +290,10 @@ func startPortalServer(
 
 func startWatch(
 	ctx context.Context,
-	plat rkcy.Platform,
+	platform string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
 	watchDecode bool,
 	running map[string]*rtProgram,
 	printCh chan<- string,
@@ -291,7 +302,7 @@ func startWatch(
 	if watchDecode {
 		args = append(args, "-d")
 	}
-	args = append(args, defaultArgs(plat.AdminBrokers(), plat.Telem().OtelcolEndpoint)...)
+	args = append(args, defaultArgs(environment, adminBrokers, otelcolEndpoint)...)
 
 	updateRunning(
 		ctx,
@@ -299,10 +310,10 @@ func startWatch(
 		rkcypb.Directive_CONSUMER_START,
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
-				Name:   "./" + plat.Name(),
+				Name:   "./" + platform,
 				Args:   args,
 				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", plat.Name(), plat.Environment())},
+				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", platform, environment)},
 			},
 		},
 		printCh,
@@ -311,28 +322,37 @@ func startWatch(
 
 func RunConsumerPrograms(
 	ctx context.Context,
-	plat rkcy.Platform,
-	watchDecode bool,
 	wg *sync.WaitGroup,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
+	watchDecode bool,
 ) {
-	consCh := make(chan *consumer.ConsumerMessage)
+	defer wg.Done()
 
-	consumer.ConsumeConsumersTopic(
+	consCh := make(chan *mgmt.ConsumerMessage)
+
+	mgmt.ConsumeConsumersTopic(
 		ctx,
-		plat,
+		wg,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
 		consCh,
 		nil,
-		wg,
 	)
 
 	running := map[string]*rtProgram{}
 
 	printCh := make(chan string, 100)
 	wg.Add(1)
-	go printer(ctx, printCh, wg)
-	startAdmin(ctx, plat, running, printCh)
-	startPortalServer(ctx, plat, running, printCh)
-	startWatch(ctx, plat, watchDecode, running, printCh)
+	go printer(ctx, wg, printCh)
+	startAdmin(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, printCh)
+	startPortalServer(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, printCh)
+	//startWatch(ctx, platform, environment, adminBrokers, otelcolEndpoint, watchDecode, running, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 
@@ -361,29 +381,34 @@ func RunConsumerPrograms(
 	}
 }
 
-func Start(plat rkcy.Platform, watchDecode bool) {
-	ctx, cancel := context.WithCancel(context.Background())
-	interruptCh := make(chan os.Signal, 1)
-	signal.Notify(interruptCh, os.Interrupt)
-	defer func() {
-		signal.Stop(interruptCh)
-		cancel()
-	}()
-
-	var wg sync.WaitGroup
+func Start(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	otelcolEndpoint string,
+	watchDecode bool,
+) {
 	wg.Add(1)
 	go RunConsumerPrograms(
 		ctx,
-		plat,
+		wg,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
+		otelcolEndpoint,
 		watchDecode,
-		&wg,
 	)
-	for {
-		select {
-		case <-interruptCh:
-			cancel()
-			// We don't do wg.Wait() to exit quickly and we are readonly
-			return
-		}
+
+	wg.Add(1)
+	select {
+	case <-ctx.Done():
+		log.Info().
+			Msg("runner stopped")
+		wg.Done()
+		return
 	}
 }

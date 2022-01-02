@@ -13,7 +13,16 @@
           },
           "consumerProgram": {
             "name": "./@platform",
-            "args": ["edge", "serve", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--http_addr", ":1135@partition", "--grpc_addr", ":1136@partition"],
+            "args": ["edge", "serve",
+                     "-e", "@environment",
+                     "-t", "@topic",
+                     "-p", "@partition",
+                     "--admin_brokers", "@admin_brokers",
+                     "--consumer_brokers", "@consumer_brokers",
+                     "--http_addr", ":1135@partition",
+                     "--grpc_addr", ":1136@partition",
+                     "--otelcol_endpoint", "@otelcol_endpoint"
+                    ],
             "abbrev": "edge/@partition",
             "tags": {"service.name": "rkcy.@platform.@concern"}
           }

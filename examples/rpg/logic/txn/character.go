@@ -7,7 +7,6 @@ package txn
 import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 
-	"github.com/lachlanorr/rocketcycle/examples/rpg/consts"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
@@ -16,7 +15,7 @@ func Fund(fr *pb.FundingRequest) *rkcy.Txn {
 		Revert: rkcy.REVERTABLE,
 		Steps: []rkcy.Step{
 			{
-				Concern: consts.Character,
+				Concern: "Character",
 				Command: "Fund",
 				Key:     fr.CharacterId,
 				Payload: fr,
