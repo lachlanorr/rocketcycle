@@ -7,9 +7,12 @@ package offline
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -117,19 +120,48 @@ func (topic *Topic) GetMetadata() kafka.TopicMetadata {
 //------------------------------------------------------------------------------
 
 type Cluster struct {
-	name    string
-	brokers string
-	topics  map[string]*Topic
-	mtx     sync.Mutex
+	name      string
+	brokers   string
+	brokersMd []kafka.BrokerMetadata
+	topics    map[string]*Topic
+	mtx       sync.Mutex
 }
 
-func NewCluster(name string, brokers string) *Cluster {
-	clust := &Cluster{
+func NewCluster(name string, brokers string) (*Cluster, error) {
+	clus := &Cluster{
 		name:    name,
 		brokers: brokers,
 		topics:  make(map[string]*Topic),
 	}
-	return clust
+
+	brokerList := strings.Split(brokers, ",")
+	clus.brokersMd = make([]kafka.BrokerMetadata, len(brokerList))
+	for i, hostport := range brokerList {
+		var (
+			host string
+			port int
+			err  error
+		)
+		colpos := strings.Index(hostport, ":")
+		if colpos != -1 {
+			host = hostport[:colpos]
+			port, err = strconv.Atoi(hostport[colpos+1:])
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			host = hostport
+			port = 9092
+		}
+
+		clus.brokersMd[i] = kafka.BrokerMetadata{
+			ID:   int32(i),
+			Host: host,
+			Port: port,
+		}
+	}
+
+	return clus, nil
 }
 
 func (clus *Cluster) GetPartition(topicName string, partition int32) (*Partition, error) {
@@ -153,14 +185,6 @@ func (clus *Cluster) GetMetadata(topic *string, allTopics bool, timeoutMs int) (
 
 	md := &kafka.Metadata{}
 
-	md.Brokers = []kafka.BrokerMetadata{
-		{
-			ID:   0,
-			Host: "offline",
-			Port: 0,
-		},
-	}
-
 	md.Topics = make(map[string]kafka.TopicMetadata)
 	for name, topic := range clus.topics {
 		md.Topics[name] = topic.GetMetadata()
@@ -176,9 +200,15 @@ func (clus *Cluster) CreateTopics(
 ) ([]kafka.TopicResult, error) {
 	res := make([]kafka.TopicResult, len(topics))
 	for i, topic := range topics {
-		clus.topics[topic.Topic] = NewTopic(topic.Topic, topic.NumPartitions)
 		res[i].Topic = topic.Topic
-		res[i].Error = kafka.NewError(kafka.ErrNoError, "kafka.ErrNoError", false)
+
+		if _, ok := clus.topics[topic.Topic]; ok {
+			res[i].Error = kafka.NewError(kafka.ErrTopicAlreadyExists, "kafka.ErrTopicAlreadyExists", false)
+			return res, nil
+		}
+
+		log.Info().Msgf("CreateTopics: %s %d", topic.Topic, topic.NumPartitions)
+		clus.topics[topic.Topic] = NewTopic(topic.Topic, topic.NumPartitions)
 	}
 	return res, nil
 }
@@ -195,17 +225,33 @@ type Manager struct {
 	mtx          sync.Mutex
 }
 
-func NewManager(rtPlatDef *rkcy.RtPlatformDef) *Manager {
+func NewManager(rtPlatDef *rkcy.RtPlatformDef) (*Manager, error) {
+	log.Info().Msgf("NewManager")
+
 	mgr := &Manager{
 		clusters: make(map[string]*Cluster),
 	}
 
-	mgr.adminBrokers = rtPlatDef.Clusters[rtPlatDef.AdminCluster].Brokers
+	mgr.adminBrokers = rtPlatDef.AdminCluster.Brokers
 
-	for _, cd := range rtPlatDef.Clusters {
-		mgr.clusters[cd.Brokers] = NewCluster(cd.Name, cd.Brokers)
+	var err error
+	for _, clus := range rtPlatDef.Clusters {
+		mgr.clusters[clus.Brokers], err = NewCluster(clus.Name, clus.Brokers)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return mgr
+
+	return mgr, nil
+}
+
+func NewManagerFromJson(platformDefJson []byte) (*Manager, error) {
+	rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(platformDefJson)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewManager(rtPlatDef)
 }
 
 func (mgr *Manager) GetCluster(brokers string) (*Cluster, error) {

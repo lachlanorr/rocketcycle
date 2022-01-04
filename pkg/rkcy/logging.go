@@ -50,24 +50,30 @@ func LogProto(msg proto.Message) {
 	log.Info().Msg(reqJson)
 }
 
+var gLoggingIsPrepd = false
+
 func PrepLogging() {
-	logLevel := os.Getenv("RKCY_LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "info"
-	}
+	if !gLoggingIsPrepd {
+		gLoggingIsPrepd = true
 
-	badParse := false
-	lvl, err := zerolog.ParseLevel(logLevel)
-	if err != nil {
-		lvl = zerolog.InfoLevel
-		badParse = true
-	}
+		logLevel := os.Getenv("RKCY_LOG_LEVEL")
+		if logLevel == "" {
+			logLevel = "info"
+		}
 
-	zerolog.SetGlobalLevel(lvl)
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
+		badParse := false
+		lvl, err := zerolog.ParseLevel(logLevel)
+		if err != nil {
+			lvl = zerolog.InfoLevel
+			badParse = true
+		}
 
-	if badParse {
-		log.Error().
-			Msgf("Bad value for RKCY_LOG_LEVEL: %s", os.Getenv("RKCY_LOG_LEVEL"))
+		zerolog.SetGlobalLevel(lvl)
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02T15:04:05.999"})
+
+		if badParse {
+			log.Error().
+				Msgf("Bad value for RKCY_LOG_LEVEL: %s", os.Getenv("RKCY_LOG_LEVEL"))
+		}
 	}
 }

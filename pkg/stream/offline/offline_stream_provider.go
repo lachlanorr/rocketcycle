@@ -5,29 +5,27 @@
 package offline
 
 import (
-	"context"
-	"sync"
-	"time"
-
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
-	"github.com/lachlanorr/rocketcycle/pkg/apecs"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type OfflineStreamProvider struct {
 	mgr *Manager
 }
 
-func NewOfflineStreamProvider(rtPlatDef *rkcy.RtPlatformDef) *OfflineStreamProvider {
-	return &OfflineStreamProvider{
-		mgr: NewManager(rtPlatDef),
+func NewOfflineStreamProvider(rtPlatDef *rkcy.RtPlatformDef) (*OfflineStreamProvider, error) {
+	mgr, err := NewManager(rtPlatDef)
+	if err != nil {
+		return nil, err
 	}
+	return &OfflineStreamProvider{
+		mgr: mgr,
+	}, nil
 }
 
 func (ostrmprov *OfflineStreamProvider) NewConsumer(brokers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
-	clus, err := ostrmprov.GetCluster(brokers)
+	clus, err := ostrmprov.mgr.GetCluster(brokers)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +34,7 @@ func (ostrmprov *OfflineStreamProvider) NewConsumer(brokers string, groupName st
 }
 
 func (ostrmprov *OfflineStreamProvider) NewProducer(brokers string, logCh chan kafka.LogEvent) (rkcy.Producer, error) {
-	clus, err := ostrmprov.GetCluster(brokers)
+	clus, err := ostrmprov.mgr.GetCluster(brokers)
 	if err != nil {
 		return nil, err
 	}
@@ -45,5 +43,5 @@ func (ostrmprov *OfflineStreamProvider) NewProducer(brokers string, logCh chan k
 }
 
 func (ostrmprov *OfflineStreamProvider) NewAdminClient(brokers string) (rkcy.AdminClient, error) {
-	return ostrmprov.GetCluster(brokers)
+	return ostrmprov.mgr.GetCluster(brokers)
 }

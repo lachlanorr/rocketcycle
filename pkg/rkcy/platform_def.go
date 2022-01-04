@@ -22,8 +22,9 @@ type RtPlatformDef struct {
 	PlatformDef          *rkcypb.PlatformDef
 	Hash                 string
 	Concerns             map[string]*RtConcern
+	DefaultResponseTopic *RtTopics
 	Clusters             map[string]*rkcypb.Cluster
-	AdminCluster         string
+	AdminCluster         *rkcypb.Cluster
 	StorageTargets       map[string]*rkcypb.StorageTarget
 	PrimaryStorageTarget string
 }
@@ -99,7 +100,7 @@ func newRtTopics(rtPlatDef *RtPlatformDef, rtConc *RtConcern, topics *rkcypb.Con
 	return &rtTops, nil
 }
 
-func initTopic(topic *rkcypb.Concern_Topic, adminCluster string) *rkcypb.Concern_Topic {
+func initTopic(topic *rkcypb.Concern_Topic, adminCluster *rkcypb.Cluster) *rkcypb.Concern_Topic {
 	if topic == nil {
 		topic = &rkcypb.Concern_Topic{}
 	}
@@ -108,7 +109,7 @@ func initTopic(topic *rkcypb.Concern_Topic, adminCluster string) *rkcypb.Concern
 		topic.Generation = 1
 	}
 	if topic.Cluster == "" {
-		topic.Cluster = adminCluster
+		topic.Cluster = adminCluster.Name
 	}
 	if topic.PartitionCount <= 0 {
 		topic.PartitionCount = 1
@@ -121,7 +122,7 @@ func initTopic(topic *rkcypb.Concern_Topic, adminCluster string) *rkcypb.Concern
 
 func initTopics(
 	topics *rkcypb.Concern_Topics,
-	adminCluster string,
+	adminCluster *rkcypb.Cluster,
 	concernType rkcypb.Concern_Type,
 	storageTargets []*rkcypb.StorageTarget,
 ) *rkcypb.Concern_Topics {
@@ -206,10 +207,10 @@ func NewRtPlatformDef(platDef *rkcypb.PlatformDef, platformName string, environm
 			return nil, fmt.Errorf("Cluster '%s' missing brokers field", cluster.Name)
 		}
 		if cluster.IsAdmin {
-			if rtPlatDef.AdminCluster != "" {
+			if rtPlatDef.AdminCluster != nil {
 				return nil, fmt.Errorf("More than one admin cluster")
 			}
-			rtPlatDef.AdminCluster = cluster.Name
+			rtPlatDef.AdminCluster = cluster
 		}
 		// verify clusters only appear once
 		if _, ok := rtPlatDef.Clusters[cluster.Name]; ok {
@@ -217,7 +218,7 @@ func NewRtPlatformDef(platDef *rkcypb.PlatformDef, platformName string, environm
 		}
 		rtPlatDef.Clusters[cluster.Name] = cluster
 	}
-	if rtPlatDef.AdminCluster == "" {
+	if rtPlatDef.AdminCluster == nil {
 		return nil, fmt.Errorf("No admin cluster defined")
 	}
 
@@ -297,12 +298,20 @@ func NewRtPlatformDef(platDef *rkcypb.PlatformDef, platformName string, environm
 			return nil, err
 		}
 		rtPlatDef.Concerns[concern.Name] = rtConc
+
+		// By convention, if there's an "edge" GENERIC concern with a "response" topic, set as default
+		if rtConc.Concern.Name == "edge" && rtConc.Concern.Type == rkcypb.Concern_GENERAL {
+			respTopic, ok := rtConc.Topics["response"]
+			if ok {
+				rtPlatDef.DefaultResponseTopic = respTopic
+			}
+		}
 	}
 
 	return &rtPlatDef, nil
 }
 
-func NewRtPlatformDefFromJson(platDefJson []byte, platformName string, environment string) (*RtPlatformDef, error) {
+func NewRtPlatformDefFromJson(platDefJson []byte) (*RtPlatformDef, error) {
 	platDef := &rkcypb.PlatformDef{}
 	err := protojson.Unmarshal(platDefJson, platDef)
 	if err != nil {
@@ -312,7 +321,7 @@ func NewRtPlatformDefFromJson(platDefJson []byte, platformName string, environme
 	if !platDef.UpdateTime.IsValid() {
 		platDef.UpdateTime = timestamppb.Now()
 	}
-	return NewRtPlatformDef(platDef, platformName, environment)
+	return NewRtPlatformDef(platDef, platDef.Name, platDef.Environment)
 }
 
 var singlePartitionTopics = map[string]bool{

@@ -7,7 +7,6 @@ package offline
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
@@ -15,10 +14,8 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 )
 
-const FOO = "foo"
-
 func TestTopic(t *testing.T) {
-	topic := NewTopic(FOO, 3)
+	topic := NewTopic("foo", 3)
 	if len(topic.partitions) != 3 {
 		t.Fatalf("Invalid partition count, expecting 3 vs %d", len(topic.partitions))
 	}
@@ -77,22 +74,21 @@ func TestPlatform(t *testing.T) {
 	rkcy.PrepLogging()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	bailoutCh := make(chan bool)
+	defer cancel()
 
-	rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(gTestPlatformDef, "rpg", "test")
+	plat, err := NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
 	if err != nil {
-		t.Fatalf("Failed to NewRtPlatformDefFromJson: %s", err.Error())
+		t.Fatalf("NewOfflinePlatformFromJson error: %s", err.Error())
 	}
 
-	oplat, err := platform.NewPlatform(ctx, &wg, rtPlatDef, bailoutCh)
-	if err != nil {
-		t.Fatalf("Failed to NewOfflinePlatform: %s", err.Error())
+	ostrmprov, ok := plat.StreamProvider().(*OfflineStreamProvider)
+	if !ok {
+		t.Fatalf("OfflinePlatform without OfflineStreamProvider")
 	}
 
 	// validate all topics are created
 	for _, topDet := range gTopicDetails {
-		clus, err := oplat.mgr.GetCluster(topDet.brokers)
+		clus, err := ostrmprov.mgr.GetCluster(topDet.brokers)
 		if err != nil {
 			t.Fatalf("GetCluster error: %s", err.Error())
 		}
@@ -122,9 +118,6 @@ func TestPlatform(t *testing.T) {
 			}
 		}
 	}
-
-	cancel()
-	wg.Wait()
 }
 
 type TopicDetails struct {
@@ -135,97 +128,97 @@ type TopicDetails struct {
 
 var gTopicDetails = []TopicDetails{
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.platform",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.config",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.producers",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.consumers",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.edge.GENERAL.response.0001",
 		count:   20,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.edge.GENERAL.admin.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.edge.GENERAL.error.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.process.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.storage.0001",
 		count:   3,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.admin.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.error.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.complete.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Player.APECS.storage-scnd.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.process.0001",
 		count:   5,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.storage.0001",
 		count:   10,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.admin.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.error.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.complete.0001",
 		count:   1,
 	},
 	{
-		brokers: "offline:0",
+		brokers: "offline:9092",
 		name:    "rkcy.rpg.test.Character.APECS.storage-scnd.0001",
 		count:   1,
 	},
@@ -255,8 +248,8 @@ var gTestPlatformDef = []byte(`{
                        "--admin_brokers", "@admin_brokers",
                        "--consumer_brokers", "@consumer_brokers",
                        "--http_addr", ":1135@partition",
-                       "--grpc_addr", ":1136@partition"
-                       "--otelcol_endpoint", "@otelcol_endpoint",
+                       "--grpc_addr", ":1136@partition",
+                       "--otelcol_endpoint", "@otelcol_endpoint"
                       ],
               "abbrev": "edge/@partition",
               "tags": {"service.name": "rkcy.@platform.@environment.@concern"}
@@ -308,7 +301,7 @@ var gTestPlatformDef = []byte(`{
   "clusters": [
     {
       "name": "offline",
-      "brokers": "offline:0",
+      "brokers": "offline:9092",
       "isAdmin": true
     }
   ],

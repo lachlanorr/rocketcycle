@@ -6,36 +6,22 @@ package logic
 
 import (
 	"context"
-	"sync"
 	"testing"
 
-	"github.com/lachlanorr/rocketcycle/pkg/offline"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
+	"github.com/lachlanorr/rocketcycle/pkg/stream/offline"
 )
 
 func TestCharacter(t *testing.T) {
 	rkcy.PrepLogging()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	bailoutCh := make(chan bool)
+	defer cancel()
 
-	rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(gTestPlatformDef, "rpg", "test")
+	_, err := offline.NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
 	if err != nil {
-		t.Fatalf("Failed to NewRtPlatformDefFromJson: %s", err.Error())
+		t.Fatalf("Failed to NewOfflinePlatformFromJson: %s", err.Error())
 	}
-
-	_, err := offline.NewOfflinePlatform(ctx, rtPlatDef, bailoutCh, &wg)
-	if err != nil {
-		t.Fatalf("Failed to NewOfflinePlatform: %s", err.Error())
-	}
-
-	//	res, err := apecs.ExecuteTxnSync(
-	//		ctx,
-	//		oplat,
-
-	cancel()
-	wg.Wait()
 }
 
 // All the clusters below are distinct, to make sure
@@ -111,30 +97,30 @@ var gTestPlatformDef = []byte(`{
     },
     {
       "name": "edge_response",
-      "brokers": "offline_edge_response:0",
+      "brokers": "offline_edge_response:0"
+    },
+    {
+      "name": "player_process",
+      "brokers": "offline_player_process:0"
+    },
+    {
+      "name": "player_storage",
+      "brokers": "offline_player_storage:0"
     },
     {
       "name": "character_process",
-      "brokers": "offline_player_process:0",
+      "brokers": "offline_character_process:0"
     },
     {
-      "name": "character_process",
-      "brokers": "offline_player_storage:0",
-    },
-    {
-      "name": "character_process",
-      "brokers": "offline_character_process:0",
-    },
-    {
-      "name": "character_process",
-      "brokers": "offline_character_storage:0",
+      "name": "character_storage",
+      "brokers": "offline_character_storage:0"
     }
   ],
   "storageTargets": [
     {
       "name": "offline-0",
       "type": "ramdb",
-      "isPrimary": true,
+      "isPrimary": true
     }
   ]
 }`)
