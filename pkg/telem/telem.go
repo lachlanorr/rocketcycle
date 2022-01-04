@@ -15,9 +15,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	otel_codes "go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/exporters/otlp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric/global"
 	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
 	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
@@ -30,39 +32,37 @@ import (
 )
 
 var (
-	gOtelcolEndpoint string
-	gExporter        *otlp.Exporter
-	gTp              *sdktrace.TracerProvider
-	gPusher          *controller.Controller
+	gIsInitialized  bool
+	gTraceExporter  *otlptrace.Exporter
+	gMetricExporter *otlpmetric.Exporter
+	gTp             *sdktrace.TracerProvider
+	gMetricPusher   *controller.Controller
 )
 
-func Initialize(ctx context.Context, otelcolEndpoint string) error {
-	var err error
-	gOtelcolEndpoint = otelcolEndpoint
-
-	// Set different endpoints for the metrics and traces collectors
-	metricsDriver := otlpgrpc.NewDriver(
-		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint(otelcolEndpoint),
-	)
-	tracesDriver := otlpgrpc.NewDriver(
-		otlpgrpc.WithInsecure(),
-		otlpgrpc.WithEndpoint(otelcolEndpoint),
-	)
-	splitCfg := otlp.SplitConfig{
-		ForMetrics: metricsDriver,
-		ForTraces:  tracesDriver,
+func initialize(
+	ctx context.Context,
+	traceClient otlptrace.Client,
+	metricClient otlpmetric.Client,
+) error {
+	if gIsInitialized {
+		return nil
 	}
-	driver := otlp.NewSplitDriver(splitCfg)
-	gExporter, err = otlp.NewExporter(ctx, driver)
+
+	gIsInitialized = true
+
+	var err error
+
+	// traces
+	gTraceExporter, err = otlptrace.New(ctx, traceClient)
 	if err != nil {
+		Shutdown(ctx)
 		return err
 	}
 
 	gTp = sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithBatcher(
-			gExporter,
+			gTraceExporter,
 			// add following two options to ensure flush
 			sdktrace.WithBatchTimeout(5*time.Second),
 			sdktrace.WithMaxExportBatchSize(10),
@@ -71,33 +71,66 @@ func Initialize(ctx context.Context, otelcolEndpoint string) error {
 
 	otel.SetTracerProvider(gTp)
 
-	gPusher = controller.New(
-		processor.New(
-			simple.NewWithExactDistribution(),
-			gExporter,
+	// metrics
+	gMetricExporter, err = otlpmetric.New(ctx, metricClient)
+	if err != nil {
+		Shutdown(ctx)
+		return err
+	}
+
+	gMetricPusher = controller.New(
+		processor.NewFactory(
+			simple.NewWithHistogramDistribution(),
+			gMetricExporter,
 		),
-		controller.WithExporter(gExporter),
+		controller.WithExporter(gMetricExporter),
 		controller.WithCollectPeriod(2*time.Second),
 	)
-	global.SetMeterProvider(gPusher.MeterProvider())
+	global.SetMeterProvider(gMetricPusher)
 
-	if err := gPusher.Start(ctx); err != nil {
-		gExporter.Shutdown(ctx)
+	if err := gMetricPusher.Start(ctx); err != nil {
+		Shutdown(ctx)
 		return err
 	}
 
 	return nil
 }
 
+func Initialize(ctx context.Context, otelcolEndpoint string) error {
+	traceClient := otlptracegrpc.NewClient(
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(otelcolEndpoint),
+		otlptracegrpc.WithReconnectionPeriod(50*time.Millisecond),
+	)
+
+	metricClient := otlpmetricgrpc.NewClient(
+		otlpmetricgrpc.WithInsecure(),
+		otlpmetricgrpc.WithEndpoint(otelcolEndpoint),
+		otlpmetricgrpc.WithReconnectionPeriod(50*time.Millisecond),
+	)
+
+	return initialize(ctx, traceClient, metricClient)
+}
+
+func InitializeOffline(ctx context.Context) error {
+	return initialize(ctx, &stubTraceClient{}, &stubMetricClient{})
+}
+
 func Shutdown(ctx context.Context) {
-	if gPusher != nil {
-		gPusher.Stop(ctx)
+	// metrics
+	if gMetricPusher != nil {
+		gMetricPusher.Stop(ctx)
 	}
+	if gMetricExporter != nil {
+		gMetricExporter.Shutdown(ctx)
+	}
+
+	// traces
 	if gTp != nil {
 		gTp.Shutdown(ctx)
 	}
-	if gExporter != nil {
-		gExporter.Shutdown(ctx)
+	if gTraceExporter != nil {
+		gTraceExporter.Shutdown(ctx)
 	}
 }
 
@@ -124,7 +157,7 @@ func SpanContext(ctx context.Context, traceId string) context.Context {
 }
 
 func RecordSpanError(span trace.Span, err error) {
-	span.SetStatus(otel_codes.Error, err.Error())
+	span.SetStatus(codes.Error, err.Error())
 }
 
 func ExtractTraceParent(ctx context.Context) string {
