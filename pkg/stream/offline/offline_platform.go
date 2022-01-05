@@ -8,6 +8,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
 	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
@@ -46,6 +47,16 @@ func NewOfflinePlatformFromJson(
 	if err != nil {
 		return nil, err
 	}
+
+	// publish our platform so everyone gets it
+	mgmt.PlatformReplaceFromJson(
+		ctx,
+		strmprov,
+		rtPlatDef.PlatformDef.Name,
+		rtPlatDef.PlatformDef.Environment,
+		rtPlatDef.AdminCluster.Brokers,
+		platformDefJson,
+	)
 
 	var respTarget *rkcypb.TopicTarget
 	if rtPlatDef.DefaultResponseTopic != nil {

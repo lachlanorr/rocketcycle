@@ -207,7 +207,6 @@ func (clus *Cluster) CreateTopics(
 			return res, nil
 		}
 
-		log.Info().Msgf("CreateTopics: %s %d", topic.Topic, topic.NumPartitions)
 		clus.topics[topic.Topic] = NewTopic(topic.Topic, topic.NumPartitions)
 	}
 	return res, nil

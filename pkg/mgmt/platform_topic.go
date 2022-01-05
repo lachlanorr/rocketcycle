@@ -6,6 +6,7 @@ package mgmt
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"sync"
 	"time"
@@ -92,7 +93,7 @@ func ConsumePlatformTopic(
 	)
 }
 
-func PlatformReplace(
+func PlatformReplaceFromFile(
 	ctx context.Context,
 	strmprov rkcy.StreamProvider,
 	platform string,
@@ -100,24 +101,45 @@ func PlatformReplace(
 	adminBrokers string,
 	platformFilePath string,
 ) {
-	slog := log.With().
-		Str("Brokers", adminBrokers).
-		Str("PlatformFilePath", platformFilePath).
-		Logger()
-
 	// read platform conf file and deserialize
-	conf, err := ioutil.ReadFile(platformFilePath)
+	platformDefJson, err := ioutil.ReadFile(platformFilePath)
 	if err != nil {
-		slog.Fatal().
+		log.Fatal().
+			Str("PlatformFilePath", platformFilePath).
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
-	platDef := rkcypb.PlatformDef{}
-	err = protojson.Unmarshal(conf, proto.Message(&platDef))
+
+	err = PlatformReplaceFromJson(
+		ctx,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
+		platformDefJson,
+	)
+
 	if err != nil {
-		slog.Fatal().
+		log.Fatal().
+			Str("Brokers", adminBrokers).
+			Str("PlatformFilePath", platformFilePath).
 			Err(err).
-			Msg("Failed to unmarshal platform")
+			Msg("Failed to PlatformReplaceFromJson")
+	}
+}
+
+func PlatformReplaceFromJson(
+	ctx context.Context,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	platformDefJson []byte,
+) error {
+	platDef := rkcypb.PlatformDef{}
+	err := protojson.Unmarshal(platformDefJson, proto.Message(&platDef))
+	if err != nil {
+		return err
 	}
 
 	platDef.UpdateTime = timestamppb.Now()
@@ -125,9 +147,7 @@ func PlatformReplace(
 	// create an RtPlatformDef so we run the validations that involves
 	rtPlatDef, err := rkcy.NewRtPlatformDef(&platDef, platform, environment)
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to newRtPlatform")
+		return err
 	}
 	jsonBytes, _ := protojson.Marshal(proto.Message(rtPlatDef.PlatformDef))
 	log.Info().
@@ -146,16 +166,10 @@ func PlatformReplace(
 	)
 
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Str("Platform", platDef.Name).
-			Msg("Failed to create platform topics")
+		return err
 	}
 
 	platformTopic := rkcy.PlatformTopic(platDef.Name, platDef.Environment)
-	slog = slog.With().
-		Str("Topic", platformTopic).
-		Logger()
 
 	// At this point we are guaranteed to have a platform admin topic
 	kafkaLogCh := make(chan kafka.LogEvent)
@@ -163,37 +177,18 @@ func PlatformReplace(
 
 	prod, err := strmprov.NewProducer(adminBrokers, kafkaLogCh)
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to NewProducer")
+		return err
 	}
 	defer func() {
-		log.Warn().
-			Str("Brokers", adminBrokers).
-			Msg("Closing kafka producer")
 		prod.Close()
-		log.Warn().
-			Str("Brokers", adminBrokers).
-			Msg("Closed kafka producer")
 	}()
 
 	msg, err := rkcy.NewKafkaMessage(&platformTopic, 0, &platDef, rkcypb.Directive_PLATFORM, telem.ExtractTraceParent(ctx))
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to kafkaMessage")
+		return err
 	}
 
-	produce := func() {
-		err := prod.Produce(msg, nil)
-		if err != nil {
-			slog.Fatal().
-				Err(err).
-				Msg("Failed to Produce")
-		}
-	}
-
-	produce()
+	prod.Produce(msg, nil)
 
 	// check channel for delivery event
 	timer := time.NewTimer(10 * time.Second)
@@ -201,26 +196,17 @@ Loop:
 	for {
 		select {
 		case <-timer.C:
-			slog.Fatal().
-				Msg("Timeout producing platform message")
+			return errors.New("Timeout producing platform message")
 		case ev := <-prod.Events():
 			msgEv, ok := ev.(*kafka.Message)
-			if !ok {
-				slog.Warn().
-					Msg("Non *kafka.Message event received from producer")
-			} else {
+			if ok {
 				if msgEv.TopicPartition.Error != nil {
-					slog.Warn().
-						Err(msgEv.TopicPartition.Error).
-						Msg("Error reported while producing platform message, trying again after a delay")
-					time.Sleep(1 * time.Second)
-					produce()
+					return msgEv.TopicPartition.Error
 				} else {
-					slog.Info().
-						Msg("Platform config successfully produced")
 					break Loop
 				}
 			}
 		}
 	}
+	return nil
 }
