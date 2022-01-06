@@ -7,7 +7,7 @@ package main
 import (
 	"context"
 
-	"github.com/lachlanorr/rocketcycle/pkg/rkcycmd"
+	"github.com/lachlanorr/rocketcycle/pkg/runner"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/edge"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/sim"
@@ -17,18 +17,18 @@ import (
 )
 
 func main() {
-	rkcyCmd := rkcycmd.NewRkcyCmd(context.Background(), "rpg")
+	runner := runner.NewRunner(context.Background(), "rpg")
 
-	rkcyCmd.AddStorageInit("postgresql", postgresql.InitPostgresqlPool)
+	runner.AddStorageInit("postgresql", postgresql.InitPostgresqlPool)
 
-	rkcyCmd.AddLogicHandler("Player", &logic.Player{})
-	rkcyCmd.AddLogicHandler("Character", &logic.Character{})
+	runner.AddLogicHandler("Player", &logic.Player{})
+	runner.AddLogicHandler("Character", &logic.Character{})
 
-	rkcyCmd.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
-	rkcyCmd.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
+	runner.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
+	runner.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
 
-	rkcyCmd.AddCobraEdgeCommand(edge.CobraCommand(rkcyCmd.PlatformFunc()))
-	rkcyCmd.AddCobraCommand(sim.CobraCommand())
+	runner.AddCobraEdgeCommand(edge.CobraCommand(runner.PlatformFunc()))
+	runner.AddCobraCommand(sim.CobraCommand())
 
-	rkcyCmd.Start()
+	runner.Execute()
 }

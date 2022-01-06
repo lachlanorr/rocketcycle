@@ -5,410 +5,253 @@
 package runner
 
 import (
-	"bufio"
 	"context"
-	"fmt"
-	"io"
 	"os"
-	"os/exec"
+	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/pkg/mgmt"
+	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/stream"
+	"github.com/lachlanorr/rocketcycle/pkg/telem"
 )
 
-type rtProgram struct {
-	program     *rkcypb.Program
-	key         string
-	color       int
-	abbrev      string
-	abbrevColor string
+type Runner struct {
+	platform string
 
-	cmd      *exec.Cmd
-	stdout   io.ReadCloser
-	stderr   io.ReadCloser
-	runCount int
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	wg        sync.WaitGroup
+	bailoutCh chan bool
+
+	settings Settings
+
+	storageInits  []*StorageInit
+	logicHandlers []*LogicHandler
+	crudHandlers  []*CrudHandler
+
+	customCobraCommands []*cobra.Command
+
+	plat *platform.Platform
 }
 
-var gCurrColorIdx int = 0
+type StorageInit struct {
+	storageType string
+	storageInit rkcy.StorageInit
+}
 
-func newRtProgram(program *rkcypb.Program, key string) *rtProgram {
-	rtProg := &rtProgram{
-		program: program,
-		key:     key,
+type LogicHandler struct {
+	concern string
+	handler interface{}
+}
+
+type CrudHandler struct {
+	concern     string
+	storageType string
+	handler     interface{}
+}
+
+type Settings struct {
+	PlatformFilePath string
+	ConfigFilePath   string
+
+	OtelcolEndpoint string
+
+	Environment     string
+	AdminBrokers    string
+	ConsumerBrokers string
+
+	HttpAddr string
+	GrpcAddr string
+
+	Topic     string
+	Partition int32
+
+	Edge bool
+
+	AdminPingIntervalSecs uint
+
+	StorageTarget string
+
+	WatchDecode bool
+
+	Runner string
+}
+
+func NewRunner(ctx context.Context, platform string) *Runner {
+	runner := &Runner{
+		platform: platform,
 	}
-	rtProg.color = gColors[gCurrColorIdx%len(gColors)]
-	gCurrColorIdx++
-	rtProg.abbrev = colorize(fmt.Sprintf("%-20s |  ", rtProg.program.Abbrev), rtProg.color)
 
-	return rtProg
+	runner.ctx, runner.ctxCancel = context.WithCancel(ctx)
+	runner.bailoutCh = make(chan bool)
+
+	return runner
 }
 
-func (rtProg *rtProgram) kill() bool {
-	// try to 'kill' gracefully
-	stopped := rtProg.stop()
-
-	if !stopped {
-		if rtProg.cmd != nil && rtProg.cmd.Process != nil && rtProg.cmd.Process.Pid != 0 {
-			proc, err := os.FindProcess(rtProg.cmd.Process.Pid)
-			if err != nil {
-				proc.Kill()
-				return true
-			}
+func (runner *Runner) PlatformFunc() func() *platform.Platform {
+	return func() *platform.Platform {
+		if runner.plat == nil {
+			panic("No platform initialized")
 		}
+		return runner.plat
 	}
-	return false
 }
 
-func (rtProg *rtProgram) stop() bool {
-	if rtProg.cmd != nil && rtProg.cmd.Process != nil && rtProg.cmd.Process.Pid != 0 {
-		proc, err := os.FindProcess(rtProg.cmd.Process.Pid)
-		if err == nil && proc != nil {
-			err = proc.Signal(syscall.SIGINT)
-			if err == nil {
-				return true
-			}
-		}
-	}
-	return false
+func (runner *Runner) AddStorageInit(storageType string, storageInit rkcy.StorageInit) {
+	runner.storageInits = append(
+		runner.storageInits,
+		&StorageInit{
+			storageType: storageType,
+			storageInit: storageInit,
+		},
+	)
 }
 
-func (rtProg *rtProgram) isRunning() bool {
-	if rtProg.cmd != nil && rtProg.cmd.Process != nil && rtProg.cmd.Process.Pid != 0 {
-		proc, err := os.FindProcess(rtProg.cmd.Process.Pid)
-		if err == nil && proc != nil {
-			err = proc.Signal(syscall.SIGCONT)
-			if err == nil {
-				return true
-			}
-		}
-	}
-	return false
+func (runner *Runner) AddLogicHandler(
+	concern string,
+	handler interface{},
+) {
+	runner.logicHandlers = append(
+		runner.logicHandlers,
+		&LogicHandler{
+			concern: concern,
+			handler: handler,
+		},
+	)
 }
 
-func (rtProg *rtProgram) wait() {
-	err := rtProg.cmd.Wait()
-	if err != nil && err.Error() != "signal: killed" {
-		log.Error().
+func (runner *Runner) AddCrudHandler(
+	concern string,
+	storageType string,
+	handler interface{},
+) {
+	runner.crudHandlers = append(
+		runner.crudHandlers,
+		&CrudHandler{
+			concern:     concern,
+			storageType: storageType,
+			handler:     handler,
+		},
+	)
+}
+
+func (runner *Runner) AddCobraCommand(cmd *cobra.Command) {
+	runner.customCobraCommands = append(runner.customCobraCommands, cmd)
+}
+
+func (runner *Runner) AddCobraConsumerCommand(cmd *cobra.Command) {
+	runner.addConsumerFlags(cmd)
+	runner.AddCobraCommand(cmd)
+}
+
+func (runner *Runner) AddCobraEdgeCommand(cmd *cobra.Command) {
+	runner.addEdgeFlags(cmd)
+	runner.AddCobraCommand(cmd)
+}
+
+func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
+	rkcy.PrepLogging()
+
+	err := telem.Initialize(runner.ctx, runner.settings.OtelcolEndpoint)
+	if err != nil {
+		log.Fatal().
 			Err(err).
-			Str("Program", rtProg.program.Abbrev).
-			Msgf("Wait returned error")
-	}
-}
-
-func (rtProg *rtProgram) start(
-	ctx context.Context,
-	key string,
-	printCh chan<- string,
-	killIfActive bool,
-) error {
-	if killIfActive {
-		rtProg.kill()
+			Msg("Failed to telem.Initialize")
 	}
 
-	rtProg.cmd = exec.CommandContext(ctx, rtProg.program.Name, rtProg.program.Args...)
-
-	if rtProg.program.Tags != nil {
-		otelResourceAttrs := "OTEL_RESOURCE_ATTRIBUTES="
-		for k, v := range rtProg.program.Tags {
-			otelResourceAttrs += fmt.Sprintf("%s=%s,", k, v)
+	var respTarget *rkcypb.TopicTarget
+	if runner.settings.Edge {
+		if runner.settings.ConsumerBrokers == "" || runner.settings.Topic == "" || runner.settings.Partition == -1 {
+			log.Fatal().
+				Msgf("edge flag set with missing consumer_brokers, topic, or partition")
 		}
-		otelResourceAttrs = otelResourceAttrs[:len(otelResourceAttrs)-1]
-		rtProg.cmd.Env = os.Environ()
-		rtProg.cmd.Env = append(rtProg.cmd.Env, otelResourceAttrs)
+		respTarget = &rkcypb.TopicTarget{
+			Brokers:   runner.settings.ConsumerBrokers,
+			Topic:     runner.settings.Topic,
+			Partition: runner.settings.Partition,
+		}
 	}
 
-	// only reset color and abbrev if this is the first time through
-	if rtProg.abbrev == "" {
-		rtProg.color = gColors[gCurrColorIdx%len(gColors)]
-		gCurrColorIdx++
-		rtProg.abbrev = colorize(fmt.Sprintf("%-13s |  ", rtProg.program.Abbrev), rtProg.color)
-	}
+	strmprov := stream.NewKafkaStreamProvider()
+	adminPingInterval := time.Duration(runner.settings.AdminPingIntervalSecs) * time.Second
 
-	var err error
-
-	rtProg.stdout, err = rtProg.cmd.StdoutPipe()
+	runner.plat, err = platform.NewPlatform(
+		runner.ctx,
+		&runner.wg,
+		runner.platform,
+		runner.settings.Environment,
+		runner.settings.AdminBrokers,
+		adminPingInterval,
+		strmprov,
+		respTarget,
+	)
 	if err != nil {
-		return err
+		log.Fatal().
+			Err(err).
+			Msg("Failed to NewKafkaPlatform")
 	}
-	rtProg.stderr, err = rtProg.cmd.StderrPipe()
-	if err != nil {
-		rtProg.stdout.Close()
-		return err
-	}
-	err = rtProg.cmd.Start()
-	if err != nil {
-		rtProg.stdout.Close()
-		rtProg.stderr.Close()
-		return err
-	}
-	rtProg.runCount++
 
-	go readOutput(printCh, rtProg.stdout, key, rtProg.abbrev)
-	go readOutput(printCh, rtProg.stderr, key, rtProg.abbrev)
-	go rtProg.wait()
-	return nil
+	for _, stgInit := range runner.storageInits {
+		runner.plat.AddStorageInit(stgInit.storageType, stgInit.storageInit)
+	}
+
+	for _, logicHdlr := range runner.logicHandlers {
+		runner.plat.AddLogicHandler(logicHdlr.concern, logicHdlr.handler)
+	}
+
+	for _, crudHdlr := range runner.crudHandlers {
+		runner.plat.AddCrudHandler(crudHdlr.concern, crudHdlr.storageType, crudHdlr.handler)
+	}
+
+	// validate all command handlers exist for each concern
+	if !runner.plat.ConcernHandlers.ValidateConcernHandlers() {
+		log.Fatal().
+			Msg("ValidateConcernHandlers failed")
+	}
 }
 
-func updateRunning(
-	ctx context.Context,
-	running map[string]*rtProgram,
-	directive rkcypb.Directive,
-	acd *rkcypb.ConsumerDirective,
-	printCh chan<- string,
-) {
-	key := rkcy.ProgKey(acd.Program)
-	var (
-		rtProg *rtProgram
-		ok     bool
-		err    error
-	)
+func (runner *Runner) Execute() {
+	interruptCh := make(chan os.Signal, 1)
+	signal.Notify(interruptCh, os.Interrupt)
 
-	switch directive {
-	case rkcypb.Directive_CONSUMER_START:
-		rtProg, ok = running[key]
-		if ok {
+	cleanupHasRun := false
+	var cleanupMtx sync.Mutex
+	cleanup := func() {
+		cleanupMtx.Lock()
+		defer cleanupMtx.Unlock()
+		if !cleanupHasRun {
+			cleanupHasRun = true
+			signal.Stop(interruptCh)
+			telem.Shutdown(runner.ctx)
+			runner.ctxCancel()
+			runner.wg.Wait()
+			log.Info().Msgf("Runner.Start completed")
+		}
+	}
+
+	go func() {
+		defer cleanup()
+
+		select {
+		case <-runner.ctx.Done():
+			return
+		case <-interruptCh:
+			return
+		case <-runner.bailoutCh:
 			log.Warn().
-				Msg("Program already running: " + key)
+				Msg("APECS Consumer Stopped, BAILOUT")
 			return
 		}
-		rtProg = newRtProgram(acd.Program, key)
-		err = rtProg.start(ctx, key, printCh, true)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("Program", rtProg.program.Abbrev).
-				Msg("Unable to start")
-			return
-		}
-		running[key] = rtProg
-	case rkcypb.Directive_CONSUMER_STOP:
-		rtProg, ok = running[key]
-		if !ok {
-			log.Warn().Msg("Program not running running, cannot stop: " + key)
-			return
-		} else {
-			delete(running, key)
-			rtProg.kill()
-		}
-	}
-}
+	}()
 
-func printer(ctx context.Context, wg *sync.WaitGroup, printCh <-chan string) {
-	defer wg.Done()
+	cobraCmd := runner.BuildCobraCommand()
+	cobraCmd.Execute()
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().
-				Msg("runner printer stopped")
-			return
-		case line := <-printCh:
-			fmt.Println(line)
-		}
-	}
-}
-
-func readOutput(printCh chan<- string, rdr io.ReadCloser, key string, abbrev string) {
-	scanner := bufio.NewScanner(rdr)
-
-	for scanner.Scan() {
-		printCh <- abbrev + scanner.Text()
-	}
-}
-
-func doMaintenance(ctx context.Context, running map[string]*rtProgram, printCh chan<- string) {
-	for key, rtProg := range running {
-		if !rtProg.isRunning() {
-			rtProg.start(ctx, key, printCh, false)
-		}
-	}
-}
-
-func defaultArgs(environment string, adminBrokers string, otelcolEndpoint string) []string {
-	return []string{
-		"-e", environment,
-		"--admin_brokers", adminBrokers,
-		"--otelcol_endpoint", otelcolEndpoint,
-	}
-}
-
-func startAdmin(
-	ctx context.Context,
-	platform string,
-	environment string,
-	adminBrokers string,
-	otelcolEndpoint string,
-	running map[string]*rtProgram,
-	printCh chan<- string,
-) {
-	updateRunning(
-		ctx,
-		running,
-		rkcypb.Directive_CONSUMER_START,
-		&rkcypb.ConsumerDirective{
-			Program: &rkcypb.Program{
-				Name:   "./" + platform,
-				Args:   append([]string{"admin"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
-				Abbrev: "admin",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", platform, environment)},
-			},
-		},
-		printCh,
-	)
-}
-
-func startPortalServer(
-	ctx context.Context,
-	platform string,
-	environment string,
-	adminBrokers string,
-	otelcolEndpoint string,
-	running map[string]*rtProgram,
-	printCh chan<- string,
-) {
-	updateRunning(
-		ctx,
-		running,
-		rkcypb.Directive_CONSUMER_START,
-		&rkcypb.ConsumerDirective{
-			Program: &rkcypb.Program{
-				Name:   "./" + platform,
-				Args:   append([]string{"portal", "serve"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
-				Abbrev: "portal",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", platform, environment)},
-			},
-		},
-		printCh,
-	)
-}
-
-func startWatch(
-	ctx context.Context,
-	platform string,
-	environment string,
-	adminBrokers string,
-	otelcolEndpoint string,
-	watchDecode bool,
-	running map[string]*rtProgram,
-	printCh chan<- string,
-) {
-	args := []string{"watch"}
-	if watchDecode {
-		args = append(args, "-d")
-	}
-	args = append(args, defaultArgs(environment, adminBrokers, otelcolEndpoint)...)
-
-	updateRunning(
-		ctx,
-		running,
-		rkcypb.Directive_CONSUMER_START,
-		&rkcypb.ConsumerDirective{
-			Program: &rkcypb.Program{
-				Name:   "./" + platform,
-				Args:   args,
-				Abbrev: "watch",
-				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.watch", platform, environment)},
-			},
-		},
-		printCh,
-	)
-}
-
-func RunConsumerPrograms(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	strmprov rkcy.StreamProvider,
-	platform string,
-	environment string,
-	adminBrokers string,
-	otelcolEndpoint string,
-	watchDecode bool,
-) {
-	defer wg.Done()
-
-	consCh := make(chan *mgmt.ConsumerMessage)
-
-	mgmt.ConsumeConsumersTopic(
-		ctx,
-		wg,
-		strmprov,
-		platform,
-		environment,
-		adminBrokers,
-		consCh,
-		nil,
-	)
-
-	running := map[string]*rtProgram{}
-
-	printCh := make(chan string, 100)
-	wg.Add(1)
-	go printer(ctx, wg, printCh)
-	startAdmin(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, printCh)
-	startPortalServer(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, printCh)
-	//startWatch(ctx, platform, environment, adminBrokers, otelcolEndpoint, watchDecode, running, printCh)
-
-	ticker := time.NewTicker(1000 * time.Millisecond)
-
-	for {
-		select {
-		case <-ctx.Done():
-			for _, prog := range running {
-				prog.kill()
-			}
-			return
-		case <-ticker.C:
-			doMaintenance(ctx, running, printCh)
-		case consMsg := <-consCh:
-			if (consMsg.Directive & rkcypb.Directive_CONSUMER) != rkcypb.Directive_CONSUMER {
-				log.Error().Msgf("Invalid directive for ConsumersTopic: %s", consMsg.Directive.String())
-				continue
-			}
-			updateRunning(
-				ctx,
-				running,
-				consMsg.Directive,
-				consMsg.ConsumerDirective,
-				printCh,
-			)
-		}
-	}
-}
-
-func Start(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	strmprov rkcy.StreamProvider,
-	platform string,
-	environment string,
-	adminBrokers string,
-	otelcolEndpoint string,
-	watchDecode bool,
-) {
-	wg.Add(1)
-	go RunConsumerPrograms(
-		ctx,
-		wg,
-		strmprov,
-		platform,
-		environment,
-		adminBrokers,
-		otelcolEndpoint,
-		watchDecode,
-	)
-
-	wg.Add(1)
-	select {
-	case <-ctx.Done():
-		log.Info().
-			Msg("runner stopped")
-		wg.Done()
-		return
-	}
+	cleanup()
 }
