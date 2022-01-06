@@ -7,20 +7,55 @@ package logic
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/lachlanorr/rocketcycle/pkg/apecs"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/stream/offline"
+	"github.com/lachlanorr/rocketcycle/pkg/telem"
+
+	"github.com/lachlanorr/rocketcycle/examples/rpg/logic/txn"
+	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
-func TestCharacter(t *testing.T) {
+func TestPlayer(t *testing.T) {
 	rkcy.PrepLogging()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := offline.NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
+	telem.InitializeOffline(ctx)
+	defer telem.Shutdown(ctx)
+
+	plat, err := offline.NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
 	if err != nil {
 		t.Fatalf("Failed to NewOfflinePlatformFromJson: %s", err.Error())
+	}
+
+	res, err := apecs.ExecuteTxnSync(
+		ctx,
+		plat,
+		txn.CreatePlayer(&pb.Player{
+			Username: "player0",
+			Active:   true,
+		}),
+		time.Second,
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to ExecuteTxnSync: %s", err.Error())
+	}
+
+	if res.Type != "Player" {
+		t.Fatalf("res.Type not Player: %s", res.Type)
+	}
+	_, ok := res.Instance.(*pb.Player)
+	if !ok {
+		t.Fatal("res.Instance not type pb.Player")
+	}
+	_, ok = res.Related.(*pb.PlayerRelated)
+	if !ok {
+		t.Fatal("res.Related not type pb.PlayerRelated")
 	}
 }
 
