@@ -78,7 +78,7 @@ func (srv portalServer) ConfigRead(ctx context.Context, pa *rkcypb.Void) (*rkcyp
 }
 
 func (srv portalServer) DecodeInstance(ctx context.Context, args *rkcypb.DecodeInstanceArgs) (*rkcypb.DecodeResponse, error) {
-	jsonBytes, err := srv.plat.ConcernHandlers.DecodeInstance64Json(ctx, args.Concern, args.Payload64)
+	jsonBytes, err := srv.plat.ClientCode.ConcernHandlers.DecodeInstance64Json(ctx, args.Concern, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func resultProto2DecodeResponse(resProto *rkcy.ResultProto) (*rkcypb.DecodeRespo
 }
 
 func (srv portalServer) DecodeArgPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
-	resProto, _, err := srv.plat.ConcernHandlers.DecodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.plat.ClientCode.ConcernHandlers.DecodeArgPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (srv portalServer) DecodeArgPayload(ctx context.Context, args *rkcypb.Decod
 }
 
 func (srv portalServer) DecodeResultPayload(ctx context.Context, args *rkcypb.DecodePayloadArgs) (*rkcypb.DecodeResponse, error) {
-	resProto, _, err := srv.plat.ConcernHandlers.DecodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
+	resProto, _, err := srv.plat.ClientCode.ConcernHandlers.DecodeResultPayload64(ctx, args.Concern, args.System, args.Command, args.Payload64)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ func managePlatform(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
+			log.Trace().
 				Msg("managePlatform exiting, ctx.Done()")
 			plat.WaitGroup().Done()
 			return

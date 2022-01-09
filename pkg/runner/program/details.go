@@ -11,7 +11,10 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
-type NewRunnableFunc func(ctx context.Context, protDets *Details) (Runnable, error)
+type NewRunnableFunc func(
+	ctx context.Context,
+	dets *Details,
+) (Runnable, error)
 
 type Runnable interface {
 	Details() *Details

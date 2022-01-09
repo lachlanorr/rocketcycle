@@ -97,22 +97,27 @@ func initialize(
 }
 
 func Initialize(ctx context.Context, otelcolEndpoint string) error {
-	traceClient := otlptracegrpc.NewClient(
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(otelcolEndpoint),
-		otlptracegrpc.WithReconnectionPeriod(50*time.Millisecond),
-	)
+	if otelcolEndpoint != "offline" {
+		traceClient := otlptracegrpc.NewClient(
+			otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(otelcolEndpoint),
+			otlptracegrpc.WithReconnectionPeriod(50*time.Millisecond),
+		)
 
-	metricClient := otlpmetricgrpc.NewClient(
-		otlpmetricgrpc.WithInsecure(),
-		otlpmetricgrpc.WithEndpoint(otelcolEndpoint),
-		otlpmetricgrpc.WithReconnectionPeriod(50*time.Millisecond),
-	)
+		metricClient := otlpmetricgrpc.NewClient(
+			otlpmetricgrpc.WithInsecure(),
+			otlpmetricgrpc.WithEndpoint(otelcolEndpoint),
+			otlpmetricgrpc.WithReconnectionPeriod(50*time.Millisecond),
+		)
 
-	return initialize(ctx, traceClient, metricClient)
+		return initialize(ctx, traceClient, metricClient)
+	} else {
+		return InitializeOffline(ctx)
+	}
 }
 
 func InitializeOffline(ctx context.Context) error {
+	log.Info().Msg("telem.InitializeOffline called, no telemetry will be published")
 	return initialize(ctx, &stubTraceClient{}, &stubMetricClient{})
 }
 

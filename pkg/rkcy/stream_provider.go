@@ -14,6 +14,7 @@ import (
 type ProducerCh chan *kafka.Message
 
 type StreamProvider interface {
+	Type() string
 	NewConsumer(brokers string, groupName string, logCh chan kafka.LogEvent) (Consumer, error)
 	NewProducer(brokers string, logCh chan kafka.LogEvent) (Producer, error)
 	NewAdminClient(brokers string) (AdminClient, error)

@@ -74,7 +74,7 @@ func (wt *watchTopic) consume(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
+			log.Trace().
 				Msg("watchTopic.consume exiting, ctx.Done()")
 			wg.Done()
 			return
@@ -307,7 +307,7 @@ func WatchResultTopics(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
+			log.Trace().
 				Msg("WatchResultTopics exiting, ctx.Done()")
 			return
 		case platMsg := <-platformCh:

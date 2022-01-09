@@ -236,7 +236,7 @@ func ConsumeMgmtTopic(
 	}
 
 	defer func() {
-		slog.Warn().
+		slog.Trace().
 			Str("Topic", fullTopic).
 			Msgf("CONSUMER Closing...")
 		err := cons.Close()
@@ -246,7 +246,7 @@ func ConsumeMgmtTopic(
 				Str("Topic", fullTopic).
 				Msgf("Error during consumer.Close()")
 		}
-		slog.Warn().
+		slog.Trace().
 			Str("Topic", fullTopic).
 			Msgf("CONSUMER CLOSED")
 	}()

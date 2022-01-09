@@ -24,6 +24,16 @@ func NewOfflineStreamProvider(rtPlatDef *rkcy.RtPlatformDef) (*OfflineStreamProv
 	}, nil
 }
 
+func NewOfflineStreamProviderFromManager(mgr *Manager) *OfflineStreamProvider {
+	return &OfflineStreamProvider{
+		mgr: mgr,
+	}
+}
+
+func (ostrmprov *OfflineStreamProvider) Type() string {
+	return "offline"
+}
+
 func (ostrmprov *OfflineStreamProvider) NewConsumer(brokers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
 	clus, err := ostrmprov.mgr.GetCluster(brokers)
 	if err != nil {

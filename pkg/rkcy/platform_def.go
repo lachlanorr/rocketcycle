@@ -141,7 +141,7 @@ func initTopics(
 		case "process":
 			prog := &rkcypb.Program{
 				Name:   "./@platform",
-				Args:   []string{"process", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition"},
+				Args:   []string{"process", "-t", "@topic", "-p", "@partition", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "--stream", "@stream"},
 				Abbrev: "p/@concern/@partition",
 			}
 			topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -150,7 +150,7 @@ func initTopics(
 				if stgTgt.IsPrimary {
 					prog := &rkcypb.Program{
 						Name: "./@platform",
-						Args: []string{"storage", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+						Args: []string{"storage", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name, "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "--stream", "@stream"},
 					}
 					prog.Abbrev = fmt.Sprintf("s/*%s/@concern/@partition", stgTgt.Name)
 					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -161,7 +161,7 @@ func initTopics(
 				if !stgTgt.IsPrimary {
 					prog := &rkcypb.Program{
 						Name: "./@platform",
-						Args: []string{"storage-scnd", "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name},
+						Args: []string{"storage-scnd", "-t", "@topic", "-p", "@partition", "--storage_target", stgTgt.Name, "-e", "@environment", "--otelcol_endpoint", "@otelcol_endpoint", "--admin_brokers", "@admin_brokers", "--consumer_brokers", "@consumer_brokers", "--stream", "@stream"},
 					}
 					prog.Abbrev = fmt.Sprintf("s/%s/@concern/@partition", stgTgt.Name)
 					topics.ConsumerPrograms = append(topics.ConsumerPrograms, prog)
@@ -394,7 +394,7 @@ type PlatformDiff struct {
 	ProgsToStart []*rkcypb.Program
 }
 
-func (rtPlatDef *RtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint string) map[string]*rkcypb.Program {
+func (rtPlatDef *RtPlatformDef) getAllProgs(streamType string, adminBrokers string, otelcolEndpoint string) map[string]*rkcypb.Program {
 	progs := make(map[string]*rkcypb.Program)
 	if rtPlatDef != nil {
 		for _, concern := range rtPlatDef.PlatformDef.Concerns {
@@ -403,6 +403,7 @@ func (rtPlatDef *RtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint
 					exProgs := expandProgs(
 						rtPlatDef.PlatformDef.Name,
 						rtPlatDef.PlatformDef.Environment,
+						streamType,
 						adminBrokers,
 						otelcolEndpoint,
 						concern,
@@ -419,14 +420,14 @@ func (rtPlatDef *RtPlatformDef) getAllProgs(adminBrokers string, otelcolEndpoint
 	return progs
 }
 
-func (lhs *RtPlatformDef) Diff(rhs *RtPlatformDef, adminBrokers string, otelcolEndpoint string) *PlatformDiff {
+func (lhs *RtPlatformDef) Diff(rhs *RtPlatformDef, streamType string, adminBrokers string, otelcolEndpoint string) *PlatformDiff {
 	d := &PlatformDiff{
 		ProgsToStop:  nil,
 		ProgsToStart: nil,
 	}
 
-	newProgs := lhs.getAllProgs(adminBrokers, otelcolEndpoint)
-	oldProgs := rhs.getAllProgs(adminBrokers, otelcolEndpoint)
+	newProgs := lhs.getAllProgs(streamType, adminBrokers, otelcolEndpoint)
+	oldProgs := rhs.getAllProgs(streamType, adminBrokers, otelcolEndpoint)
 
 	for k, v := range newProgs {
 		if _, ok := oldProgs[k]; !ok {
@@ -474,6 +475,7 @@ var gStdTags map[string]string = map[string]string{
 func expandProgs(
 	platformName string,
 	environment string,
+	streamType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	concern *rkcypb.Concern,
@@ -484,6 +486,7 @@ func expandProgs(
 	substMap := map[string]string{
 		"@platform":         platformName,
 		"@environment":      environment,
+		"@stream":           streamType,
 		"@admin_brokers":    adminBrokers,
 		"@otelcol_endpoint": otelcolEndpoint,
 		"@concern":          concern.Name,
@@ -496,6 +499,7 @@ func expandProgs(
 			substMap["@system"] = topics.Name
 			substMap["@topic"] = BuildFullTopicName(platformName, environment, concern.Name, concern.Type, topics.Name, topics.Current.Generation)
 			substMap["@partition"] = strconv.Itoa(int(i))
+			substMap["@stream"] = streamType
 
 			prog := &rkcypb.Program{
 				Name:   substStr(consProg.Name, substMap),

@@ -102,7 +102,10 @@ func (ocons *OfflineConsumer) ReadMessage(timeout time.Duration) (*kafka.Message
 		partOff := ocons.partOffs[ocons.readCount%len(ocons.partOffs)]
 		kMsg := partOff.part.GetMessage(partOff.offset)
 		if kMsg != nil {
+			partOff.offset++
 			return kMsg, nil
+		} else {
+			time.Sleep(time.Millisecond * 100)
 		}
 	}
 

@@ -196,7 +196,7 @@ func ExecuteTxnSync(
 		return nil, err
 	}
 
-	success, resProto, result := rkcy.ApecsTxnResult(ctx, plat.ConcernHandlers, txnResp)
+	success, resProto, result := rkcy.ApecsTxnResult(ctx, plat.ClientCode.ConcernHandlers, txnResp)
 	if !success {
 		details := make([]*anypb.Any, 0, 1)
 		resultAny, err := anypb.New(result)

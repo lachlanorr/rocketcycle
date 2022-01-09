@@ -7,6 +7,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,12 +50,8 @@ func updateRunning(
 				Str("ProgramKey", key).
 				Msg("Failed to newRunnableFunc")
 		}
-		err = rnbl.Start(ctx, printCh, true)
+		err = startRunnable(ctx, rnbl, printCh)
 		if err != nil {
-			log.Error().
-				Err(err).
-				Str("ProgramKey", key).
-				Msg("Unable to start")
 			return
 		}
 		running[key] = rnbl
@@ -85,17 +82,36 @@ func printer(ctx context.Context, wg *sync.WaitGroup, printCh <-chan string) {
 	}
 }
 
+func startRunnable(
+	ctx context.Context,
+	rnbl program.Runnable,
+	printCh chan<- string,
+) error {
+	log.Info().Msgf("Running: %s %s", rnbl.Details().Program.Name, strings.Join(rnbl.Details().Program.Args, " "))
+	err := rnbl.Start(ctx, printCh, true)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("ProgramKey", rnbl.Details().Key).
+			Msg("Unable to start")
+		return err
+	}
+	rnbl.Details().RunCount++
+	return nil
+}
+
 func doMaintenance(ctx context.Context, running map[string]program.Runnable, printCh chan<- string) {
 	for _, rnbl := range running {
 		if !rnbl.IsRunning() {
-			rnbl.Start(ctx, printCh, false)
+			startRunnable(ctx, rnbl, printCh)
 		}
 	}
 }
 
-func defaultArgs(environment string, adminBrokers string, otelcolEndpoint string) []string {
+func defaultArgs(environment string, streamType string, adminBrokers string, otelcolEndpoint string) []string {
 	return []string{
 		"-e", environment,
+		"--stream", streamType,
 		"--admin_brokers", adminBrokers,
 		"--otelcol_endpoint", otelcolEndpoint,
 	}
@@ -105,6 +121,7 @@ func startAdmin(
 	ctx context.Context,
 	platform string,
 	environment string,
+	streamType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	running map[string]program.Runnable,
@@ -119,7 +136,7 @@ func startAdmin(
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
 				Name:   "./" + platform,
-				Args:   append([]string{"admin"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
+				Args:   append([]string{"admin"}, defaultArgs(environment, streamType, adminBrokers, otelcolEndpoint)...),
 				Abbrev: "admin",
 				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.admin", platform, environment)},
 			},
@@ -132,6 +149,7 @@ func startPortalServer(
 	ctx context.Context,
 	platform string,
 	environment string,
+	streamType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	running map[string]program.Runnable,
@@ -146,7 +164,7 @@ func startPortalServer(
 		&rkcypb.ConsumerDirective{
 			Program: &rkcypb.Program{
 				Name:   "./" + platform,
-				Args:   append([]string{"portal", "serve"}, defaultArgs(environment, adminBrokers, otelcolEndpoint)...),
+				Args:   append([]string{"portal", "serve"}, defaultArgs(environment, streamType, adminBrokers, otelcolEndpoint)...),
 				Abbrev: "portal",
 				Tags:   map[string]string{"service.name": fmt.Sprintf("rkcy.%s.%s.portal", platform, environment)},
 			},
@@ -159,6 +177,7 @@ func startWatch(
 	ctx context.Context,
 	platform string,
 	environment string,
+	streamType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	watchDecode bool,
@@ -170,7 +189,7 @@ func startWatch(
 	if watchDecode {
 		args = append(args, "-d")
 	}
-	args = append(args, defaultArgs(environment, adminBrokers, otelcolEndpoint)...)
+	args = append(args, defaultArgs(environment, streamType, adminBrokers, otelcolEndpoint)...)
 
 	updateRunning(
 		ctx,
@@ -193,16 +212,16 @@ func (runner *Runner) RunConsumerPrograms(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	strmprov rkcy.StreamProvider,
-	runnerType string,
 	platform string,
 	environment string,
+	runnerType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	watchDecode bool,
 ) {
 	defer wg.Done()
 
-	newRunnableFunc := GetRunnerStartFunc(runnerType)
+	newRunnableFunc := GetNewRunnableFunc(runnerType)
 
 	consCh := make(chan *mgmt.ConsumerMessage)
 
@@ -222,9 +241,9 @@ func (runner *Runner) RunConsumerPrograms(
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, wg, printCh)
-	startAdmin(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
-	startPortalServer(ctx, platform, environment, adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
-	startWatch(ctx, platform, environment, adminBrokers, otelcolEndpoint, watchDecode, running, newRunnableFunc, printCh)
+	startAdmin(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
+	startPortalServer(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
+	startWatch(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, watchDecode, running, newRunnableFunc, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 

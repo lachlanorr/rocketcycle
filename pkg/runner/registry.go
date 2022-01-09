@@ -9,11 +9,13 @@ import (
 
 	"github.com/lachlanorr/rocketcycle/pkg/runner/process"
 	"github.com/lachlanorr/rocketcycle/pkg/runner/program"
+	"github.com/lachlanorr/rocketcycle/pkg/runner/routine"
 )
 
 var gRunnableRegistry = make(map[string]program.NewRunnableFunc)
 
 func init() {
+	RegisterNewRunnableFunc("routine", routine.NewRunnable)
 	RegisterNewRunnableFunc("process", process.NewRunnable)
 }
 
@@ -26,7 +28,7 @@ func RegisterNewRunnableFunc(name string, newRunnableFunc program.NewRunnableFun
 	gRunnableRegistry[name] = newRunnableFunc
 }
 
-func GetRunnerStartFunc(name string) program.NewRunnableFunc {
+func GetNewRunnableFunc(name string) program.NewRunnableFunc {
 	newRunnableFunc, ok := gRunnableRegistry[name]
 	if !ok {
 		panic(fmt.Sprintf("RunnerStartFunc not found: %s", name))

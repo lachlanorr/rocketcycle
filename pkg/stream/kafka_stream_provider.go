@@ -16,6 +16,10 @@ func NewKafkaStreamProvider() *KafkaStreamProvider {
 	return &KafkaStreamProvider{}
 }
 
+func (*KafkaStreamProvider) Type() string {
+	return "kafka"
+}
+
 func (*KafkaStreamProvider) NewConsumer(brokers string, groupName string, logCh chan kafka.LogEvent) (rkcy.Consumer, error) {
 	return kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":        brokers,

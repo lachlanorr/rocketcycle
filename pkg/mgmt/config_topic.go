@@ -130,10 +130,10 @@ func ConfigReplace(
 			Msg("Failed to NewProducer")
 	}
 	defer func() {
-		slog.Warn().
+		slog.Trace().
 			Msg("Closing kafka producer")
 		prod.Close()
-		slog.Warn().
+		slog.Trace().
 			Msg("Closed kafka producer")
 	}()
 

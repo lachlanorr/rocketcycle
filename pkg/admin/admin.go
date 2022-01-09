@@ -105,7 +105,7 @@ func managePlatform(
 				Str("PlatformJson", string(jsonBytes)).
 				Msg("Platform Replaced")
 
-			platDiff := adminCmd.plat.RtPlatformDef.Diff(platMsg.OldRtPlatDef, adminCmd.plat.Args.AdminBrokers, adminCmd.otelcolEndpoint)
+			platDiff := adminCmd.plat.RtPlatformDef.Diff(platMsg.OldRtPlatDef, adminCmd.plat.StreamProvider().Type(), adminCmd.plat.Args.AdminBrokers, adminCmd.otelcolEndpoint)
 			rkcy.UpdateTopics(ctx, adminCmd.plat.StreamProvider(), adminCmd.plat.RtPlatformDef.PlatformDef)
 			updateRunner(ctx, adminCmd.plat, adminProdCh, consumersTopic, platDiff)
 		case prodMsg := <-prodCh:

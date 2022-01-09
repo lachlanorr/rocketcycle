@@ -721,7 +721,7 @@ func consumeApecsTopic(
 	}
 	shouldCommit := false
 	defer func() {
-		log.Warn().
+		log.Trace().
 			Str("Topic", tp.FullTopic).
 			Msgf("CONSUMER Closing...")
 
@@ -750,7 +750,7 @@ func consumeApecsTopic(
 				Str("Topic", tp.FullTopic).
 				Msgf("Error during consumer.Close()")
 		}
-		log.Warn().
+		log.Trace().
 			Str("Topic", tp.FullTopic).
 			Msgf("CONSUMER CLOSED")
 	}()
@@ -777,7 +777,7 @@ func consumeApecsTopic(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
+			log.Trace().
 				Msg("consumeStorage exiting, ctx.Done()")
 			return
 		case <-commitTicker.C:
@@ -955,7 +955,7 @@ func handleCommand(
 		}
 	}()
 
-	cncHdlr, ok := plat.ConcernHandlers[concern]
+	cncHdlr, ok := plat.ClientCode.ConcernHandlers[concern]
 	if !ok {
 		rslt := &rkcypb.ApecsTxn_Step_Result{}
 		SetStepResult(rslt, fmt.Errorf("No handler for concern: '%s'", concern))

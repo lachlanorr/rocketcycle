@@ -249,6 +249,7 @@ var gTestPlatformDef = []byte(`{
                        "--consumer_brokers", "@consumer_brokers",
                        "--http_addr", ":1135@partition",
                        "--grpc_addr", ":1136@partition",
+                       "--stream", "@stream",
                        "--otelcol_endpoint", "@otelcol_endpoint"
                       ],
               "abbrev": "edge/@partition",

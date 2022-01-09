@@ -31,13 +31,10 @@ type Platform struct {
 	ctx context.Context
 	wg  *sync.WaitGroup
 
-	Args         *rkcy.PlatformArgs
-	storageInits map[string]rkcy.StorageInit
+	Args *rkcy.PlatformArgs
 
 	configMgr *config_mgr.ConfigMgr
 	configRdr rkcy.ConfigRdr
-
-	ConcernHandlers rkcy.ConcernHandlers
 
 	bprod         *stream.BrokersProducer
 	ApecsProducer *stream.ApecsProducer
@@ -45,6 +42,8 @@ type Platform struct {
 	RtPlatformDef *rkcy.RtPlatformDef
 
 	InstanceStore *rkcy.InstanceStore
+
+	ClientCode *rkcy.ClientCode
 
 	respTarget     *rkcypb.TopicTarget
 	respRegisterCh chan *RespChan
@@ -58,6 +57,7 @@ func NewPlatform(
 	adminBrokers string,
 	adminPingInterval time.Duration,
 	strmprov rkcy.StreamProvider,
+	clientCode *rkcy.ClientCode,
 	respTarget *rkcypb.TopicTarget,
 ) (*Platform, error) {
 	if !rkcy.IsValidName(name) {
@@ -73,11 +73,10 @@ func NewPlatform(
 			AdminBrokers:      adminBrokers,
 			AdminPingInterval: adminPingInterval,
 		},
-		storageInits: make(map[string]rkcy.StorageInit),
-
-		ConcernHandlers: rkcy.GlobalConcernHandlerRegistry(),
 
 		InstanceStore: rkcy.NewInstanceStore(),
+
+		ClientCode: clientCode,
 
 		respTarget: respTarget,
 	}
@@ -161,22 +160,6 @@ func (plat *Platform) NewManagedProducer(
 	)
 }
 
-func (plat *Platform) AddStorageInit(storageType string, storageInit rkcy.StorageInit) {
-	if plat.storageInits[storageType] != nil {
-		log.Fatal().
-			Msgf("Multiple AddStorageInit for storageType %s", storageType)
-	}
-	plat.storageInits[storageType] = storageInit
-}
-
-func (plat *Platform) AddLogicHandler(concern string, handler interface{}) {
-	plat.ConcernHandlers.RegisterLogicHandler(concern, handler)
-}
-
-func (plat *Platform) AddCrudHandler(concern string, storageType string, handler interface{}) {
-	plat.ConcernHandlers.RegisterCrudHandler(concern, storageType, handler)
-}
-
 func (plat *Platform) ConfigMgr() *config_mgr.ConfigMgr {
 	if plat.configMgr == nil {
 		log.Fatal().Msg("Platform.ConfigMgr(): InitConfigMgr has not been called")
@@ -211,27 +194,7 @@ func (plat *Platform) UpdateStorageTargets(platMsg *mgmt.PlatformMessage) {
 		log.Error().Msgf("Invalid directive for PlatformTopic: %s", platMsg.Directive.String())
 		return
 	}
-
-	stgTgtInits := make(map[string]*rkcy.StorageTargetInit)
-	for _, platStgTgt := range platMsg.NewRtPlatDef.StorageTargets {
-		tgt := &rkcy.StorageTargetInit{
-			StorageTarget: platStgTgt,
-		}
-		if tgt.Config == nil {
-			tgt.Config = make(map[string]string)
-		}
-		var ok bool
-		tgt.Init, ok = plat.storageInits[platStgTgt.Type]
-		if !ok {
-			log.Warn().
-				Str("StorageTarget", platStgTgt.Name).
-				Msgf("No StorageInit for target")
-		}
-		stgTgtInits[platStgTgt.Name] = tgt
-	}
-	for _, cncHdlr := range plat.ConcernHandlers {
-		cncHdlr.SetStorageTargets(stgTgtInits)
-	}
+	plat.ClientCode.UpdateStorageTargets(platMsg.NewRtPlatDef.StorageTargets)
 }
 
 func respondThroughChannel(txnId string, respCh chan<- *rkcypb.ApecsTxn, txn *rkcypb.ApecsTxn) {
@@ -272,7 +235,7 @@ func ConsumeResponseTopic(
 	shouldCommit := false
 
 	defer func() {
-		log.Warn().
+		log.Trace().
 			Str("Topic", respTarget.Topic).
 			Msgf("CONSUMER Closing...")
 		if shouldCommit {
@@ -291,7 +254,7 @@ func ConsumeResponseTopic(
 				Str("Topic", respTarget.Topic).
 				Msgf("Error during consumer.Close()")
 		}
-		log.Warn().
+		log.Trace().
 			Str("Topic", respTarget.Topic).
 			Msgf("CONSUMER CLOSED")
 	}()
@@ -315,7 +278,7 @@ func ConsumeResponseTopic(
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().
+			log.Trace().
 				Msg("ConsumeResponseTopic exiting, ctx.Done()")
 			return
 		case <-cleanupTicker.C:

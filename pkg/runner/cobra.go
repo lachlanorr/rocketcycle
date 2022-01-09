@@ -49,14 +49,15 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Short:            "Rocketcycle Platform - " + runner.platform,
 		PersistentPreRun: runner.prerunCobra,
 	}
-	rootCmd.PersistentFlags().StringVar(&runner.settings.OtelcolEndpoint, "otelcol_endpoint", "localhost:4317", "OpenTelemetry collector address")
+	rootCmd.PersistentFlags().StringVar(&runner.settings.OtelcolEndpoint, "otelcol_endpoint", "offline", "OpenTelemetry collector address")
+	rootCmd.PersistentFlags().StringVar(&runner.settings.StreamType, "stream", "kafka", "Type of StreamProvider to use")
 
 	// admin sub command
 	adminCmd := &cobra.Command{
 		Use:   "admin",
 		Short: "Admin service that manages topics and orchestration",
-		Run: func(*cobra.Command, []string) {
-			admin.Start(runner.ctx, runner.plat, runner.settings.OtelcolEndpoint)
+		Run: func(cmd *cobra.Command, args []string) {
+			admin.Start(cmd.Context(), runner.plat, runner.settings.OtelcolEndpoint)
 		},
 	}
 	runner.addPlatformFlags(adminCmd)
@@ -137,8 +138,8 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "serve",
 		Short: "Rocketcycle Portal Server",
 		Long:  "Host rest api",
-		Run: func(*cobra.Command, []string) {
-			portal.Serve(runner.ctx, runner.plat, runner.settings.HttpAddr, runner.settings.GrpcAddr)
+		Run: func(cmd *cobra.Command, args []string) {
+			portal.Serve(cmd.Context(), runner.plat, runner.settings.HttpAddr, runner.settings.GrpcAddr)
 		},
 	}
 	runner.addPlatformFlags(portalServeCmd)
@@ -158,9 +159,9 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "replace",
 		Short: "Replace config",
 		Long:  "WARNING: This will fully replace stored config with the file contents!!!! Publishes contents of config file to config topic and fully replaces it.",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			mgmt.ConfigReplace(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat.StreamProvider(),
 				runner.plat.Args.Platform,
 				runner.plat.Args.Environment,
@@ -170,7 +171,7 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		},
 	}
 	runner.addPlatformFlags(configReplaceCmd)
-	configReplaceCmd.PersistentFlags().StringVarP(&runner.settings.ConfigFilePath, "config_file_path", "c", "./config.json", "Path to json file containing Config values")
+	configReplaceCmd.PersistentFlags().StringVar(&runner.settings.ConfigFilePath, "config_file_path", "./config.json", "Path to json file containing Config values")
 	configCmd.AddCommand(configReplaceCmd)
 
 	// decode sub command
@@ -185,7 +186,7 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Args:      cobra.MinimumNArgs(2),
 		ValidArgs: []string{"concern", "base64_payload"},
 		Run: func(cmd *cobra.Command, args []string) {
-			rkcy.DecodeInstance(runner.plat.ConcernHandlers, args[0], args[1])
+			rkcy.DecodeInstance(runner.clientCode.ConcernHandlers, args[0], args[1])
 		},
 	}
 	decodeCmd.AddCommand(decodeInstanceCmd)
@@ -195,9 +196,9 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "process",
 		Short: "APECS processing mode",
 		Long:  "Runs a proc consumer against the partition specified",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			apecs.StartApecsConsumer(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat,
 				"",
 				runner.settings.ConsumerBrokers,
@@ -215,9 +216,9 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "storage",
 		Short: "APECS storage mode",
 		Long:  "Runs a storage consumer against the partition specified",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			apecs.StartApecsConsumer(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat,
 				runner.settings.StorageTarget,
 				runner.settings.ConsumerBrokers,
@@ -237,9 +238,9 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "storage-scnd",
 		Short: "APECS secondary storage mode",
 		Long:  "Runs a secondary storage consumer against the partition specified",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			apecs.StartApecsConsumer(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat,
 				runner.settings.StorageTarget,
 				runner.settings.ConsumerBrokers,
@@ -259,15 +260,15 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "watch",
 		Short: "APECS watch mode",
 		Long:  "Runs a watch consumer against all error/complete topics",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			watch.Start(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat.WaitGroup(),
 				runner.plat.StreamProvider(),
 				runner.plat.Args.Platform,
 				runner.plat.Args.Environment,
 				runner.plat.Args.AdminBrokers,
-				runner.plat.ConcernHandlers,
+				runner.clientCode.ConcernHandlers,
 				runner.settings.WatchDecode,
 			)
 		},
@@ -281,15 +282,15 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "run",
 		Short: "Run all topic consumer programs",
 		Long:  "Orchestrates sub processes as specified by platform topics consumer programs",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			runner.plat.WaitGroup().Add(1)
 			runner.RunConsumerPrograms(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat.WaitGroup(),
 				runner.plat.StreamProvider(),
-				runner.settings.Runner,
 				runner.plat.Args.Platform,
 				runner.plat.Args.Environment,
+				runner.settings.RunnerType,
 				runner.plat.Args.AdminBrokers,
 				runner.settings.OtelcolEndpoint,
 				runner.settings.WatchDecode,
@@ -297,8 +298,10 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		},
 	}
 	runner.addPlatformFlags(runCmd)
-	runCmd.PersistentFlags().StringVar(&runner.settings.Runner, "runner", "process", "Type of runner to use to manage distributed processes or routines")
 	runCmd.PersistentFlags().BoolVarP(&runner.settings.WatchDecode, "decode", "d", false, "If set, will decode all Buffer objects when printing ApecsTxn messages")
+	runCmd.PersistentFlags().StringVar(&runner.settings.RunnerType, "runner", "process", "Type of runner to use to manage distributed processes or routines")
+	runCmd.PersistentFlags().StringVar(&runner.settings.PlatformFilePath, "platform_file_path", "./platform.json", "Path to json file containing platform configuration")
+	runCmd.PersistentFlags().StringVar(&runner.settings.ConfigFilePath, "config_file_path", "./config.json", "Path to json file containing Config values")
 	rootCmd.AddCommand(runCmd)
 
 	// plaform sub command
@@ -312,9 +315,9 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		Use:   "replace",
 		Short: "Replace platform config",
 		Long:  "WARNING: Only use this to bootstrap a new platform!!!! Publishes contents of platform config file to platform topic and fully replaces platform. Creates platform topics if they do not already exist.",
-		Run: func(*cobra.Command, []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			mgmt.PlatformReplaceFromFile(
-				runner.ctx,
+				cmd.Context(),
 				runner.plat.StreamProvider(),
 				runner.plat.Args.Platform,
 				runner.plat.Args.Environment,
@@ -324,10 +327,10 @@ func (runner *Runner) BuildCobraCommand() *cobra.Command {
 		},
 	}
 	runner.addPlatformFlags(platReplaceCmd)
-	platReplaceCmd.PersistentFlags().StringVarP(&runner.settings.PlatformFilePath, "platform_file_path", "p", "./platform.json", "Path to json file containing platform configuration")
+	platReplaceCmd.PersistentFlags().StringVar(&runner.settings.PlatformFilePath, "platform_file_path", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platReplaceCmd)
 
-	for _, cmd := range runner.customCobraCommands {
+	for _, cmd := range runner.clientCode.CustomCobraCommands {
 		rootCmd.AddCommand(cmd)
 	}
 

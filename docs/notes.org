@@ -97,7 +97,7 @@ step at the end of the transaction for every instance that was
 changed. VALIDATE_INSTANCE steps ensure that their offsets are not
 within the dead zone.
 
-After all VALIDATE_INSTANCE steps run, if any of them report an dead
+After all VALIDATE_INSTANCE steps run, if any of them report a dead
 zone violation, the transaction is rolled back.
 
 During rollback, if any instance being rolled back violates the dead

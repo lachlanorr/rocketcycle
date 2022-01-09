@@ -17,6 +17,7 @@ import (
 func NewOfflinePlatformFromJson(
 	ctx context.Context,
 	platformDefJson []byte,
+	clientCode *rkcy.ClientCode,
 ) (*platform.Platform, error) {
 	rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(platformDefJson)
 	if err != nil {
@@ -76,6 +77,7 @@ func NewOfflinePlatformFromJson(
 		rtPlatDef.AdminCluster.Brokers,
 		10,
 		strmprov,
+		clientCode,
 		respTarget,
 	)
 	if err != nil {

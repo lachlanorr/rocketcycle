@@ -70,7 +70,7 @@ func NewChanneledProducer(
 func (cp *ChanneledProducer) Run(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer func() {
-		log.Warn().
+		log.Trace().
 			Str("Brokers", cp.brokers).
 			Msg("PRODUCER Closing...")
 		if cp.ch != nil {

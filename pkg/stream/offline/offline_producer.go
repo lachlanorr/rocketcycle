@@ -16,7 +16,7 @@ type OfflineProducer struct {
 func NewOfflineProducer(cluster *Cluster) *OfflineProducer {
 	oprod := &OfflineProducer{
 		cluster: cluster,
-		events:  make(chan kafka.Event, 100),
+		events:  make(chan kafka.Event, 1),
 	}
 	return oprod
 }
@@ -27,6 +27,7 @@ func (oprod *OfflineProducer) Produce(msg *kafka.Message, deliveryChan chan kafk
 		return err
 	}
 	part.Produce(msg)
+	oprod.events <- msg
 	return nil
 }
 
