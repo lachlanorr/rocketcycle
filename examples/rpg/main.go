@@ -17,18 +17,18 @@ import (
 )
 
 func main() {
-	runner := runner.NewRunner(context.Background(), "rpg")
+	rkcycmd := runner.NewRkcyCmd(context.Background(), "rpg")
 
-	runner.AddStorageInit("postgresql", postgresql.InitPostgresqlPool)
+	rkcycmd.AddStorageInit("postgresql", postgresql.InitPostgresqlPool)
 
-	runner.AddLogicHandler("Player", &logic.Player{})
-	runner.AddLogicHandler("Character", &logic.Character{})
+	rkcycmd.AddLogicHandler("Player", &logic.Player{})
+	rkcycmd.AddLogicHandler("Character", &logic.Character{})
 
-	runner.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
-	runner.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
+	rkcycmd.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
+	rkcycmd.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
 
-	runner.AddCobraEdgeCommand(edge.CobraCommand(runner.PlatformFunc()))
-	runner.AddCobraCommand(sim.CobraCommand())
+	runner.AddCobraEdgeCommandFunc(edge.CobraCommand)
+	runner.AddCobraCommandFunc(sim.CobraCommand)
 
-	runner.Execute()
+	rkcycmd.Execute()
 }

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -25,7 +26,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/telem"
 )
 
-type Runner struct {
+type RkcyCmd struct {
 	platform   string
 	clientCode *rkcy.ClientCode
 
@@ -34,12 +35,16 @@ type Runner struct {
 	wg        sync.WaitGroup
 	bailoutCh chan bool
 
-	settings Settings
+	settings *Settings
 
 	plat *platform.Platform
 }
 
 var gOfflineMgr *offline.Manager
+
+type CustomCommandFunc func(rkcycmd *RkcyCmd) *cobra.Command
+
+var gCustomCommandFuncs = make([]CustomCommandFunc, 0)
 
 type Settings struct {
 	PlatformFilePath string
@@ -69,68 +74,72 @@ type Settings struct {
 	RunnerType string
 }
 
-func NewRunner(ctx context.Context, platform string) *Runner {
-	return NewRunnerWithClientCode(ctx, platform, rkcy.NewClientCode())
+func NewRkcyCmd(ctx context.Context, platform string) *RkcyCmd {
+	return NewRkcyCmdWithClientCode(ctx, platform, rkcy.NewClientCode())
 }
 
-func NewRunnerWithClientCode(ctx context.Context, platform string, clientCode *rkcy.ClientCode) *Runner {
-	runner := &Runner{
+func NewRkcyCmdWithClientCode(ctx context.Context, platform string, clientCode *rkcy.ClientCode) *RkcyCmd {
+	rkcycmd := &RkcyCmd{
 		platform:   platform,
 		clientCode: clientCode,
+		settings:   &Settings{},
 	}
 
-	runner.ctx, runner.ctxCancel = context.WithCancel(ctx)
-	runner.bailoutCh = make(chan bool)
+	rkcycmd.ctx, rkcycmd.ctxCancel = context.WithCancel(ctx)
+	rkcycmd.bailoutCh = make(chan bool)
 
-	return runner
+	return rkcycmd
 }
 
-func (runner *Runner) PlatformFunc() func() *platform.Platform {
-	return func() *platform.Platform {
-		if runner.plat == nil {
-			panic("No platform initialized")
-		}
-		return runner.plat
-	}
+func (rkcycmd *RkcyCmd) Platform() *platform.Platform {
+	return rkcycmd.plat
 }
 
-func (runner *Runner) AddStorageInit(storageType string, storageInit rkcy.StorageInit) {
-	runner.clientCode.AddStorageInit(storageType, storageInit)
+func (rkcycmd *RkcyCmd) AddStorageInit(storageType string, storageInit rkcy.StorageInit) {
+	rkcycmd.clientCode.AddStorageInit(storageType, storageInit)
 }
 
-func (runner *Runner) AddLogicHandler(
+func (rkcycmd *RkcyCmd) AddLogicHandler(
 	concern string,
 	handler interface{},
 ) {
-	runner.clientCode.AddLogicHandler(concern, handler)
+	rkcycmd.clientCode.AddLogicHandler(concern, handler)
 }
 
-func (runner *Runner) AddCrudHandler(
+func (rkcycmd *RkcyCmd) AddCrudHandler(
 	concern string,
 	storageType string,
 	handler interface{},
 ) {
-	runner.clientCode.AddCrudHandler(concern, storageType, handler)
+	rkcycmd.clientCode.AddCrudHandler(concern, storageType, handler)
 }
 
-func (runner *Runner) AddCobraCommand(cmd *cobra.Command) {
-	runner.clientCode.CustomCobraCommands = append(runner.clientCode.CustomCobraCommands, cmd)
+func AddCobraCommandFunc(custCmdFunc CustomCommandFunc) {
+	gCustomCommandFuncs = append(gCustomCommandFuncs, custCmdFunc)
 }
 
-func (runner *Runner) AddCobraConsumerCommand(cmd *cobra.Command) {
-	runner.addConsumerFlags(cmd)
-	runner.AddCobraCommand(cmd)
+func AddCobraConsumerCommandFunc(custCmdFunc CustomCommandFunc) {
+	gCustomCommandFuncs = append(gCustomCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
+		cmd := custCmdFunc(rkcycmd)
+		rkcycmd.addConsumerFlags(cmd)
+		return cmd
+	})
 }
 
-func (runner *Runner) AddCobraEdgeCommand(cmd *cobra.Command) {
-	runner.addEdgeFlags(cmd)
-	runner.AddCobraCommand(cmd)
+func AddCobraEdgeCommandFunc(custCmdFunc CustomCommandFunc) {
+	gCustomCommandFuncs = append(gCustomCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
+		cmd := custCmdFunc(rkcycmd)
+		rkcycmd.addEdgeFlags(cmd)
+		return cmd
+	})
 }
 
-func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
+func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	rkcy.PrepLogging()
 
-	err := telem.Initialize(cmd.Context(), runner.settings.OtelcolEndpoint)
+	platId := uuid.NewString()
+
+	err := telem.Initialize(cmd.Context(), rkcycmd.settings.OtelcolEndpoint)
 	if err != nil {
 		log.Fatal().
 			Err(err).
@@ -138,52 +147,52 @@ func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
 	}
 
 	// validate all command handlers exist for each concern
-	if !runner.clientCode.ConcernHandlers.ValidateConcernHandlers() {
+	if !rkcycmd.clientCode.ConcernHandlers.ValidateConcernHandlers() {
 		log.Fatal().
 			Msg("ValidateConcernHandlers failed")
 	}
 
 	var respTarget *rkcypb.TopicTarget
-	if runner.settings.Edge {
-		if runner.settings.ConsumerBrokers == "" || runner.settings.Topic == "" || runner.settings.Partition == -1 {
+	if rkcycmd.settings.Edge {
+		if rkcycmd.settings.ConsumerBrokers == "" || rkcycmd.settings.Topic == "" || rkcycmd.settings.Partition == -1 {
 			log.Fatal().
 				Msgf("edge flag set with missing consumer_brokers, topic, or partition")
 		}
 		respTarget = &rkcypb.TopicTarget{
-			Brokers:   runner.settings.ConsumerBrokers,
-			Topic:     runner.settings.Topic,
-			Partition: runner.settings.Partition,
+			Brokers:   rkcycmd.settings.ConsumerBrokers,
+			Topic:     rkcycmd.settings.Topic,
+			Partition: rkcycmd.settings.Partition,
 		}
 	}
 
 	var strmprov rkcy.StreamProvider
 
-	if runner.settings.StreamType == "kafka" {
+	if rkcycmd.settings.StreamType == "kafka" {
 		strmprov = stream.NewKafkaStreamProvider()
-	} else if runner.settings.StreamType == "offline" {
+	} else if rkcycmd.settings.StreamType == "offline" {
 		if gOfflineMgr == nil {
 			routine.SetExecuteFunc(func(ctx context.Context, args []string) {
-				ExecuteFromArgs(ctx, runner.platform, runner.clientCode, args)
+				ExecuteFromArgs(ctx, rkcycmd.platform, rkcycmd.clientCode, args)
 			})
 
-			platformDefJson, err := ioutil.ReadFile(runner.settings.PlatformFilePath)
+			platformDefJson, err := ioutil.ReadFile(rkcycmd.settings.PlatformFilePath)
 			if err != nil {
 				log.Fatal().
-					Str("PlatformFilePath", runner.settings.PlatformFilePath).
+					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
 					Err(err).
 					Msg("Failed to ReadFile")
 			}
 			rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(platformDefJson)
 			if err != nil {
 				log.Fatal().
-					Str("PlatformFilePath", runner.settings.PlatformFilePath).
+					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
 					Err(err).
 					Msg("Failed to NewRtPlatformDefFromJson")
 			}
 			gOfflineMgr, err = offline.NewManager(rtPlatDef)
 			if err != nil {
 				log.Fatal().
-					Str("PlatformFilePath", runner.settings.PlatformFilePath).
+					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
 					Err(err).
 					Msg("Failed to offline.NewManager")
 			}
@@ -192,13 +201,13 @@ func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
 			err = rkcy.CreatePlatformTopics(
 				cmd.Context(),
 				strmprov,
-				runner.platform,
-				runner.settings.Environment,
-				runner.settings.AdminBrokers,
+				rkcycmd.platform,
+				rkcycmd.settings.Environment,
+				rkcycmd.settings.AdminBrokers,
 			)
 			if err != nil {
 				log.Fatal().
-					Str("PlatformFilePath", runner.settings.PlatformFilePath).
+					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
 					Err(err).
 					Msg("Failed to CreatePlatformTopics")
 			}
@@ -210,7 +219,7 @@ func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
 			)
 			if err != nil {
 				log.Fatal().
-					Str("PlatformFilePath", runner.settings.PlatformFilePath).
+					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
 					Err(err).
 					Msg("Failed to UpdateTopics")
 			}
@@ -219,37 +228,38 @@ func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
 			mgmt.PlatformReplaceFromJson(
 				cmd.Context(),
 				strmprov,
-				runner.platform,
-				runner.settings.Environment,
-				runner.settings.AdminBrokers,
+				rkcycmd.platform,
+				rkcycmd.settings.Environment,
+				rkcycmd.settings.AdminBrokers,
 				platformDefJson,
 			)
 			mgmt.ConfigReplace(
 				cmd.Context(),
 				strmprov,
-				runner.platform,
-				runner.settings.Environment,
-				runner.settings.AdminBrokers,
-				runner.settings.ConfigFilePath,
+				rkcycmd.platform,
+				rkcycmd.settings.Environment,
+				rkcycmd.settings.AdminBrokers,
+				rkcycmd.settings.ConfigFilePath,
 			)
 		} else {
 			strmprov = offline.NewOfflineStreamProviderFromManager(gOfflineMgr)
 		}
 	} else {
-		log.Fatal().Msgf("Invalid --stream: %s", runner.settings.StreamType)
+		log.Fatal().Msgf("Invalid --stream: %s", rkcycmd.settings.StreamType)
 	}
 
-	adminPingInterval := time.Duration(runner.settings.AdminPingIntervalSecs) * time.Second
+	adminPingInterval := time.Duration(rkcycmd.settings.AdminPingIntervalSecs) * time.Second
 
-	runner.plat, err = platform.NewPlatform(
+	rkcycmd.plat, err = platform.NewPlatform(
 		cmd.Context(),
-		&runner.wg,
-		runner.platform,
-		runner.settings.Environment,
-		runner.settings.AdminBrokers,
+		&rkcycmd.wg,
+		platId,
+		rkcycmd.platform,
+		rkcycmd.settings.Environment,
+		rkcycmd.settings.AdminBrokers,
 		adminPingInterval,
 		strmprov,
-		runner.clientCode,
+		rkcycmd.clientCode,
 		respTarget,
 	)
 	if err != nil {
@@ -259,7 +269,7 @@ func (runner *Runner) prerunCobra(cmd *cobra.Command, args []string) {
 	}
 }
 
-func (runner *Runner) Execute() error {
+func (rkcycmd *RkcyCmd) Execute() error {
 	interruptCh := make(chan os.Signal, 1)
 	signal.Notify(interruptCh, os.Interrupt)
 
@@ -271,10 +281,10 @@ func (runner *Runner) Execute() error {
 		if !cleanupHasRun {
 			cleanupHasRun = true
 			signal.Stop(interruptCh)
-			telem.Shutdown(runner.ctx)
-			runner.ctxCancel()
-			runner.wg.Wait()
-			log.Info().Msgf("Runner.Start completed")
+			telem.Shutdown(rkcycmd.ctx)
+			rkcycmd.ctxCancel()
+			rkcycmd.wg.Wait()
+			log.Info().Msgf("RkcyCmd.Execute completed")
 		}
 	}
 
@@ -282,26 +292,26 @@ func (runner *Runner) Execute() error {
 		defer cleanup()
 
 		select {
-		case <-runner.ctx.Done():
+		case <-rkcycmd.ctx.Done():
 			return
 		case <-interruptCh:
 			return
-		case <-runner.bailoutCh:
+		case <-rkcycmd.bailoutCh:
 			log.Warn().
 				Msg("APECS Consumer Stopped, BAILOUT")
 			return
 		}
 	}()
 
-	cobraCmd := runner.BuildCobraCommand()
-	err := cobraCmd.ExecuteContext(runner.ctx)
+	cobraCmd := rkcycmd.BuildCobraCommand()
+	err := cobraCmd.ExecuteContext(rkcycmd.ctx)
 	cleanup()
 	return err
 }
 
 func ExecuteFromArgs(ctx context.Context, platform string, clientCode *rkcy.ClientCode, args []string) {
-	runner := NewRunnerWithClientCode(ctx, platform, clientCode)
-	cobraCmd := runner.BuildCobraCommand()
+	rkcycmd := NewRkcyCmdWithClientCode(ctx, platform, clientCode)
+	cobraCmd := rkcycmd.BuildCobraCommand()
 	cobraCmd.SetArgs(args)
 	cobraCmd.ExecuteContext(ctx)
 }

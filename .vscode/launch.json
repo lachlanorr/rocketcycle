@@ -24,6 +24,16 @@
             "args": ["run", "-d", "-e", "dev", "--runner", "routine", "--stream", "offline"]
         },
         {
+            "name": "sim one char",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/examples/rpg",
+            "cwd": "${workspaceFolder}/examples/rpg",
+            "env": {},
+            "args": ["sim", "--init_character_count", "1", "--simulation_count", "0"]
+        },
+        {
             "name": "admin offline routine",
             "type": "go",
             "request": "launch",

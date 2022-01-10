@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/lachlanorr/rocketcycle/pkg/runner"
 )
 
 type Settings struct {
@@ -25,7 +27,7 @@ var (
 	settings Settings
 )
 
-func CobraCommand() *cobra.Command {
+func CobraCommand(rkcycmd *runner.RkcyCmd) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "sim",
 		Short: "RPG Simulator",

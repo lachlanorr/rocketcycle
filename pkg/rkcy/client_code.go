@@ -6,15 +6,13 @@ package rkcy
 
 import (
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/cobra"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
 type ClientCode struct {
-	StorageInits        map[string]StorageInit
-	ConcernHandlers     ConcernHandlers
-	CustomCobraCommands []*cobra.Command
+	StorageInits    map[string]StorageInit
+	ConcernHandlers ConcernHandlers
 }
 
 func NewClientCode() *ClientCode {

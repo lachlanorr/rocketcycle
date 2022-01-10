@@ -7,7 +7,7 @@ package edge
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/lachlanorr/rocketcycle/pkg/platform"
+	"github.com/lachlanorr/rocketcycle/pkg/runner"
 )
 
 // Cobra sets these values based on command parsing
@@ -21,7 +21,7 @@ type Settings struct {
 
 var settings Settings
 
-func CobraCommand(platFunc func() *platform.Platform) *cobra.Command {
+func CobraCommand(rkcycmd *runner.RkcyCmd) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "edge",
 		Short: "RPG Edge Rest Api",
@@ -79,7 +79,7 @@ func CobraCommand(platFunc func() *platform.Platform) *cobra.Command {
 		Short: "Rocketcycle Edge Api Server",
 		Long:  "Provides rest entrypoints into application",
 		Run: func(cmd *cobra.Command, args []string) {
-			serve(platFunc)
+			serve(rkcycmd.Platform())
 		},
 	}
 

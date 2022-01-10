@@ -52,7 +52,8 @@ type Platform struct {
 func NewPlatform(
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	name string,
+	id string,
+	platform string,
 	environment string,
 	adminBrokers string,
 	adminPingInterval time.Duration,
@@ -60,15 +61,16 @@ func NewPlatform(
 	clientCode *rkcy.ClientCode,
 	respTarget *rkcypb.TopicTarget,
 ) (*Platform, error) {
-	if !rkcy.IsValidName(name) {
-		return nil, fmt.Errorf("Invalid name: %s", name)
+	if !rkcy.IsValidName(platform) {
+		return nil, fmt.Errorf("Invalid platform: %s", platform)
 	}
 
 	plat := &Platform{
 		ctx: ctx,
 		wg:  wg,
 		Args: &rkcy.PlatformArgs{
-			Platform:          name,
+			Id:                id,
+			Platform:          platform,
 			Environment:       environment,
 			AdminBrokers:      adminBrokers,
 			AdminPingInterval: adminPingInterval,
@@ -104,7 +106,7 @@ func NewPlatform(
 			log.Info().
 				Str("Platform", plat.Args.Platform).
 				Str("Environment", plat.Args.Environment).
-				Msg("Platform closed")
+				Msgf("Platform closed %s", plat.Args.Id)
 			plat.wg.Done()
 		}
 	}()

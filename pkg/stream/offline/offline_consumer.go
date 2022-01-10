@@ -42,6 +42,16 @@ func (ocons *OfflineConsumer) Assign(partitions []kafka.TopicPartition) error {
 		if err != nil {
 			return err
 		}
+
+		switch tp.Offset {
+		case kafka.OffsetBeginning:
+			tp.Offset = 0
+		case kafka.OffsetStored:
+			tp.Offset = 0
+		case kafka.OffsetEnd:
+			tp.Offset = kafka.Offset(part.Len())
+		}
+
 		ocons.partOffs[i] = &PartitionOffset{
 			part:   part,
 			offset: tp.Offset,

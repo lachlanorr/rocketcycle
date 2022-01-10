@@ -25,6 +25,7 @@ const (
 )
 
 type PlatformArgs struct {
+	Id                string
 	Platform          string
 	Environment       string
 	AdminBrokers      string

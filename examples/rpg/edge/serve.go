@@ -251,7 +251,7 @@ func runServer(
 	portal.ServeGrpcGateway(ctx, srv)
 }
 
-func serve(platFunc func() *platform.Platform) {
+func serve(plat *platform.Platform) {
 	log.Info().
 		Str("GitCommit", version.GitCommit).
 		Msg("edge server started")
@@ -265,7 +265,6 @@ func serve(platFunc func() *platform.Platform) {
 		cancel()
 	}()
 
-	plat := platFunc()
 	go runServer(ctx, plat)
 
 	select {

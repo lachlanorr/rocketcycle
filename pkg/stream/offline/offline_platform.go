@@ -16,6 +16,7 @@ import (
 
 func NewOfflinePlatformFromJson(
 	ctx context.Context,
+	id string,
 	platformDefJson []byte,
 	clientCode *rkcy.ClientCode,
 ) (*platform.Platform, error) {
@@ -72,6 +73,7 @@ func NewOfflinePlatformFromJson(
 	plat, err := platform.NewPlatform(
 		ctx,
 		&wg,
+		id,
 		rtPlatDef.PlatformDef.Name,
 		rtPlatDef.PlatformDef.Environment,
 		rtPlatDef.AdminCluster.Brokers,

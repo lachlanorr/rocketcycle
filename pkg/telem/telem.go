@@ -117,7 +117,6 @@ func Initialize(ctx context.Context, otelcolEndpoint string) error {
 }
 
 func InitializeOffline(ctx context.Context) error {
-	log.Info().Msg("telem.InitializeOffline called, no telemetry will be published")
 	return initialize(ctx, &stubTraceClient{}, &stubMetricClient{})
 }
 

@@ -208,7 +208,7 @@ func startWatch(
 	)
 }
 
-func (runner *Runner) RunConsumerPrograms(
+func RunConsumerPrograms(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	strmprov rkcy.StreamProvider,
