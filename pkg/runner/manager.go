@@ -22,7 +22,7 @@ import (
 func updateRunning(
 	ctx context.Context,
 	running map[string]program.Runnable,
-	newRunnableFunc program.NewRunnableFunc,
+	newRunnableFunc NewRunnableFunc,
 	directive rkcypb.Directive,
 	acd *rkcypb.ConsumerDirective,
 	printCh chan<- string,
@@ -125,7 +125,7 @@ func startAdmin(
 	adminBrokers string,
 	otelcolEndpoint string,
 	running map[string]program.Runnable,
-	newRunnableFunc program.NewRunnableFunc,
+	newRunnableFunc NewRunnableFunc,
 	printCh chan<- string,
 ) {
 	updateRunning(
@@ -153,7 +153,7 @@ func startPortalServer(
 	adminBrokers string,
 	otelcolEndpoint string,
 	running map[string]program.Runnable,
-	newRunnableFunc program.NewRunnableFunc,
+	newRunnableFunc NewRunnableFunc,
 	printCh chan<- string,
 ) {
 	updateRunning(
@@ -182,7 +182,7 @@ func startWatch(
 	otelcolEndpoint string,
 	watchDecode bool,
 	running map[string]program.Runnable,
-	newRunnableFunc program.NewRunnableFunc,
+	newRunnableFunc NewRunnableFunc,
 	printCh chan<- string,
 ) {
 	args := []string{"watch"}
@@ -208,20 +208,17 @@ func startWatch(
 	)
 }
 
-func RunConsumerPrograms(
+func (rkcycmd *RkcyCmd) RunConsumerPrograms(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	strmprov rkcy.StreamProvider,
 	platform string,
 	environment string,
-	runnerType string,
 	adminBrokers string,
 	otelcolEndpoint string,
 	watchDecode bool,
 ) {
 	defer wg.Done()
-
-	newRunnableFunc := GetNewRunnableFunc(runnerType)
 
 	consCh := make(chan *mgmt.ConsumerMessage)
 
@@ -241,9 +238,9 @@ func RunConsumerPrograms(
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, wg, printCh)
-	startAdmin(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
-	startPortalServer(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, newRunnableFunc, printCh)
-	startWatch(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, watchDecode, running, newRunnableFunc, printCh)
+	startAdmin(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
+	startPortalServer(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
+	startWatch(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, watchDecode, running, rkcycmd.newRunnableFunc, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 
@@ -264,7 +261,7 @@ func RunConsumerPrograms(
 			updateRunning(
 				ctx,
 				running,
-				newRunnableFunc,
+				rkcycmd.newRunnableFunc,
 				consMsg.Directive,
 				consMsg.ConsumerDirective,
 				printCh,

@@ -11,11 +11,6 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
 
-type NewRunnableFunc func(
-	ctx context.Context,
-	dets *Details,
-) (Runnable, error)
-
 type Runnable interface {
 	Details() *Details
 

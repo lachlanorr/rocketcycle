@@ -5,21 +5,25 @@
 package runner
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lachlanorr/rocketcycle/pkg/runner/process"
 	"github.com/lachlanorr/rocketcycle/pkg/runner/program"
-	"github.com/lachlanorr/rocketcycle/pkg/runner/routine"
 )
 
-var gRunnableRegistry = make(map[string]program.NewRunnableFunc)
+type NewRunnableFunc func(
+	ctx context.Context,
+	dets *program.Details,
+) (program.Runnable, error)
+
+var gRunnableRegistry = make(map[string]NewRunnableFunc)
 
 func init() {
-	RegisterNewRunnableFunc("routine", routine.NewRunnable)
 	RegisterNewRunnableFunc("process", process.NewRunnable)
 }
 
-func RegisterNewRunnableFunc(name string, newRunnableFunc program.NewRunnableFunc) {
+func RegisterNewRunnableFunc(name string, newRunnableFunc NewRunnableFunc) {
 	_, ok := gRunnableRegistry[name]
 	if ok {
 		panic(fmt.Sprintf("RunnerStartFunc already registered: %s", name))
@@ -28,7 +32,7 @@ func RegisterNewRunnableFunc(name string, newRunnableFunc program.NewRunnableFun
 	gRunnableRegistry[name] = newRunnableFunc
 }
 
-func GetNewRunnableFunc(name string) program.NewRunnableFunc {
+func GetNewRunnableFunc(name string) NewRunnableFunc {
 	newRunnableFunc, ok := gRunnableRegistry[name]
 	if !ok {
 		panic(fmt.Sprintf("RunnerStartFunc not found: %s", name))

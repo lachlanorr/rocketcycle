@@ -6,33 +6,25 @@ package routine
 
 import (
 	"context"
-	"errors"
 
 	"github.com/lachlanorr/rocketcycle/pkg/runner/program"
 )
 
 type Runnable struct {
-	details *program.Details
-	ctx     context.Context
-	cancel  context.CancelFunc
-}
-
-var gExecuteFunc func(ctx context.Context, args []string)
-
-func SetExecuteFunc(f func(ctx context.Context, args []string)) {
-	gExecuteFunc = f
+	details     *program.Details
+	executeFunc func(ctx context.Context, args []string)
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 func NewRunnable(
 	ctx context.Context,
 	dets *program.Details,
+	executeFunc func(ctx context.Context, args []string),
 ) (program.Runnable, error) {
-	if gExecuteFunc == nil {
-		return nil, errors.New("SetExecuteFunc has not been called")
-	}
-
 	rnbl := &Runnable{
-		details: dets,
+		details:     dets,
+		executeFunc: executeFunc,
 	}
 
 	return rnbl, nil
@@ -77,7 +69,7 @@ func (rnbl *Runnable) Start(
 
 	rnbl.ctx, rnbl.cancel = context.WithCancel(ctx)
 
-	go gExecuteFunc(rnbl.ctx, rnbl.details.Program.Args)
+	go rnbl.executeFunc(rnbl.ctx, rnbl.details.Program.Args)
 
 	go rnbl.Wait()
 	return nil

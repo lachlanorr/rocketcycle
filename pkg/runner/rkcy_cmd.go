@@ -20,6 +20,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/platform"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/runner/program"
 	"github.com/lachlanorr/rocketcycle/pkg/runner/routine"
 	"github.com/lachlanorr/rocketcycle/pkg/stream"
 	"github.com/lachlanorr/rocketcycle/pkg/stream/offline"
@@ -39,8 +40,11 @@ type RkcyCmd struct {
 
 	plat *platform.Platform
 
-	offlineMgr         *offline.Manager
+	newRunnableFunc NewRunnableFunc
+
 	customCommandFuncs []CustomCommandFunc
+
+	offlineMgr *offline.Manager
 }
 
 type CustomCommandFunc func(rkcycmd *RkcyCmd) *cobra.Command
@@ -81,15 +85,15 @@ func newRkcyCmd(
 	ctx context.Context,
 	platform string,
 	clientCode *rkcy.ClientCode,
-	offlineMgr *offline.Manager,
 	customCommandFuncs []CustomCommandFunc,
+	offlineMgr *offline.Manager,
 ) *RkcyCmd {
 	rkcycmd := &RkcyCmd{
 		platform:           platform,
 		clientCode:         clientCode,
 		settings:           &Settings{},
-		offlineMgr:         offlineMgr,
 		customCommandFuncs: customCommandFuncs,
+		offlineMgr:         offlineMgr,
 	}
 
 	if rkcycmd.customCommandFuncs == nil {
@@ -204,17 +208,6 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 					Msg("Failed to offline.NewManager")
 			}
 
-			routine.SetExecuteFunc(func(ctx context.Context, args []string) {
-				ExecuteFromArgs(
-					ctx,
-					rkcycmd.platform,
-					rkcycmd.clientCode,
-					rkcycmd.offlineMgr,
-					rkcycmd.customCommandFuncs,
-					args,
-				)
-			})
-
 			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
 			err = rkcy.CreatePlatformTopics(
 				cmd.Context(),
@@ -262,8 +255,30 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 		} else {
 			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
 		}
+
 	} else {
 		log.Fatal().Msgf("Invalid --stream: %s", rkcycmd.settings.StreamType)
+	}
+
+	if rkcycmd.settings.StreamType == "offline" {
+		rkcycmd.newRunnableFunc = func(ctx context.Context, dets *program.Details) (program.Runnable, error) {
+			return routine.NewRunnable(
+				ctx,
+				dets,
+				func(ctx context.Context, args []string) {
+					ExecuteFromArgs(
+						ctx,
+						rkcycmd.platform,
+						rkcycmd.clientCode,
+						rkcycmd.customCommandFuncs,
+						rkcycmd.offlineMgr,
+						args,
+					)
+				},
+			)
+		}
+	} else {
+		rkcycmd.newRunnableFunc = GetNewRunnableFunc(rkcycmd.settings.RunnerType)
 	}
 
 	adminPingInterval := time.Duration(rkcycmd.settings.AdminPingIntervalSecs) * time.Second
@@ -331,11 +346,11 @@ func ExecuteFromArgs(
 	ctx context.Context,
 	platform string,
 	clientCode *rkcy.ClientCode,
-	offlineMgr *offline.Manager,
 	customCommandFuncs []CustomCommandFunc,
+	offlineMgr *offline.Manager,
 	args []string,
 ) {
-	rkcycmd := newRkcyCmd(ctx, platform, clientCode, offlineMgr, customCommandFuncs)
+	rkcycmd := newRkcyCmd(ctx, platform, clientCode, customCommandFuncs, offlineMgr)
 	cobraCmd := rkcycmd.BuildCobraCommand()
 	cobraCmd.SetArgs(args)
 	cobraCmd.ExecuteContext(ctx)

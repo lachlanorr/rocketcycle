@@ -284,13 +284,12 @@ func (rkcycmd *RkcyCmd) BuildCobraCommand() *cobra.Command {
 		Long:  "Orchestrates sub processes as specified by platform topics consumer programs",
 		Run: func(cmd *cobra.Command, args []string) {
 			rkcycmd.plat.WaitGroup().Add(1)
-			RunConsumerPrograms(
+			rkcycmd.RunConsumerPrograms(
 				cmd.Context(),
 				rkcycmd.plat.WaitGroup(),
 				rkcycmd.plat.StreamProvider(),
 				rkcycmd.plat.Args.Platform,
 				rkcycmd.plat.Args.Environment,
-				rkcycmd.settings.RunnerType,
 				rkcycmd.plat.Args.AdminBrokers,
 				rkcycmd.settings.OtelcolEndpoint,
 				rkcycmd.settings.WatchDecode,
