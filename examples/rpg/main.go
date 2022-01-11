@@ -27,8 +27,8 @@ func main() {
 	rkcycmd.AddCrudHandler("Player", "postgresql", &postgresql.Player{})
 	rkcycmd.AddCrudHandler("Character", "postgresql", &postgresql.Character{})
 
-	runner.AddCobraEdgeCommandFunc(edge.CobraCommand)
-	runner.AddCobraCommandFunc(sim.CobraCommand)
+	rkcycmd.AddCobraEdgeCommandFunc(edge.CobraCommand)
+	rkcycmd.AddCobraCommandFunc(sim.CobraCommand)
 
 	rkcycmd.Execute()
 }

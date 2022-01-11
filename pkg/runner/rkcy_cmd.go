@@ -39,12 +39,11 @@ type RkcyCmd struct {
 
 	plat *platform.Platform
 
-	offlineMgr *offline.Manager
+	offlineMgr         *offline.Manager
+	customCommandFuncs []CustomCommandFunc
 }
 
 type CustomCommandFunc func(rkcycmd *RkcyCmd) *cobra.Command
-
-var gCustomCommandFuncs = make([]CustomCommandFunc, 0)
 
 type Settings struct {
 	PlatformFilePath string
@@ -75,15 +74,26 @@ type Settings struct {
 }
 
 func NewRkcyCmd(ctx context.Context, platform string) *RkcyCmd {
-	return newRkcyCmd(ctx, platform, rkcy.NewClientCode(), nil)
+	return newRkcyCmd(ctx, platform, rkcy.NewClientCode(), nil, nil)
 }
 
-func newRkcyCmd(ctx context.Context, platform string, clientCode *rkcy.ClientCode, offlineMgr *offline.Manager) *RkcyCmd {
+func newRkcyCmd(
+	ctx context.Context,
+	platform string,
+	clientCode *rkcy.ClientCode,
+	offlineMgr *offline.Manager,
+	customCommandFuncs []CustomCommandFunc,
+) *RkcyCmd {
 	rkcycmd := &RkcyCmd{
-		platform:   platform,
-		clientCode: clientCode,
-		settings:   &Settings{},
-		offlineMgr: offlineMgr,
+		platform:           platform,
+		clientCode:         clientCode,
+		settings:           &Settings{},
+		offlineMgr:         offlineMgr,
+		customCommandFuncs: customCommandFuncs,
+	}
+
+	if rkcycmd.customCommandFuncs == nil {
+		rkcycmd.customCommandFuncs = make([]CustomCommandFunc, 0)
 	}
 
 	rkcycmd.ctx, rkcycmd.ctxCancel = context.WithCancel(ctx)
@@ -115,20 +125,20 @@ func (rkcycmd *RkcyCmd) AddCrudHandler(
 	rkcycmd.clientCode.AddCrudHandler(concern, storageType, handler)
 }
 
-func AddCobraCommandFunc(custCmdFunc CustomCommandFunc) {
-	gCustomCommandFuncs = append(gCustomCommandFuncs, custCmdFunc)
+func (rkcycmd *RkcyCmd) AddCobraCommandFunc(custCmdFunc CustomCommandFunc) {
+	rkcycmd.customCommandFuncs = append(rkcycmd.customCommandFuncs, custCmdFunc)
 }
 
-func AddCobraConsumerCommandFunc(custCmdFunc CustomCommandFunc) {
-	gCustomCommandFuncs = append(gCustomCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
+func (rkcycmd *RkcyCmd) AddCobraConsumerCommandFunc(custCmdFunc CustomCommandFunc) {
+	rkcycmd.customCommandFuncs = append(rkcycmd.customCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
 		cmd := custCmdFunc(rkcycmd)
 		rkcycmd.addConsumerFlags(cmd)
 		return cmd
 	})
 }
 
-func AddCobraEdgeCommandFunc(custCmdFunc CustomCommandFunc) {
-	gCustomCommandFuncs = append(gCustomCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
+func (rkcycmd *RkcyCmd) AddCobraEdgeCommandFunc(custCmdFunc CustomCommandFunc) {
+	rkcycmd.customCommandFuncs = append(rkcycmd.customCommandFuncs, func(rkcycmd *RkcyCmd) *cobra.Command {
 		cmd := custCmdFunc(rkcycmd)
 		rkcycmd.addEdgeFlags(cmd)
 		return cmd
@@ -195,7 +205,14 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 			}
 
 			routine.SetExecuteFunc(func(ctx context.Context, args []string) {
-				ExecuteFromArgs(ctx, rkcycmd.platform, rkcycmd.clientCode, rkcycmd.offlineMgr, args)
+				ExecuteFromArgs(
+					ctx,
+					rkcycmd.platform,
+					rkcycmd.clientCode,
+					rkcycmd.offlineMgr,
+					rkcycmd.customCommandFuncs,
+					args,
+				)
 			})
 
 			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
@@ -315,9 +332,10 @@ func ExecuteFromArgs(
 	platform string,
 	clientCode *rkcy.ClientCode,
 	offlineMgr *offline.Manager,
+	customCommandFuncs []CustomCommandFunc,
 	args []string,
 ) {
-	rkcycmd := newRkcyCmd(ctx, platform, clientCode, offlineMgr)
+	rkcycmd := newRkcyCmd(ctx, platform, clientCode, offlineMgr, customCommandFuncs)
 	cobraCmd := rkcycmd.BuildCobraCommand()
 	cobraCmd.SetArgs(args)
 	cobraCmd.ExecuteContext(ctx)

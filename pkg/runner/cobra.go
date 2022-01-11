@@ -330,7 +330,7 @@ func (rkcycmd *RkcyCmd) BuildCobraCommand() *cobra.Command {
 	platReplaceCmd.PersistentFlags().StringVar(&rkcycmd.settings.PlatformFilePath, "platform_file_path", "./platform.json", "Path to json file containing platform configuration")
 	platCmd.AddCommand(platReplaceCmd)
 
-	for _, custCmdFunc := range gCustomCommandFuncs {
+	for _, custCmdFunc := range rkcycmd.customCommandFuncs {
 		rootCmd.AddCommand(custCmdFunc(rkcycmd))
 	}
 
