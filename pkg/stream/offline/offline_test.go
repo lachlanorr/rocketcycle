@@ -76,7 +76,7 @@ func TestPlatform(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	plat, err := NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
+	plat, err := NewOfflinePlatformFromJson(ctx, "TestPlatform", gTestPlatformDef, nil)
 	if err != nil {
 		t.Fatalf("NewOfflinePlatformFromJson error: %s", err.Error())
 	}
@@ -113,7 +113,12 @@ func TestPlatform(t *testing.T) {
 			if part.index != i {
 				t.Errorf("Bad partition index %s.%d, %d vs %d", topDet.name, i, part.index, i)
 			}
-			if len(part.messages) != 0 {
+
+			if part.topic.name == "rkcy.rpg.test.platform" {
+				if len(part.messages) != 1 {
+					t.Errorf("Non-one message count %s.%d, %d", topDet.name, i, len(part.messages))
+				}
+			} else if len(part.messages) != 0 {
 				t.Errorf("Non-zero message count %s.%d, %d", topDet.name, i, len(part.messages))
 			}
 		}
