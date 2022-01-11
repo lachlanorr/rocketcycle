@@ -167,6 +167,14 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 			Msg("ValidateConcernHandlers failed")
 	}
 
+	if rkcycmd.settings.StreamType == "auto" {
+		if rkcycmd.settings.RunnerType == "routine" {
+			rkcycmd.settings.StreamType = "offline"
+		} else {
+			rkcycmd.settings.StreamType = "kafka"
+		}
+	}
+
 	var respTarget *rkcypb.TopicTarget
 	if rkcycmd.settings.Edge {
 		if rkcycmd.settings.ConsumerBrokers == "" || rkcycmd.settings.Topic == "" || rkcycmd.settings.Partition == -1 {

@@ -50,7 +50,7 @@ func (rkcycmd *RkcyCmd) BuildCobraCommand() *cobra.Command {
 		PersistentPreRun: rkcycmd.prerunCobra,
 	}
 	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.OtelcolEndpoint, "otelcol_endpoint", "offline", "OpenTelemetry collector address")
-	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.StreamType, "stream", "kafka", "Type of StreamProvider to use")
+	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.StreamType, "stream", "auto", "Type of StreamProvider to use")
 
 	// admin sub command
 	adminCmd := &cobra.Command{

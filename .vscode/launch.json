@@ -21,7 +21,7 @@
             "program": "${workspaceFolder}/examples/rpg",
             "cwd": "${workspaceFolder}/examples/rpg",
             "env": {},
-            "args": ["run", "-d", "-e", "dev", "--runner", "routine", "--stream", "offline"]
+            "args": ["run", "-d", "-e", "dev", "--runner", "routine"]
         },
         {
             "name": "sim one char",
