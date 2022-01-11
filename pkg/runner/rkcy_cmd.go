@@ -38,9 +38,9 @@ type RkcyCmd struct {
 	settings *Settings
 
 	plat *platform.Platform
-}
 
-var gOfflineMgr *offline.Manager
+	offlineMgr *offline.Manager
+}
 
 type CustomCommandFunc func(rkcycmd *RkcyCmd) *cobra.Command
 
@@ -75,14 +75,15 @@ type Settings struct {
 }
 
 func NewRkcyCmd(ctx context.Context, platform string) *RkcyCmd {
-	return NewRkcyCmdWithClientCode(ctx, platform, rkcy.NewClientCode())
+	return newRkcyCmd(ctx, platform, rkcy.NewClientCode(), nil)
 }
 
-func NewRkcyCmdWithClientCode(ctx context.Context, platform string, clientCode *rkcy.ClientCode) *RkcyCmd {
+func newRkcyCmd(ctx context.Context, platform string, clientCode *rkcy.ClientCode, offlineMgr *offline.Manager) *RkcyCmd {
 	rkcycmd := &RkcyCmd{
 		platform:   platform,
 		clientCode: clientCode,
 		settings:   &Settings{},
+		offlineMgr: offlineMgr,
 	}
 
 	rkcycmd.ctx, rkcycmd.ctxCancel = context.WithCancel(ctx)
@@ -170,11 +171,7 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	if rkcycmd.settings.StreamType == "kafka" {
 		strmprov = stream.NewKafkaStreamProvider()
 	} else if rkcycmd.settings.StreamType == "offline" {
-		if gOfflineMgr == nil {
-			routine.SetExecuteFunc(func(ctx context.Context, args []string) {
-				ExecuteFromArgs(ctx, rkcycmd.platform, rkcycmd.clientCode, args)
-			})
-
+		if rkcycmd.offlineMgr == nil {
 			platformDefJson, err := ioutil.ReadFile(rkcycmd.settings.PlatformFilePath)
 			if err != nil {
 				log.Fatal().
@@ -189,7 +186,7 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 					Err(err).
 					Msg("Failed to NewRtPlatformDefFromJson")
 			}
-			gOfflineMgr, err = offline.NewManager(rtPlatDef)
+			rkcycmd.offlineMgr, err = offline.NewManager(rtPlatDef)
 			if err != nil {
 				log.Fatal().
 					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
@@ -197,7 +194,11 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 					Msg("Failed to offline.NewManager")
 			}
 
-			strmprov = offline.NewOfflineStreamProviderFromManager(gOfflineMgr)
+			routine.SetExecuteFunc(func(ctx context.Context, args []string) {
+				ExecuteFromArgs(ctx, rkcycmd.platform, rkcycmd.clientCode, rkcycmd.offlineMgr, args)
+			})
+
+			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
 			err = rkcy.CreatePlatformTopics(
 				cmd.Context(),
 				strmprov,
@@ -242,7 +243,7 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 				rkcycmd.settings.ConfigFilePath,
 			)
 		} else {
-			strmprov = offline.NewOfflineStreamProviderFromManager(gOfflineMgr)
+			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
 		}
 	} else {
 		log.Fatal().Msgf("Invalid --stream: %s", rkcycmd.settings.StreamType)
@@ -309,8 +310,14 @@ func (rkcycmd *RkcyCmd) Execute() error {
 	return err
 }
 
-func ExecuteFromArgs(ctx context.Context, platform string, clientCode *rkcy.ClientCode, args []string) {
-	rkcycmd := NewRkcyCmdWithClientCode(ctx, platform, clientCode)
+func ExecuteFromArgs(
+	ctx context.Context,
+	platform string,
+	clientCode *rkcy.ClientCode,
+	offlineMgr *offline.Manager,
+	args []string,
+) {
+	rkcycmd := newRkcyCmd(ctx, platform, clientCode, offlineMgr)
 	cobraCmd := rkcycmd.BuildCobraCommand()
 	cobraCmd.SetArgs(args)
 	cobraCmd.ExecuteContext(ctx)
