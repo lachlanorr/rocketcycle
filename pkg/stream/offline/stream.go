@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
@@ -45,6 +44,14 @@ func (part *Partition) Produce(msg *kafka.Message) {
 	msg.TopicPartition.Offset = kafka.Offset(len(part.messages))
 
 	part.messages = append(part.messages, msg)
+}
+
+func (part *Partition) Topic() *Topic {
+	return part.topic
+}
+
+func (part *Partition) Index() int32 {
+	return part.index
 }
 
 func (part *Partition) Len() int64 {
@@ -94,6 +101,10 @@ func NewTopic(name string, partitionCount int) *Topic {
 		topic.partitions[i] = NewPartition(topic, int32(i))
 	}
 	return topic
+}
+
+func (topic *Topic) Name() string {
+	return topic.name
 }
 
 func (topic *Topic) PartitionCount() int32 {
@@ -164,6 +175,17 @@ func NewCluster(name string, brokers string) (*Cluster, error) {
 	return clus, nil
 }
 
+func (clus *Cluster) GetTopic(topicName string) (*Topic, error) {
+	clus.mtx.Lock()
+	defer clus.mtx.Unlock()
+
+	topic, ok := clus.topics[topicName]
+	if !ok {
+		return nil, fmt.Errorf("Topic not found: %s", topicName)
+	}
+	return topic, nil
+}
+
 func (clus *Cluster) GetPartition(topicName string, partition int32) (*Partition, error) {
 	clus.mtx.Lock()
 	defer clus.mtx.Unlock()
@@ -225,8 +247,6 @@ type Manager struct {
 }
 
 func NewManager(rtPlatDef *rkcy.RtPlatformDef) (*Manager, error) {
-	log.Info().Msgf("NewManager")
-
 	mgr := &Manager{
 		clusters: make(map[string]*Cluster),
 	}
