@@ -14,8 +14,10 @@ import (
 )
 
 type RamDb struct {
-	items map[string]*Item
+	concerns map[string]ItemMap
 }
+
+type ItemMap map[string]*Item
 
 type Item struct {
 	key        string
@@ -26,12 +28,17 @@ type Item struct {
 
 func NewRamDb() *RamDb {
 	return &RamDb{
-		items: make(map[string]*Item),
+		concerns: make(map[string]ItemMap),
 	}
 }
 
-func (ramdb *RamDb) Read(key string) (proto.Message, proto.Message, *rkcypb.CompoundOffset, error) {
-	item, ok := ramdb.items[key]
+func (ramdb *RamDb) Read(concern string, key string) (proto.Message, proto.Message, *rkcypb.CompoundOffset, error) {
+	itemMap, ok := ramdb.concerns[concern]
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("RamDb not found: %s", key)
+	}
+
+	item, ok := itemMap[key]
 	if !ok {
 		return nil, nil, nil, fmt.Errorf("RamDb not found: %s", key)
 	}
@@ -39,18 +46,24 @@ func (ramdb *RamDb) Read(key string) (proto.Message, proto.Message, *rkcypb.Comp
 	return proto.Clone(item.inst), proto.Clone(item.rel), &cmpdOffset, nil
 }
 
-func (ramdb *RamDb) Create(key string, inst proto.Message, cmpdOffset *rkcypb.CompoundOffset) (proto.Message, error) {
-	return proto.Clone(inst), ramdb.Update(key, inst, nil, cmpdOffset)
+func (ramdb *RamDb) Create(concern string, key string, inst proto.Message, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ramdb.Update(concern, key, inst, nil, cmpdOffset)
 }
 
-func (ramdb *RamDb) Update(key string, inst proto.Message, rel proto.Message, cmpdOffset *rkcypb.CompoundOffset) error {
+func (ramdb *RamDb) Update(concern string, key string, inst proto.Message, rel proto.Message, cmpdOffset *rkcypb.CompoundOffset) error {
+	itemMap, ok := ramdb.concerns[concern]
+	if !ok {
+		itemMap = make(map[string]*Item)
+		ramdb.concerns[concern] = itemMap
+	}
+
 	offsetOk := true
-	item, ok := ramdb.items[key]
+	item, ok := itemMap[key]
 	if ok {
 		offsetOk = rkcy.OffsetGT(cmpdOffset, &item.cmpdOffset)
 	}
 	if offsetOk {
-		ramdb.items[key] = &Item{
+		itemMap[key] = &Item{
 			key:        key,
 			inst:       proto.Clone(inst),
 			rel:        proto.Clone(rel),
@@ -60,14 +73,19 @@ func (ramdb *RamDb) Update(key string, inst proto.Message, rel proto.Message, cm
 	return nil
 }
 
-func (ramdb *RamDb) Delete(key string, cmpdOffset *rkcypb.CompoundOffset) error {
+func (ramdb *RamDb) Delete(concern string, key string, cmpdOffset *rkcypb.CompoundOffset) error {
+	itemMap, ok := ramdb.concerns[concern]
+	if !ok {
+		return nil
+	}
+
 	offsetOk := true
-	item, ok := ramdb.items[key]
+	item, ok := itemMap[key]
 	if ok {
 		offsetOk = rkcy.OffsetGT(cmpdOffset, &item.cmpdOffset)
 	}
 	if offsetOk {
-		delete(ramdb.items, key)
+		delete(itemMap, key)
 	}
 	return nil
 }

@@ -15,15 +15,8 @@ import (
 func TestRamDb(t *testing.T) {
 	db := NewRamDb()
 
-	if db.items == nil {
-		t.Fatal("Nil items in new RamDb")
-	}
-	if len(db.items) != 0 {
-		t.Fatal("Non-zero item count in new RamDb")
-	}
-
 	{
-		_, _, _, err := db.Read("key0")
+		_, _, _, err := db.Read("concern0", "key0")
 		if err == nil {
 			t.Fatal("Non error when reading missing key")
 		}
@@ -38,19 +31,13 @@ func TestRamDb(t *testing.T) {
 		}
 
 		// create
-		inst, err := db.Create("key0", gTestItems["item0"].inst, &cmpdOffset)
+		err := db.Create(gTestItems["item0"].concern, "key0", gTestItems["item0"].inst, &cmpdOffset)
 		if err != nil {
 			t.Fatalf("Error in ramdb.Create: %s", err.Error())
 		}
-		if !instEqual(inst, gTestItems["item0"].inst) {
-			t.Fatal("Create returned different inst from input")
-		}
-		if inst == gTestItems["item0"].inst {
-			t.Fatal("same pointer value returned")
-		}
 
 		// validate read
-		inst, rel, retCmpdOffset, err := db.Read("key0")
+		inst, rel, retCmpdOffset, err := db.Read(gTestItems["item0"].concern, "key0")
 		if err != nil {
 			t.Fatalf("Error when reading: %s", err.Error())
 		}
@@ -75,13 +62,13 @@ func TestRamDb(t *testing.T) {
 		cmpdOffset2.Offset++
 		inst2 := *gTestItems["item0"].inst
 		inst2.Name += "modified"
-		err = db.Update("key0", &inst2, gTestItems["item0"].rel, &cmpdOffset2)
+		err = db.Update(gTestItems["item0"].concern, "key0", &inst2, gTestItems["item0"].rel, &cmpdOffset2)
 		if err != nil {
-			t.Fatalf("Error in ramdb.Create: %s", err.Error())
+			t.Fatalf("Error in ramdb.Update: %s", err.Error())
 		}
 
 		// validate read
-		inst, rel, retCmpdOffset, err = db.Read("key0")
+		inst, rel, retCmpdOffset, err = db.Read(gTestItems["item0"].concern, "key0")
 		if err != nil {
 			t.Fatalf("Error when reading: %s", err.Error())
 		}
@@ -111,13 +98,13 @@ func TestRamDb(t *testing.T) {
 		inst3.Name += "modifiedAgain"
 		rel3 := *gTestItems["item0"].rel
 		rel3.Name += "relModified"
-		err = db.Update("key0", &inst3, &rel3, &cmpdOffset3)
+		err = db.Update(gTestItems["item0"].concern, "key0", &inst3, &rel3, &cmpdOffset3)
 		if err != nil {
-			t.Fatalf("Error in ramdb.Create: %s", err.Error())
+			t.Fatalf("Error in ramdb.Update: %s", err.Error())
 		}
 
 		// validate read
-		inst, rel, retCmpdOffset, err = db.Read("key0")
+		inst, rel, retCmpdOffset, err = db.Read(gTestItems["item0"].concern, "key0")
 		if err != nil {
 			t.Fatalf("Error when reading: %s", err.Error())
 		}
@@ -141,13 +128,13 @@ func TestRamDb(t *testing.T) {
 		}
 
 		// update with lower offset should be a no-op
-		err = db.Update("key0", gTestItems["item0"].inst, gTestItems["item0"].rel, &cmpdOffset)
+		err = db.Update(gTestItems["item0"].concern, "key0", gTestItems["item0"].inst, gTestItems["item0"].rel, &cmpdOffset)
 		if err != nil {
-			t.Fatalf("Error in ramdb.Create: %s", err.Error())
+			t.Fatalf("Error in ramdb.Update: %s", err.Error())
 		}
 
 		// validate read hasn't changed
-		inst, rel, retCmpdOffset, err = db.Read("key0")
+		inst, rel, retCmpdOffset, err = db.Read(gTestItems["item0"].concern, "key0")
 		if err != nil {
 			t.Fatalf("Error when reading: %s", err.Error())
 		}
@@ -175,18 +162,12 @@ func TestRamDb(t *testing.T) {
 			Partition:  1010,
 			Offset:     2010,
 		}
-		instB, errB := db.Create("key1", gTestItems["item1"].inst, &cmpdOffsetB)
+		errB := db.Create(gTestItems["item1"].concern, "key1", gTestItems["item1"].inst, &cmpdOffsetB)
 		if errB != nil {
 			t.Fatalf("Error in ramdb.Create: %s", errB.Error())
 		}
-		if !instEqual(instB, gTestItems["item1"].inst) {
-			t.Fatal("Create returned different inst from input")
-		}
-		if instB == gTestItems["item1"].inst {
-			t.Fatal("same pointer value returned")
-		}
 
-		instB, relB, retCmpdOffsetB, errB := db.Read("key1")
+		instB, relB, retCmpdOffsetB, errB := db.Read(gTestItems["item1"].concern, "key1")
 		if errB != nil {
 			t.Fatalf("Error when reading: %s", errB.Error())
 		}
@@ -206,13 +187,54 @@ func TestRamDb(t *testing.T) {
 			t.Fatal("same pointer value returned")
 		}
 
+		cmpdOffsetB2 := rkcypb.CompoundOffset{
+			Generation: 1010,
+			Partition:  10100,
+			Offset:     20100,
+		}
+		errB2 := db.Create(gTestItems["item1b"].concern, "key1b", gTestItems["item1b"].inst, &cmpdOffsetB2)
+		if errB2 != nil {
+			t.Fatalf("Error in ramdb.Create: %s", errB2.Error())
+		}
+
+		instB2, relB2, retCmpdOffsetB2, errB2 := db.Read(gTestItems["item1b"].concern, "key1b")
+		if errB2 != nil {
+			t.Fatalf("Error when reading: %s", errB2.Error())
+		}
+		if !instEqual(instB2, gTestItems["item1b"].inst) {
+			t.Fatal("inst mismatch after Read")
+		}
+		if instB2 == gTestItems["item1b"].inst {
+			t.Fatal("same pointer value returned")
+		}
+		if relB2 != nil {
+			t.Fatal("non-nil rel on Read")
+		}
+		if !cmpdOffsetEqual(&cmpdOffsetB2, retCmpdOffsetB2) {
+			t.Fatal("inst mismatch after Read")
+		}
+		if &cmpdOffsetB2 == retCmpdOffsetB2 {
+			t.Fatal("same pointer value returned")
+		}
+
+		// validate concern map looks ok
+		if len(db.concerns) != 2 {
+			t.Fatal("concerns size unexpected")
+		}
+		if len(db.concerns[gTestItems["item0"].concern]) != 1 {
+			t.Fatal("item map size unexpected")
+		}
+		if len(db.concerns[gTestItems["item1"].concern]) != 2 {
+			t.Fatal("item map size unexpected")
+		}
+
 		// delete key0 with invalid offset, make sure no-op
-		err = db.Delete("key0", &cmpdOffset3)
+		err = db.Delete(gTestItems["item0"].concern, "key0", &cmpdOffset3)
 		if err != nil {
 			t.Fatalf("Error in ramdb.Delete: %s", err.Error())
 		}
 		// make sure delete didn't happen
-		inst, rel, retCmpdOffset, err = db.Read("key0")
+		inst, rel, retCmpdOffset, err = db.Read(gTestItems["item0"].concern, "key0")
 		if err != nil {
 			t.Fatalf("Error when reading: %s", err.Error())
 		}
@@ -235,17 +257,17 @@ func TestRamDb(t *testing.T) {
 		// delete key0
 		cmpdOffset4 := cmpdOffset3
 		cmpdOffset4.Offset++
-		err = db.Delete("key0", &cmpdOffset4)
+		err = db.Delete(gTestItems["item0"].concern, "key0", &cmpdOffset4)
 		if err != nil {
 			t.Fatalf("Error in ramdb.Delete: %s", errB.Error())
 		}
-		inst, rel, retCmpdOffset, err = db.Read("key0")
+		inst, rel, retCmpdOffset, err = db.Read(gTestItems["item0"].concern, "key0")
 		if err == nil {
 			t.Fatal("Successful read after deleting")
 		}
 
 		// make sure key1 is still there
-		instB, relB, retCmpdOffsetB, errB = db.Read("key1")
+		instB, relB, retCmpdOffsetB, errB = db.Read(gTestItems["item1"].concern, "key1")
 		if errB != nil {
 			t.Fatalf("Error when reading: %s", errB.Error())
 		}
@@ -266,17 +288,28 @@ func TestRamDb(t *testing.T) {
 		}
 
 		// delete key1
-		cmpdOffsetB2 := cmpdOffsetB
-		cmpdOffsetB2.Generation++
-		cmpdOffsetB2.Partition = 0
-		cmpdOffsetB2.Offset = 1
-		errB = db.Delete("key1", &cmpdOffsetB2)
+		cmpdOffsetC := cmpdOffsetB
+		cmpdOffsetC.Generation++
+		cmpdOffsetC.Partition = 0
+		cmpdOffsetC.Offset = 1
+		errB = db.Delete(gTestItems["item1"].concern, "key1", &cmpdOffsetC)
 		if errB != nil {
 			t.Fatalf("Error in ramdb.Delete: %s", errB.Error())
 		}
-		instB, relB, retCmpdOffsetB, errB = db.Read("key1")
+		instB, relB, retCmpdOffsetB, errB = db.Read(gTestItems["item1"].concern, "key1")
 		if errB == nil {
 			t.Fatal("Successful read after deleting")
+		}
+
+		// validate concern map looks ok
+		if len(db.concerns) != 2 {
+			t.Fatal("concerns size unexpected")
+		}
+		if len(db.concerns[gTestItems["item0"].concern]) != 0 {
+			t.Fatal("item map size unexpected")
+		}
+		if len(db.concerns[gTestItems["item1"].concern]) != 1 {
+			t.Fatal("item map size unexpected")
 		}
 	}
 }
@@ -321,14 +354,16 @@ func cmpdOffsetEqual(lhs proto.Message, rhs proto.Message) bool {
 }
 
 type TestItem struct {
-	inst *rkcypb.StorageTarget
-	rel  *rkcypb.Program
+	concern string
+	inst    *rkcypb.StorageTarget
+	rel     *rkcypb.Program
 }
 
 // Use some simple core rkcy protobufs just for testing.
 // Obviously inst and rel would generally be real concern types.
 var gTestItems = map[string]*TestItem{
 	"item0": &TestItem{
+		concern: "concern0",
 		inst: &rkcypb.StorageTarget{
 			Name:      "item0_Inst_Name",
 			Type:      "item0_Inst_Type",
@@ -351,6 +386,7 @@ var gTestItems = map[string]*TestItem{
 		},
 	},
 	"item1": &TestItem{
+		concern: "concern1",
 		inst: &rkcypb.StorageTarget{
 			Name:      "item1_Inst_Name",
 			Type:      "item1_Inst_Type",
@@ -371,6 +407,25 @@ var gTestItems = map[string]*TestItem{
 			Tags: map[string]string{
 				"item1_Rel_key0": "item1_Rel_val0",
 				"item1_Rel_key1": "item1_Rel_val1",
+			},
+		},
+	},
+	"item1b": &TestItem{
+		concern: "concern1",
+		inst: &rkcypb.StorageTarget{
+			Name:      "item1b_Inst_Name",
+			Type:      "item1b_Inst_Type",
+			IsPrimary: true,
+			Config: map[string]string{
+				"item1b_Inst_key0": "item1b_Inst_val0",
+			},
+		},
+		rel: &rkcypb.Program{
+			Name:   "item1b_Rel_Name",
+			Args:   []string{"item1b_Rel_arg0", "item1b_Rel_arg1"},
+			Abbrev: "item1b_Rel_Abbrev",
+			Tags: map[string]string{
+				"item1b_Rel_key0": "item1b_Rel_val0",
 			},
 		},
 	},
