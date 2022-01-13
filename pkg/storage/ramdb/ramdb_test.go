@@ -66,6 +66,9 @@ func TestRamDb(t *testing.T) {
 		if !cmpdOffsetEqual(&cmpdOffset, retCmpdOffset) {
 			t.Fatal("inst mismatch after Read")
 		}
+		if &cmpdOffset == retCmpdOffset {
+			t.Fatal("same pointer value returned")
+		}
 
 		// modify and update
 		cmpdOffset2 := cmpdOffset
@@ -96,6 +99,9 @@ func TestRamDb(t *testing.T) {
 		}
 		if !cmpdOffsetEqual(&cmpdOffset2, retCmpdOffset) {
 			t.Fatal("inst mismatch after Read")
+		}
+		if &cmpdOffset2 == retCmpdOffset {
+			t.Fatal("same pointer value returned")
 		}
 
 		// modify inst and rel, update and validate
@@ -130,6 +136,9 @@ func TestRamDb(t *testing.T) {
 		if !cmpdOffsetEqual(&cmpdOffset3, retCmpdOffset) {
 			t.Fatal("inst mismatch after Read")
 		}
+		if &cmpdOffset3 == retCmpdOffset {
+			t.Fatal("same pointer value returned")
+		}
 
 		// update with lower offset should be a no-op
 		err = db.Update("key0", gTestItems["item0"].inst, gTestItems["item0"].rel, &cmpdOffset)
@@ -156,6 +165,9 @@ func TestRamDb(t *testing.T) {
 		}
 		if !cmpdOffsetEqual(&cmpdOffset3, retCmpdOffset) {
 			t.Fatal("inst mismatch after Read")
+		}
+		if &cmpdOffset3 == retCmpdOffset {
+			t.Fatal("same pointer value returned")
 		}
 
 		cmpdOffsetB := rkcypb.CompoundOffset{
@@ -190,6 +202,9 @@ func TestRamDb(t *testing.T) {
 		if !cmpdOffsetEqual(&cmpdOffsetB, retCmpdOffsetB) {
 			t.Fatal("inst mismatch after Read")
 		}
+		if &cmpdOffsetB == retCmpdOffsetB {
+			t.Fatal("same pointer value returned")
+		}
 
 		// delete key0 with invalid offset, make sure no-op
 		err = db.Delete("key0", &cmpdOffset3)
@@ -212,6 +227,9 @@ func TestRamDb(t *testing.T) {
 		}
 		if !cmpdOffsetEqual(&cmpdOffset3, retCmpdOffset) {
 			t.Fatal("inst mismatch after Read")
+		}
+		if &cmpdOffset3 == retCmpdOffset {
+			t.Fatal("same pointer value returned")
 		}
 
 		// delete key0
@@ -242,6 +260,9 @@ func TestRamDb(t *testing.T) {
 		}
 		if !cmpdOffsetEqual(&cmpdOffsetB, retCmpdOffsetB) {
 			t.Fatal("inst mismatch after Read")
+		}
+		if &cmpdOffsetB == retCmpdOffsetB {
+			t.Fatal("same pointer value returned")
 		}
 
 		// delete key1
