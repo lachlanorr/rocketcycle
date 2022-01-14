@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 
 	"github.com/rs/zerolog/log"
@@ -125,6 +126,7 @@ func (rnbl *Runnable) Wait() {
 
 func (rnbl *Runnable) Start(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	printCh chan<- string,
 	killIfActive bool,
 ) error {

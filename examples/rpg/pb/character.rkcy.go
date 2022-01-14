@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -17,17 +18,24 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/apecs"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/storage/ramdb"
 )
 
 // -----------------------------------------------------------------------------
 // Concern Character
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&CharacterConcernHandler{})
+	rkcy.RegisterGlobalConcernHandlerNewFunc(func() rkcy.ConcernHandler {
+		return &CharacterConcernHandler{}
+	})
 }
 
 func (inst *Character) Key() string {
 	return inst.Id
+}
+
+func (inst *Character) SetKey(key string) {
+	inst.Id = key
 }
 
 func MarshalCharacterOrPanic(inst *Character) []byte {
@@ -39,9 +47,6 @@ func MarshalCharacterOrPanic(inst *Character) []byte {
 }
 
 func (inst *Character) PreValidateCreate(ctx context.Context) error {
-	if inst.Key() != "" {
-		return rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Empty Key during PreValidateCreate for Character")
-	}
 	return nil
 }
 
@@ -68,6 +73,46 @@ type CharacterCrudHandler interface {
 	Create(ctx context.Context, inst *Character, cmpdOffset *rkcypb.CompoundOffset) (*Character, error)
 	Update(ctx context.Context, inst *Character, rel *CharacterRelated, cmpdOffset *rkcypb.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error
+}
+
+// RamDb CrudHandler typically used in offline tests
+type CharacterCrudHandlerRamDb struct{
+	db *ramdb.RamDb
+}
+
+func NewCharacterCrudHandlerRamDb(db *ramdb.RamDb) *CharacterCrudHandlerRamDb {
+	return &CharacterCrudHandlerRamDb{
+		db: db,
+	}
+}
+
+func (ch *CharacterCrudHandlerRamDb) Read(ctx context.Context, key string) (*Character, *CharacterRelated, *rkcypb.CompoundOffset, error) {
+	inst, rel, cmpdOffset, err := ch.db.Read("Character", key)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return inst.(*Character), rel.(*CharacterRelated), cmpdOffset, nil
+}
+
+func (ch *CharacterCrudHandlerRamDb) Create(ctx context.Context, inst *Character, cmpdOffset *rkcypb.CompoundOffset) (*Character, error) {
+	if inst.Key() == "" {
+		inst.SetKey(uuid.NewString())
+	}
+	err := ch.db.Create("Character", inst.Key(), inst, cmpdOffset)
+	if err != nil {
+		return nil, err
+	}
+
+	return inst, nil
+}
+
+func (ch *CharacterCrudHandlerRamDb) Update(ctx context.Context, inst *Character, rel *CharacterRelated, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Update("Character", inst.Key(), inst, rel, cmpdOffset)
+}
+
+func (ch *CharacterCrudHandlerRamDb) Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Delete("Character", key, cmpdOffset)
 }
 
 // Concern Handler

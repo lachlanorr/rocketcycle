@@ -39,7 +39,19 @@ type StorageTargetInit struct {
 	Init StorageInit
 }
 
+func StorageInitNoop(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	config map[string]string,
+) error {
+	return nil
+}
+
 type ConcernHandlers map[string]ConcernHandler
+
+func NewConcernHandlers() ConcernHandlers {
+	return make(map[string]ConcernHandler)
+}
 
 type ConcernHandler interface {
 	ConcernName() string

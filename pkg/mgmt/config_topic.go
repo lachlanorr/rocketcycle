@@ -6,6 +6,7 @@ package mgmt
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"sync"
 	"time"
@@ -68,7 +69,7 @@ func ConsumeConfigTopic(
 	)
 }
 
-func ConfigReplace(
+func ConfigReplaceFromFile(
 	ctx context.Context,
 	strmprov rkcy.StreamProvider,
 	platform string,
@@ -76,26 +77,44 @@ func ConfigReplace(
 	adminBrokers string,
 	configFilePath string,
 ) {
-	slog := log.With().
-		Str("Platform", platform).
-		Str("Environment", environment).
-		Str("Brokers", adminBrokers).
-		Str("ConfigFilePath", configFilePath).
-		Logger()
-
 	// read config file and deserialize
-	data, err := ioutil.ReadFile(configFilePath)
+	configJson, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
-		slog.Fatal().
+		log.Fatal().
+			Str("ConfigFilePath", configFilePath).
 			Err(err).
 			Msg("Failed to ReadFile")
 	}
 
-	conf, err := rkcy.JsonToConfig(data)
+	err = ConfigReplaceFromJson(
+		ctx,
+		strmprov,
+		platform,
+		environment,
+		adminBrokers,
+		configJson,
+	)
+
 	if err != nil {
-		slog.Fatal().
+		log.Fatal().
+			Str("Brokers", adminBrokers).
+			Str("ConfigFilePath", configFilePath).
 			Err(err).
-			Msg("Failed to parseConfigFile")
+			Msg("Failed to ConfigReplaceFromJson")
+	}
+}
+
+func ConfigReplaceFromJson(
+	ctx context.Context,
+	strmprov rkcy.StreamProvider,
+	platform string,
+	environment string,
+	adminBrokers string,
+	configJson []byte,
+) error {
+	conf, err := rkcy.JsonToConfig(configJson)
+	if err != nil {
+		return err
 	}
 
 	// connect to kafka and make sure we have our platform topics
@@ -109,15 +128,10 @@ func ConfigReplace(
 		adminBrokers,
 	)
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to create platform topics")
+		return err
 	}
 
 	configTopic := rkcy.ConfigTopic(platform, environment)
-	slog = slog.With().
-		Str("Topic", configTopic).
-		Logger()
 
 	// At this point we are guaranteed to have our platform topics
 	kafkaLogCh := make(chan kafka.LogEvent)
@@ -125,35 +139,21 @@ func ConfigReplace(
 
 	prod, err := strmprov.NewProducer(adminBrokers, kafkaLogCh)
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to NewProducer")
+		return err
 	}
 	defer func() {
-		slog.Trace().
-			Msg("Closing kafka producer")
 		prod.Close()
-		slog.Trace().
-			Msg("Closed kafka producer")
 	}()
 
 	msg, err := rkcy.NewKafkaMessage(&configTopic, 0, conf, rkcypb.Directive_CONFIG_PUBLISH, telem.ExtractTraceParent(ctx))
 	if err != nil {
-		slog.Fatal().
-			Err(err).
-			Msg("Failed to kafkaMessage")
+		return err
 	}
 
-	produce := func() {
-		err := prod.Produce(msg, nil)
-		if err != nil {
-			slog.Fatal().
-				Err(err).
-				Msg("Failed to Produce")
-		}
+	err = prod.Produce(msg, nil)
+	if err != nil {
+		return err
 	}
-
-	produce()
 
 	// check channel for delivery event
 	timer := time.NewTimer(10 * time.Second)
@@ -161,26 +161,17 @@ Loop:
 	for {
 		select {
 		case <-timer.C:
-			slog.Fatal().
-				Msg("Timeout producing config message")
+			return errors.New("Timeout producing config message")
 		case ev := <-prod.Events():
 			msgEv, ok := ev.(*kafka.Message)
-			if !ok {
-				slog.Warn().
-					Msg("Non *kafka.Message event received from producer")
-			} else {
+			if ok {
 				if msgEv.TopicPartition.Error != nil {
-					slog.Warn().
-						Err(msgEv.TopicPartition.Error).
-						Msg("Error reported while producing config message, trying again after a delay")
-					time.Sleep(1 * time.Second)
-					produce()
+					return msgEv.TopicPartition.Error
 				} else {
-					slog.Info().
-						Msg("Config successfully produced")
 					break Loop
 				}
 			}
 		}
 	}
+	return nil
 }

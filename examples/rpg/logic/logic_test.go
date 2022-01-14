@@ -5,59 +5,152 @@
 package logic
 
 import (
-	"context"
 	"testing"
-	"time"
 
-	"github.com/lachlanorr/rocketcycle/pkg/apecs"
+	"github.com/google/uuid"
+
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
-	"github.com/lachlanorr/rocketcycle/pkg/stream/offline"
-	"github.com/lachlanorr/rocketcycle/pkg/telem"
+	"github.com/lachlanorr/rocketcycle/pkg/runner"
+	"github.com/lachlanorr/rocketcycle/pkg/storage/ramdb"
 
 	"github.com/lachlanorr/rocketcycle/examples/rpg/logic/txn"
 	"github.com/lachlanorr/rocketcycle/examples/rpg/pb"
 )
 
-func TestPlayer(t *testing.T) {
-	rkcy.PrepLogging()
+func NewTestingClientCode() *rkcy.ClientCode {
+	clientCode := rkcy.NewClientCode()
+	clientCode.AddStorageInit("ramdb", rkcy.StorageInitNoop)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	clientCode.AddLogicHandler("Player", &Player{})
+	clientCode.AddLogicHandler("Character", &Character{})
 
-	telem.InitializeOffline(ctx)
-	defer telem.Shutdown(ctx)
+	db := ramdb.NewRamDb()
 
-	plat, err := offline.NewOfflinePlatformFromJson(ctx, gTestPlatformDef)
-	if err != nil {
-		t.Fatalf("Failed to NewOfflinePlatformFromJson: %s", err.Error())
-	}
+	clientCode.AddCrudHandler("Player", "ramdb", pb.NewPlayerCrudHandlerRamDb(db))
+	clientCode.AddCrudHandler("Character", "ramdb", pb.NewCharacterCrudHandlerRamDb(db))
 
-	res, err := apecs.ExecuteTxnSync(
-		ctx,
-		plat,
-		txn.CreatePlayer(&pb.Player{
-			Username: "player0",
-			Active:   true,
-		}),
-		time.Second,
+	return clientCode
+}
+
+var gOrnr *runner.OfflineRunner
+
+func init() {
+	var err error
+	gOrnr, err = runner.NewOfflineRunner(
+		gTestPlatformDef,
+		gTestConfig,
+		NewTestingClientCode(),
 	)
-
 	if err != nil {
-		t.Fatalf("Failed to ExecuteTxnSync: %s", err.Error())
-	}
-
-	if res.Type != "Player" {
-		t.Fatalf("res.Type not Player: %s", res.Type)
-	}
-	_, ok := res.Instance.(*pb.Player)
-	if !ok {
-		t.Fatal("res.Instance not type pb.Player")
-	}
-	_, ok = res.Related.(*pb.PlayerRelated)
-	if !ok {
-		t.Fatal("res.Related not type pb.PlayerRelated")
+		panic(err.Error())
 	}
 }
+
+func TestPlayer(t *testing.T) {
+	{
+		// verify id is assigned if not present
+		playerNoId := *gTestPlayers["player0"]
+		playerNoId.Id = ""
+		res, err := gOrnr.ExecuteTxnSync(txn.CreatePlayer(&playerNoId))
+		if err != nil {
+			t.Fatalf("Failed to ExecuteTxnSync: %s", err.Error())
+		}
+
+		if res.Type != "Player" {
+			t.Fatalf("res.Type not Player: %s", res.Type)
+		}
+		retPlayer, ok := res.Instance.(*pb.Player)
+		if !ok {
+			t.Fatal("res.Instance not type pb.Player")
+		}
+
+		if retPlayer.Id == "" || retPlayer.Id == gTestPlayers["player0"].Id {
+			t.Fatal("id not assigned to player")
+		}
+
+		_, ok = res.Related.(*pb.PlayerRelated)
+		if !ok {
+			t.Fatal("res.Related not type pb.PlayerRelated")
+		}
+	}
+}
+
+func TestCharacter(t *testing.T) {
+	{
+		_, err := gOrnr.ExecuteTxnSync(txn.CreatePlayer(gTestPlayers["player0"]))
+		if err != nil {
+			t.Fatalf("Failed to ExecuteTxnSync: %s", err.Error())
+		}
+
+		// verify id is assigned if not present
+		charNoId := *gTestChars["char0.0"]
+		charNoId.Id = ""
+		res, err := gOrnr.ExecuteTxnSync(txn.CreateCharacter(&charNoId))
+		if err != nil {
+			t.Fatalf("Failed to ExecuteTxnSync: %s", err.Error())
+		}
+
+		if res.Type != "Character" {
+			t.Fatalf("res.Type not Character: %s", res.Type)
+		}
+		retChar, ok := res.Instance.(*pb.Character)
+		if !ok {
+			t.Fatal("res.Instance not type pb.Character")
+		}
+
+		if retChar.Id == "" || retChar.Id == gTestChars["char0.0"].Id {
+			t.Fatal("id not assigned to player")
+		}
+
+		_, ok = res.Related.(*pb.CharacterRelated)
+		if !ok {
+			t.Fatal("res.Related not type pb.CharacterRelated")
+		}
+	}
+}
+
+var gTestPlayers = map[string]*pb.Player{
+	"player0": &pb.Player{
+		Id:       uuid.NewString(),
+		Username: "player0",
+		Active:   true,
+		LimitsId: "48772bc4-81bf-4273-9e4e-5ac56473ccc0",
+	},
+	"player1": &pb.Player{
+		Id:       uuid.NewString(),
+		Username: "player1",
+		Active:   true,
+		LimitsId: "48772bc4-81bf-4273-9e4e-5ac56473ccc0",
+	},
+	"player2": &pb.Player{
+		Id:       uuid.NewString(),
+		Username: "player2",
+		Active:   false,
+		LimitsId: "48772bc4-81bf-4273-9e4e-5ac56473ccc0",
+	},
+}
+
+var gTestChars = map[string]*pb.Character{
+	"char0.0": &pb.Character{
+		Id:       uuid.NewString(),
+		PlayerId: gTestPlayers["player0"].Id,
+		Fullname: "char0.0 Name",
+		Active:   true,
+	},
+}
+
+var gTestConfig = []byte(`{
+  "testString": "testStringVal",
+  "testBool": true,
+  "testInt": 1234,
+  "testDouble": 1.234,
+  "limitsList": [
+    {
+      "id": "48772bc4-81bf-4273-9e4e-5ac56473ccc0",
+      "maxCharactersPerPlayer": 5
+    }
+  ]
+}`)
 
 // All the clusters below are distinct, to make sure
 // we handle those scenarios which are harder to test

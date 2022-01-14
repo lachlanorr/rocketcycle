@@ -45,6 +45,11 @@ type RkcyCmd struct {
 	customCommandFuncs []CustomCommandFunc
 
 	offlineMgr *offline.Manager
+
+	readyCh chan bool
+
+	platformDefJson []byte
+	configJson      []byte
 }
 
 type CustomCommandFunc func(rkcycmd *RkcyCmd) *cobra.Command
@@ -78,7 +83,7 @@ type Settings struct {
 }
 
 func NewRkcyCmd(ctx context.Context, platform string) *RkcyCmd {
-	return newRkcyCmd(ctx, platform, rkcy.NewClientCode(), nil, nil)
+	return newRkcyCmd(ctx, platform, rkcy.NewClientCode(), nil, nil, nil)
 }
 
 func newRkcyCmd(
@@ -87,6 +92,7 @@ func newRkcyCmd(
 	clientCode *rkcy.ClientCode,
 	customCommandFuncs []CustomCommandFunc,
 	offlineMgr *offline.Manager,
+	readyCh chan bool,
 ) *RkcyCmd {
 	rkcycmd := &RkcyCmd{
 		platform:           platform,
@@ -94,6 +100,7 @@ func newRkcyCmd(
 		settings:           &Settings{},
 		customCommandFuncs: customCommandFuncs,
 		offlineMgr:         offlineMgr,
+		readyCh:            readyCh,
 	}
 
 	if rkcycmd.customCommandFuncs == nil {
@@ -104,6 +111,14 @@ func newRkcyCmd(
 	rkcycmd.bailoutCh = make(chan bool)
 
 	return rkcycmd
+}
+
+func (rkcycmd *RkcyCmd) setPlatformDefJson(platformDefJson []byte) {
+	rkcycmd.platformDefJson = platformDefJson
+}
+
+func (rkcycmd *RkcyCmd) setConfigJson(configJson []byte) {
+	rkcycmd.configJson = configJson
 }
 
 func (rkcycmd *RkcyCmd) Platform() *platform.Platform {
@@ -152,8 +167,6 @@ func (rkcycmd *RkcyCmd) AddCobraEdgeCommandFunc(custCmdFunc CustomCommandFunc) {
 func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	rkcy.PrepLogging()
 
-	platId := uuid.NewString()
-
 	err := telem.Initialize(cmd.Context(), rkcycmd.settings.OtelcolEndpoint)
 	if err != nil {
 		log.Fatal().
@@ -162,7 +175,9 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	}
 
 	// validate all command handlers exist for each concern
-	if !rkcycmd.clientCode.ConcernHandlers.ValidateConcernHandlers() {
+	if rkcycmd.clientCode != nil &&
+		rkcycmd.clientCode.ConcernHandlers != nil &&
+		!rkcycmd.clientCode.ConcernHandlers.ValidateConcernHandlers() {
 		log.Fatal().
 			Msg("ValidateConcernHandlers failed")
 	}
@@ -194,14 +209,17 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 		strmprov = stream.NewKafkaStreamProvider()
 	} else if rkcycmd.settings.StreamType == "offline" {
 		if rkcycmd.offlineMgr == nil {
-			platformDefJson, err := ioutil.ReadFile(rkcycmd.settings.PlatformFilePath)
-			if err != nil {
-				log.Fatal().
-					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
-					Err(err).
-					Msg("Failed to ReadFile")
+			if rkcycmd.platformDefJson == nil {
+				rkcycmd.platformDefJson, err = ioutil.ReadFile(rkcycmd.settings.PlatformFilePath)
+				if err != nil {
+					log.Fatal().
+						Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
+						Err(err).
+						Msg("Failed to ReadFile")
+				}
 			}
-			rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(platformDefJson)
+
+			rtPlatDef, err := rkcy.NewRtPlatformDefFromJson(rkcycmd.platformDefJson)
 			if err != nil {
 				log.Fatal().
 					Str("PlatformFilePath", rkcycmd.settings.PlatformFilePath).
@@ -250,16 +268,27 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 				rkcycmd.platform,
 				rkcycmd.settings.Environment,
 				rkcycmd.settings.AdminBrokers,
-				platformDefJson,
+				rkcycmd.platformDefJson,
 			)
-			mgmt.ConfigReplace(
-				cmd.Context(),
-				strmprov,
-				rkcycmd.platform,
-				rkcycmd.settings.Environment,
-				rkcycmd.settings.AdminBrokers,
-				rkcycmd.settings.ConfigFilePath,
-			)
+			if rkcycmd.configJson != nil {
+				mgmt.ConfigReplaceFromJson(
+					cmd.Context(),
+					strmprov,
+					rkcycmd.platform,
+					rkcycmd.settings.Environment,
+					rkcycmd.settings.AdminBrokers,
+					rkcycmd.configJson,
+				)
+			} else {
+				mgmt.ConfigReplaceFromFile(
+					cmd.Context(),
+					strmprov,
+					rkcycmd.platform,
+					rkcycmd.settings.Environment,
+					rkcycmd.settings.AdminBrokers,
+					rkcycmd.settings.ConfigFilePath,
+				)
+			}
 		} else {
 			strmprov = offline.NewOfflineStreamProviderFromManager(rkcycmd.offlineMgr)
 		}
@@ -294,7 +323,7 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	rkcycmd.plat, err = platform.NewPlatform(
 		cmd.Context(),
 		&rkcycmd.wg,
-		platId,
+		uuid.NewString(),
 		rkcycmd.platform,
 		rkcycmd.settings.Environment,
 		rkcycmd.settings.AdminBrokers,
@@ -306,7 +335,12 @@ func (rkcycmd *RkcyCmd) prerunCobra(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().
 			Err(err).
-			Msg("Failed to NewKafkaPlatform")
+			Msg("Failed to NewPlatform")
+	}
+
+	if rkcycmd.readyCh != nil {
+		rkcycmd.readyCh <- true
+		rkcycmd.readyCh = nil
 	}
 }
 
@@ -325,7 +359,7 @@ func (rkcycmd *RkcyCmd) Execute() error {
 			telem.Shutdown(rkcycmd.ctx)
 			rkcycmd.ctxCancel()
 			rkcycmd.wg.Wait()
-			log.Info().Msgf("RkcyCmd.Execute completed")
+			log.Trace().Msgf("RkcyCmd.Execute completed")
 		}
 	}
 
@@ -358,7 +392,7 @@ func ExecuteFromArgs(
 	offlineMgr *offline.Manager,
 	args []string,
 ) {
-	rkcycmd := newRkcyCmd(ctx, platform, clientCode, customCommandFuncs, offlineMgr)
+	rkcycmd := newRkcyCmd(ctx, platform, clientCode, customCommandFuncs, offlineMgr, nil)
 	cobraCmd := rkcycmd.BuildCobraCommand()
 	cobraCmd.SetArgs(args)
 	cobraCmd.ExecuteContext(ctx)

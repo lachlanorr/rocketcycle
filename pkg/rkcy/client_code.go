@@ -18,7 +18,7 @@ type ClientCode struct {
 func NewClientCode() *ClientCode {
 	return &ClientCode{
 		StorageInits:    make(map[string]StorageInit),
-		ConcernHandlers: GlobalConcernHandlerRegistry(),
+		ConcernHandlers: NewGlobalConcernHandlerRegistry(),
 	}
 }
 

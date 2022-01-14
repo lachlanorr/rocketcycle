@@ -6,6 +6,7 @@ package routine
 
 import (
 	"context"
+	"sync"
 
 	"github.com/lachlanorr/rocketcycle/pkg/runner/program"
 )
@@ -15,6 +16,7 @@ type Runnable struct {
 	executeFunc func(ctx context.Context, args []string)
 	ctx         context.Context
 	cancel      context.CancelFunc
+	wg          *sync.WaitGroup
 }
 
 func NewRunnable(
@@ -54,12 +56,14 @@ func (rnbl *Runnable) IsRunning() bool {
 func (rnbl *Runnable) Wait() {
 	select {
 	case <-rnbl.ctx.Done():
+		rnbl.wg.Done()
 		return
 	}
 }
 
 func (rnbl *Runnable) Start(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	printCh chan<- string,
 	killIfActive bool,
 ) error {
@@ -68,9 +72,11 @@ func (rnbl *Runnable) Start(
 	}
 
 	rnbl.ctx, rnbl.cancel = context.WithCancel(ctx)
+	rnbl.wg = wg
 
 	go rnbl.executeFunc(rnbl.ctx, rnbl.details.Program.Args)
 
+	wg.Add(1)
 	go rnbl.Wait()
 	return nil
 }

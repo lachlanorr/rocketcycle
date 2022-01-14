@@ -62,7 +62,7 @@ func TestDecodeTxnOpaques(t *testing.T) {
 	}
 
 	pjOpts := protojson.MarshalOptions{Multiline: true, Indent: "  ", EmitUnpopulated: true}
-	marTxnJson, err := watch.DecodeTxnOpaques(ctx, txn, rkcy.GlobalConcernHandlerRegistry(), &pjOpts)
+	marTxnJson, err := watch.DecodeTxnOpaques(ctx, txn, rkcy.NewGlobalConcernHandlerRegistry(), &pjOpts)
 	if err != nil {
 		t.Fatal(err)
 	}

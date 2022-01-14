@@ -49,7 +49,7 @@ func (rkcycmd *RkcyCmd) BuildCobraCommand() *cobra.Command {
 		Short:            "Rocketcycle Platform - " + rkcycmd.platform,
 		PersistentPreRun: rkcycmd.prerunCobra,
 	}
-	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.OtelcolEndpoint, "otelcol_endpoint", "offline", "OpenTelemetry collector address")
+	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.OtelcolEndpoint, "otelcol_endpoint", "offline", "OpenTelemetry collector address, e.g. localhost:4317")
 	rootCmd.PersistentFlags().StringVar(&rkcycmd.settings.StreamType, "stream", "auto", "Type of StreamProvider to use")
 
 	// admin sub command
@@ -160,7 +160,7 @@ func (rkcycmd *RkcyCmd) BuildCobraCommand() *cobra.Command {
 		Short: "Replace config",
 		Long:  "WARNING: This will fully replace stored config with the file contents!!!! Publishes contents of config file to config topic and fully replaces it.",
 		Run: func(cmd *cobra.Command, args []string) {
-			mgmt.ConfigReplace(
+			mgmt.ConfigReplaceFromFile(
 				cmd.Context(),
 				rkcycmd.plat.StreamProvider(),
 				rkcycmd.plat.Args.Platform,

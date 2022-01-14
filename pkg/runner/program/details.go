@@ -7,6 +7,7 @@ package program
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
 )
@@ -20,6 +21,7 @@ type Runnable interface {
 	Wait()
 	Start(
 		ctx context.Context,
+		wg *sync.WaitGroup,
 		printCh chan<- string,
 		killIfActive bool,
 	) error

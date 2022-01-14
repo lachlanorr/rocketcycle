@@ -21,6 +21,7 @@ import (
 
 func updateRunning(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	running map[string]program.Runnable,
 	newRunnableFunc NewRunnableFunc,
 	directive rkcypb.Directive,
@@ -50,7 +51,7 @@ func updateRunning(
 				Str("ProgramKey", key).
 				Msg("Failed to newRunnableFunc")
 		}
-		err = startRunnable(ctx, rnbl, printCh)
+		err = startRunnable(ctx, wg, rnbl, printCh)
 		if err != nil {
 			return
 		}
@@ -84,11 +85,12 @@ func printer(ctx context.Context, wg *sync.WaitGroup, printCh <-chan string) {
 
 func startRunnable(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	rnbl program.Runnable,
 	printCh chan<- string,
 ) error {
 	log.Info().Msgf("Running: %s %s", rnbl.Details().Program.Name, strings.Join(rnbl.Details().Program.Args, " "))
-	err := rnbl.Start(ctx, printCh, true)
+	err := rnbl.Start(ctx, wg, printCh, true)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -100,10 +102,10 @@ func startRunnable(
 	return nil
 }
 
-func doMaintenance(ctx context.Context, running map[string]program.Runnable, printCh chan<- string) {
+func doMaintenance(ctx context.Context, wg *sync.WaitGroup, running map[string]program.Runnable, printCh chan<- string) {
 	for _, rnbl := range running {
 		if !rnbl.IsRunning() {
-			startRunnable(ctx, rnbl, printCh)
+			startRunnable(ctx, wg, rnbl, printCh)
 		}
 	}
 }
@@ -119,6 +121,7 @@ func defaultArgs(environment string, streamType string, adminBrokers string, ote
 
 func startAdmin(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	platform string,
 	environment string,
 	streamType string,
@@ -130,6 +133,7 @@ func startAdmin(
 ) {
 	updateRunning(
 		ctx,
+		wg,
 		running,
 		newRunnableFunc,
 		rkcypb.Directive_CONSUMER_START,
@@ -147,6 +151,7 @@ func startAdmin(
 
 func startPortalServer(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	platform string,
 	environment string,
 	streamType string,
@@ -158,6 +163,7 @@ func startPortalServer(
 ) {
 	updateRunning(
 		ctx,
+		wg,
 		running,
 		newRunnableFunc,
 		rkcypb.Directive_CONSUMER_START,
@@ -175,6 +181,7 @@ func startPortalServer(
 
 func startWatch(
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	platform string,
 	environment string,
 	streamType string,
@@ -193,6 +200,7 @@ func startWatch(
 
 	updateRunning(
 		ctx,
+		wg,
 		running,
 		newRunnableFunc,
 		rkcypb.Directive_CONSUMER_START,
@@ -238,9 +246,9 @@ func (rkcycmd *RkcyCmd) RunConsumerPrograms(
 	printCh := make(chan string, 100)
 	wg.Add(1)
 	go printer(ctx, wg, printCh)
-	startAdmin(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
-	startPortalServer(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
-	startWatch(ctx, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, watchDecode, running, rkcycmd.newRunnableFunc, printCh)
+	startAdmin(ctx, wg, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
+	startPortalServer(ctx, wg, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, running, rkcycmd.newRunnableFunc, printCh)
+	startWatch(ctx, wg, platform, environment, strmprov.Type(), adminBrokers, otelcolEndpoint, watchDecode, running, rkcycmd.newRunnableFunc, printCh)
 
 	ticker := time.NewTicker(1000 * time.Millisecond)
 
@@ -252,7 +260,7 @@ func (rkcycmd *RkcyCmd) RunConsumerPrograms(
 			}
 			return
 		case <-ticker.C:
-			doMaintenance(ctx, running, printCh)
+			doMaintenance(ctx, wg, running, printCh)
 		case consMsg := <-consCh:
 			if (consMsg.Directive & rkcypb.Directive_CONSUMER) != rkcypb.Directive_CONSUMER {
 				log.Error().Msgf("Invalid directive for ConsumersTopic: %s", consMsg.Directive.String())
@@ -260,6 +268,7 @@ func (rkcycmd *RkcyCmd) RunConsumerPrograms(
 			}
 			updateRunning(
 				ctx,
+				wg,
 				running,
 				rkcycmd.newRunnableFunc,
 				consMsg.Directive,

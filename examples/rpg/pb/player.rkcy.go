@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -17,6 +18,7 @@ import (
 	"github.com/lachlanorr/rocketcycle/pkg/apecs"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcy"
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/storage/ramdb"
 )
 
 // -----------------------------------------------------------------------------
@@ -63,11 +65,17 @@ func init() {
 // Concern Player
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&PlayerConcernHandler{})
+	rkcy.RegisterGlobalConcernHandlerNewFunc(func() rkcy.ConcernHandler {
+		return &PlayerConcernHandler{}
+	})
 }
 
 func (inst *Player) Key() string {
 	return inst.Id
+}
+
+func (inst *Player) SetKey(key string) {
+	inst.Id = key
 }
 
 func MarshalPlayerOrPanic(inst *Player) []byte {
@@ -79,9 +87,6 @@ func MarshalPlayerOrPanic(inst *Player) []byte {
 }
 
 func (inst *Player) PreValidateCreate(ctx context.Context) error {
-	if inst.Key() != "" {
-		return rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Empty Key during PreValidateCreate for Player")
-	}
 	return nil
 }
 
@@ -104,6 +109,46 @@ type PlayerCrudHandler interface {
 	Create(ctx context.Context, inst *Player, cmpdOffset *rkcypb.CompoundOffset) (*Player, error)
 	Update(ctx context.Context, inst *Player, rel *PlayerRelated, cmpdOffset *rkcypb.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error
+}
+
+// RamDb CrudHandler typically used in offline tests
+type PlayerCrudHandlerRamDb struct{
+	db *ramdb.RamDb
+}
+
+func NewPlayerCrudHandlerRamDb(db *ramdb.RamDb) *PlayerCrudHandlerRamDb {
+	return &PlayerCrudHandlerRamDb{
+		db: db,
+	}
+}
+
+func (ch *PlayerCrudHandlerRamDb) Read(ctx context.Context, key string) (*Player, *PlayerRelated, *rkcypb.CompoundOffset, error) {
+	inst, rel, cmpdOffset, err := ch.db.Read("Player", key)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return inst.(*Player), rel.(*PlayerRelated), cmpdOffset, nil
+}
+
+func (ch *PlayerCrudHandlerRamDb) Create(ctx context.Context, inst *Player, cmpdOffset *rkcypb.CompoundOffset) (*Player, error) {
+	if inst.Key() == "" {
+		inst.SetKey(uuid.NewString())
+	}
+	err := ch.db.Create("Player", inst.Key(), inst, cmpdOffset)
+	if err != nil {
+		return nil, err
+	}
+
+	return inst, nil
+}
+
+func (ch *PlayerCrudHandlerRamDb) Update(ctx context.Context, inst *Player, rel *PlayerRelated, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Update("Player", inst.Key(), inst, rel, cmpdOffset)
+}
+
+func (ch *PlayerCrudHandlerRamDb) Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Delete("Player", key, cmpdOffset)
 }
 
 // Concern Handler

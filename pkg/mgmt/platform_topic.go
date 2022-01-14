@@ -188,7 +188,10 @@ func PlatformReplaceFromJson(
 		return err
 	}
 
-	prod.Produce(msg, nil)
+	err = prod.Produce(msg, nil)
+	if err != nil {
+		return err
+	}
 
 	// check channel for delivery event
 	timer := time.NewTimer(10 * time.Second)

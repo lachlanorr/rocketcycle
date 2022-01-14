@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "test current file",
+            "name": "test rpg logic",
             "type": "go",
             "request": "launch",
             "mode": "test",
-            "program": "${file}",
+            "program": "${workspaceFolder}/examples/rpg/logic",
             "env": {},
             "args": []
         },

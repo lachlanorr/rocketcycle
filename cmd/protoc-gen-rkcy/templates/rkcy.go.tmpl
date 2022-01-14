@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 {{- end }}
 {{- if .HasConfigs }}
@@ -31,6 +32,7 @@ import (
 {{- end }}
 {{- if .HasConcerns }}
 	"github.com/lachlanorr/rocketcycle/pkg/rkcypb"
+	"github.com/lachlanorr/rocketcycle/pkg/storage/ramdb"
 {{- end }}
 {{- end }}
 )
@@ -89,11 +91,17 @@ func init() {
 // Concern {{ $cnc.Name }}
 // -----------------------------------------------------------------------------
 func init() {
-	rkcy.RegisterGlobalConcernHandler(&{{ $cnc.Name }}ConcernHandler{})
+	rkcy.RegisterGlobalConcernHandlerNewFunc(func() rkcy.ConcernHandler {
+		return &{{ $cnc.Name }}ConcernHandler{}
+	})
 }
 
 func (inst *{{ $cnc.Name }}) Key() string {
 	return inst.{{ $cnc.Msg.KeyFieldGo }}
+}
+
+func (inst *{{ $cnc.Name }}) SetKey(key string) {
+	inst.{{ $cnc.Msg.KeyFieldGo }} = key
 }
 
 func Marshal{{ $cnc.Name }}OrPanic(inst *{{ $cnc.Name }}) []byte {
@@ -105,9 +113,6 @@ func Marshal{{ $cnc.Name }}OrPanic(inst *{{ $cnc.Name }}) []byte {
 }
 
 func (inst *{{ $cnc.Name }}) PreValidateCreate(ctx context.Context) error {
-	if inst.Key() != "" {
-		return rkcy.NewError(rkcypb.Code_INVALID_ARGUMENT, "Empty Key during PreValidateCreate for {{ $cnc.Name }}")
-	}
 	return nil
 }
 
@@ -135,6 +140,46 @@ type {{ $cnc.Name }}CrudHandler interface {
 	Create(ctx context.Context, inst *{{ $cnc.Name }}, cmpdOffset *rkcypb.CompoundOffset) (*{{ $cnc.Name }}, error)
 	Update(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relArg }}cmpdOffset *rkcypb.CompoundOffset) error
 	Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error
+}
+
+// RamDb CrudHandler typically used in offline tests
+type {{ $cnc.Name }}CrudHandlerRamDb struct{
+	db *ramdb.RamDb
+}
+
+func New{{ $cnc.Name }}CrudHandlerRamDb(db *ramdb.RamDb) *{{ $cnc.Name }}CrudHandlerRamDb {
+	return &{{ $cnc.Name }}CrudHandlerRamDb{
+		db: db,
+	}
+}
+
+func (ch *{{ $cnc.Name }}CrudHandlerRamDb) Read(ctx context.Context, key string) (*{{ $cnc.Name }}, {{ $relType }}*rkcypb.CompoundOffset, error) {
+	inst, rel, cmpdOffset, err := ch.db.Read("{{ $cnc.Name }}", key)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return inst.(*{{ $cnc.Name }}), {{ if $cnc.Related }}rel.(*{{ $cnc.Related.Msg.Name }}), {{ end }}cmpdOffset, nil
+}
+
+func (ch *{{ $cnc.Name }}CrudHandlerRamDb) Create(ctx context.Context, inst *{{ $cnc.Name }}, cmpdOffset *rkcypb.CompoundOffset) (*{{ $cnc.Name }}, error) {
+	if inst.Key() == "" {
+		inst.SetKey(uuid.NewString())
+	}
+	err := ch.db.Create("{{ $cnc.Name }}", inst.Key(), inst, cmpdOffset)
+	if err != nil {
+		return nil, err
+	}
+
+	return inst, nil
+}
+
+func (ch *{{ $cnc.Name }}CrudHandlerRamDb) Update(ctx context.Context, inst *{{ $cnc.Name }}, {{ $relArg }}cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Update("{{ $cnc.Name }}", inst.Key(), inst, {{ if $cnc.Related }}rel, {{ end }}cmpdOffset)
+}
+
+func (ch *{{ $cnc.Name }}CrudHandlerRamDb) Delete(ctx context.Context, key string, cmpdOffset *rkcypb.CompoundOffset) error {
+	return ch.db.Delete("{{ $cnc.Name }}", key, cmpdOffset)
 }
 
 // Concern Handler

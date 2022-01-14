@@ -49,7 +49,7 @@ protoc-gen-rkcy: proto ## compile rkcy mgmt app
 	./cmd/protoc-gen-rkcy
 
 .PHONY: tests
-tests: proto
+tests: rpg-proto
 	@echo "==> Testing $@..."
 	@go test ./...
 

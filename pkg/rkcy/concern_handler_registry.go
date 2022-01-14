@@ -6,18 +6,32 @@ package rkcy
 
 import (
 	"fmt"
+	"sync"
 )
 
-var gConcernHandlerRegistry = make(ConcernHandlers)
+var gConcernHandlerNewFuncRegistry = make([]func() ConcernHandler, 0)
+var gConcernHandlerNewFuncRegistryMtx sync.Mutex
 
-func RegisterGlobalConcernHandler(cncHandler ConcernHandler) {
-	_, ok := gConcernHandlerRegistry[cncHandler.ConcernName()]
-	if ok {
-		panic(fmt.Sprintf("%s concern handler already registered", cncHandler.ConcernName()))
-	}
-	gConcernHandlerRegistry[cncHandler.ConcernName()] = cncHandler
+func RegisterGlobalConcernHandlerNewFunc(newCncHdlr func() ConcernHandler) {
+	gConcernHandlerNewFuncRegistryMtx.Lock()
+	defer gConcernHandlerNewFuncRegistryMtx.Unlock()
+	gConcernHandlerNewFuncRegistry = append(gConcernHandlerNewFuncRegistry, newCncHdlr)
 }
 
-func GlobalConcernHandlerRegistry() ConcernHandlers {
-	return gConcernHandlerRegistry
+func NewGlobalConcernHandlerRegistry() ConcernHandlers {
+	gConcernHandlerNewFuncRegistryMtx.Lock()
+	defer gConcernHandlerNewFuncRegistryMtx.Unlock()
+
+	cncHdlrs := NewConcernHandlers()
+
+	for _, newCncHdlr := range gConcernHandlerNewFuncRegistry {
+		cncHdlr := newCncHdlr()
+		_, ok := cncHdlrs[cncHdlr.ConcernName()]
+		if ok {
+			panic(fmt.Sprintf("%s concern handler registered multiple times", cncHdlr.ConcernName()))
+		}
+		cncHdlrs[cncHdlr.ConcernName()] = cncHdlr
+	}
+
+	return cncHdlrs
 }
