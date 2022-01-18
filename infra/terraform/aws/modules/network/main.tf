@@ -219,7 +219,7 @@ resource "aws_network_interface" "bastion" {
 
 data "aws_ami" "bastion" {
   most_recent      = true
-  name_regex       = "^rkcy-bastion-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/bastion-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -294,7 +294,7 @@ resource "null_resource" "bastion_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {

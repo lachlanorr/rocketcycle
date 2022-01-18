@@ -215,7 +215,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef", runtime.WithHTTPPathPattern("/v1/platformDef/read"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -238,7 +238,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/ConfigRead")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/ConfigRead", runtime.WithHTTPPathPattern("/v1/config/read"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -261,7 +261,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeInstance")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeInstance", runtime.WithHTTPPathPattern("/v1/instance/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -284,7 +284,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeArgPayload")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeArgPayload", runtime.WithHTTPPathPattern("/v1/arg/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -307,7 +307,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeResultPayload")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/DecodeResultPayload", runtime.WithHTTPPathPattern("/v1/result/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -330,7 +330,7 @@ func RegisterPortalServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/CancelTxn")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/rkcy.PortalService/CancelTxn", runtime.WithHTTPPathPattern("/v1/txn/cancel"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -392,7 +392,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/PlatformDef", runtime.WithHTTPPathPattern("/v1/platformDef/read"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -412,7 +412,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/ConfigRead")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/ConfigRead", runtime.WithHTTPPathPattern("/v1/config/read"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -432,7 +432,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeInstance")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeInstance", runtime.WithHTTPPathPattern("/v1/instance/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -452,7 +452,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeArgPayload")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeArgPayload", runtime.WithHTTPPathPattern("/v1/arg/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -472,7 +472,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeResultPayload")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/DecodeResultPayload", runtime.WithHTTPPathPattern("/v1/result/decode"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -492,7 +492,7 @@ func RegisterPortalServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/CancelTxn")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/rkcy.PortalService/CancelTxn", runtime.WithHTTPPathPattern("/v1/txn/cancel"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

@@ -1,5 +1,6 @@
 {
   "name": "rpg",
+  "environment": "dev",
   "concerns": [
     {
       "type": "GENERAL",
@@ -74,9 +75,10 @@
   "clusters": [
     {
       "name": "rkcy-perfa",
-      "brokers": "kafka-0.clusa.perfa.rkcy.net:9093"
+      "brokers": "kafka-0.clusa.perfa.rkcy.net:9093",
+      "isAdmin": true
     }
-  ]
+  ],
 
   "storageTargets": [
     {

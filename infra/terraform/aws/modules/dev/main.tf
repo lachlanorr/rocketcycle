@@ -53,7 +53,7 @@ variable "ssh_key_path" {
 
 data "aws_ami" "dev" {
   most_recent      = true
-  name_regex       = "^rkcy-dev-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/dev-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -189,7 +189,7 @@ resource "null_resource" "dev_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -206,7 +206,7 @@ EOF
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/init_db.sh.tpl",
+      "${path.module}/../../../shared/dev/init_db.sh.tpl",
       {
         postgresql_hosts = var.postgresql_hosts
       })
@@ -215,17 +215,18 @@ EOF
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/platform.json.tpl",
+      "${path.module}/../../../shared/dev/platform.json.tpl",
       {
         kafka_cluster = var.kafka_cluster
         kafka_hosts = var.kafka_hosts
+        postgresql_hosts = var.postgresql_hosts
       })
     destination = "/code/rocketcycle/build/bin/platform_aws.json"
   }
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/run_aws.sh.tpl",
+      "${path.module}/../../../shared/dev/run_aws.sh.tpl",
       {
         kafka_hosts = var.kafka_hosts
         otelcol_endpoint = var.otelcol_endpoint

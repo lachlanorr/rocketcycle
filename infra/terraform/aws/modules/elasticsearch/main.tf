@@ -60,7 +60,7 @@ locals {
 
 data "aws_ami" "elasticsearch" {
   most_recent      = true
-  name_regex       = "^rkcy-elasticsearch-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/elastic-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -195,7 +195,7 @@ resource "null_resource" "elasticsearch_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -212,7 +212,7 @@ EOF
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/elasticsearch.yml.tpl",
+      "${path.module}/../../../shared/elasticsearch/elasticsearch.yml.tpl",
       {
         stack = var.stack
         idx = count.index

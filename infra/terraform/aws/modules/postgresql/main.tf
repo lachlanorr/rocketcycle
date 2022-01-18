@@ -51,7 +51,7 @@ locals {
 
 data "aws_ami" "postgresql" {
   most_recent      = true
-  name_regex       = "^rkcy-postgresql-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/postgres-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -206,7 +206,7 @@ resource "null_resource" "postgresql_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -222,17 +222,17 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/postgresql.conf.tpl", {})
+    content = templatefile("${path.module}/../../../shared/postgresql/postgresql.conf.tpl", {})
     destination = "/home/ubuntu/postgresql.conf"
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/pg_hba.conf.tpl", {})
+    content = templatefile("${path.module}/../../../shared/postgresql/pg_hba.conf.tpl", {})
     destination = "/home/ubuntu/pg_hba.conf"
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/pg_ident.conf.tpl", {})
+    content = templatefile("${path.module}/../../../shared/postgresql/pg_ident.conf.tpl", {})
     destination = "/home/ubuntu/pg_ident.conf"
   }
 

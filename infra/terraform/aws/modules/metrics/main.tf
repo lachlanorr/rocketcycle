@@ -76,7 +76,7 @@ locals {
 
 data "aws_ami" "metrics" {
   most_recent      = true
-  name_regex       = "^rkcy-metrics-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/metrics-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -202,7 +202,7 @@ resource "null_resource" "prometheus_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -218,7 +218,7 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/prometheus.service.tpl", {
+    content = templatefile("${path.module}/../../../shared/metrics/prometheus.service.tpl", {
       balancer_url = var.balancer_external_urls.edge
       prometheus_port = var.prometheus_port
     })
@@ -226,7 +226,7 @@ EOF
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/prometheus.yml.tpl", {
+    content = templatefile("${path.module}/../../../shared/metrics/prometheus.yml.tpl", {
       jobs = concat(var.jobs, [
         {
           name = "prometheus",
@@ -403,7 +403,7 @@ resource "null_resource" "grafana_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -418,7 +418,7 @@ EOF
   # node_exporter (END)
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/grafana.ini.tpl", {
+    content = templatefile("${path.module}/../../../shared/metrics/grafana.ini.tpl", {
       balancer_url = var.balancer_external_urls.edge
       grafana_port = var.grafana_port
     })
@@ -426,19 +426,19 @@ EOF
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/datasources.yaml.tpl", {
+    content = templatefile("${path.module}/../../../shared/metrics/datasources.yaml.tpl", {
       balancer_url = var.balancer_internal_urls.app
     })
     destination = "/home/ubuntu/datasources.yaml"
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/dashboards.yaml.tpl", {})
+    content = templatefile("${path.module}/../../../shared/metrics/dashboards.yaml.tpl", {})
     destination = "/home/ubuntu/dashboards.yaml"
   }
 
   provisioner "file" {
-    source = "${path.module}/dashboards"
+    source = "${path.module}/../../../shared/metrics/dashboards"
     destination = "/home/ubuntu/dashboards"
   }
 

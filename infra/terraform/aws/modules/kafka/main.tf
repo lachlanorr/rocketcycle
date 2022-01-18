@@ -64,7 +64,7 @@ locals {
 
 data "aws_ami" "kafka" {
   most_recent      = true
-  name_regex       = "^rkcy-kafka-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/kafka-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -223,7 +223,7 @@ resource "null_resource" "zookeeper_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -239,13 +239,13 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/zookeeper.service.tpl", {})
+    content = templatefile("${path.module}/../../../shared/kafka/zookeeper.service.tpl", {})
     destination = "/home/ubuntu/zookeeper.service"
   }
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/zookeeper.properties.tpl",
+      "${path.module}/../../../shared/kafka/zookeeper.properties.tpl",
       {
         zookeeper_ips = local.zookeeper_ips
       })
@@ -428,7 +428,7 @@ resource "null_resource" "kafka_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -444,13 +444,13 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/kafka.service.tpl", {})
+    content = templatefile("${path.module}/../../../shared/kafka/kafka.service.tpl", {})
     destination = "/home/ubuntu/kafka.service"
   }
 
   provisioner "file" {
     content = templatefile(
-      "${path.module}/kafka.properties.tpl",
+      "${path.module}/../../../shared/kafka/kafka.properties.tpl",
       {
         idx = count.index,
         kafka_racks = local.kafka_racks,

@@ -456,7 +456,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ReadPlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ReadPlayer", runtime.WithHTTPPathPattern("/v1/player/read/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -479,7 +479,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/CreatePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/CreatePlayer", runtime.WithHTTPPathPattern("/v1/player/create"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -502,7 +502,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/UpdatePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/UpdatePlayer", runtime.WithHTTPPathPattern("/v1/player/update"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -525,7 +525,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/DeletePlayer")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/DeletePlayer", runtime.WithHTTPPathPattern("/v1/player/delete/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -548,7 +548,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ReadCharacter")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ReadCharacter", runtime.WithHTTPPathPattern("/v1/character/read/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -571,7 +571,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/CreateCharacter")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/CreateCharacter", runtime.WithHTTPPathPattern("/v1/character/create"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -594,7 +594,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/UpdateCharacter")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/UpdateCharacter", runtime.WithHTTPPathPattern("/v1/character/update"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -617,7 +617,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/DeleteCharacter")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/DeleteCharacter", runtime.WithHTTPPathPattern("/v1/character/delete/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -640,7 +640,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/FundCharacter")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/FundCharacter", runtime.WithHTTPPathPattern("/v1/character/fund"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -663,7 +663,7 @@ func RegisterRpgServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ConductTrade")
+		rctx, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/edge.RpgService/ConductTrade", runtime.WithHTTPPathPattern("/v1/character/conductTrade"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -725,7 +725,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ReadPlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ReadPlayer", runtime.WithHTTPPathPattern("/v1/player/read/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -745,7 +745,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/CreatePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/CreatePlayer", runtime.WithHTTPPathPattern("/v1/player/create"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -765,7 +765,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/UpdatePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/UpdatePlayer", runtime.WithHTTPPathPattern("/v1/player/update"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -785,7 +785,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/DeletePlayer")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/DeletePlayer", runtime.WithHTTPPathPattern("/v1/player/delete/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -805,7 +805,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ReadCharacter")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ReadCharacter", runtime.WithHTTPPathPattern("/v1/character/read/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -825,7 +825,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/CreateCharacter")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/CreateCharacter", runtime.WithHTTPPathPattern("/v1/character/create"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -845,7 +845,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/UpdateCharacter")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/UpdateCharacter", runtime.WithHTTPPathPattern("/v1/character/update"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -865,7 +865,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/DeleteCharacter")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/DeleteCharacter", runtime.WithHTTPPathPattern("/v1/character/delete/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -885,7 +885,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/FundCharacter")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/FundCharacter", runtime.WithHTTPPathPattern("/v1/character/fund"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -905,7 +905,7 @@ func RegisterRpgServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ConductTrade")
+		rctx, err := runtime.AnnotateContext(ctx, mux, req, "/edge.RpgService/ConductTrade", runtime.WithHTTPPathPattern("/v1/character/conductTrade"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

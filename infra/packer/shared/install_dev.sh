@@ -4,7 +4,7 @@ GO_FILE_NAME=go${GO_VER}.linux-amd64.tar.gz
 PROTOC_VER=3.17.3
 PROTOC_FILE_NAME=protoc-3.17.3-linux-x86_64.zip
 
-sudo apt install -y make \
+sudo apt-get install -y make \
      build-essential \
      cpanminus \
      perl \
@@ -34,14 +34,18 @@ cd /code
 git clone https://github.com/lachlanorr/rocketcycle.git
 
 cd rocketcycle
+
+git submodule init
+git submodule update
+
 go install \
-    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.0.1
+    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.7.2
 go install \
-    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.0.1
+    github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.7.2
 go install \
-    google.golang.org/protobuf/cmd/protoc-gen-go@v1.26.0
+    google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
 go install \
-    google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.0.1
+    google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 
 echo 'export PATH=$PATH:/code/protobuf/bin:/usr/local/go/bin:~/go/bin' >> ~/.bashrc
 

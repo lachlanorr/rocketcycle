@@ -4,6 +4,11 @@
     "title": "edge.proto",
     "version": "version not set"
   },
+  "tags": [
+    {
+      "name": "RpgService"
+    }
+  ],
   "consumes": [
     "application/json"
   ],
@@ -350,14 +355,11 @@
     "google.protobuf.Any": {
       "type": "object",
       "properties": {
-        "typeUrl": {
+        "@type": {
           "type": "string"
-        },
-        "value": {
-          "type": "string",
-          "format": "byte"
         }
-      }
+      },
+      "additionalProperties": {}
     },
     "google.rpc.Status": {
       "type": "object",

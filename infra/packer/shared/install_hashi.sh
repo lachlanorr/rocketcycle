@@ -1,9 +1,9 @@
-CONSUL_VER=1.10.2
+CONSUL_VER=1.11.2
 CONSUL_ZIP=consul_${CONSUL_VER}_linux_amd64.zip
-NOMAD_VER=1.1.4
+NOMAD_VER=1.2.3
 NOMAD_ZIP=nomad_${NOMAD_VER}_linux_amd64.zip
 
-sudo apt install unzip
+sudo apt-get install unzip
 
 # prep hashi user, used for consul and nomad
 sudo useradd hashi -m

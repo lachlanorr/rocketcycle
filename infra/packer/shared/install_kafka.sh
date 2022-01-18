@@ -5,7 +5,7 @@ FILE_NAME=kafka_${FULL_VER}
 KAFKA_PATH=/opt/${FILE_NAME}
 
 # install java
-sudo apt -y install default-jre
+sudo apt-get -y install default-jre
 
 # prep kafka user, used for zookeeper and the brokers
 sudo useradd kafka -m

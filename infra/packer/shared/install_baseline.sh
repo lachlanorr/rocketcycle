@@ -1,9 +1,9 @@
-NODE_EXPORTER_VER=1.2.2
+NODE_EXPORTER_VER=1.3.1
 NODE_EXPORTER_FILE=node_exporter-${NODE_EXPORTER_VER}.linux-amd64
 
-sudo apt update
-sudo apt update # needed, not sure why, but updates come down the second time
-sudo apt upgrade
+sudo apt-get update
+sudo apt-get update # needed, not sure why, but updates come down the second time
+sudo apt-get upgrade
 
 sudo useradd metrics -m
 sudo usermod --shell /bin/bash metrics

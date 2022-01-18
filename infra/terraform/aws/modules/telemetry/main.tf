@@ -84,7 +84,7 @@ locals {
 
 data "aws_ami" "telemetry" {
   most_recent      = true
-  name_regex       = "^rkcy-telemetry-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/telem-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -232,7 +232,7 @@ resource "null_resource" "jaeger_collector_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -248,7 +248,7 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/jaeger-collector.service.tpl", {
+    content = templatefile("${path.module}/../../../shared/telemetry/jaeger-collector.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
     })
     destination = "/home/ubuntu/jaeger-collector.service"
@@ -433,7 +433,7 @@ resource "null_resource" "jaeger_query_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -449,7 +449,7 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/jaeger-query.service.tpl", {
+    content = templatefile("${path.module}/../../../shared/telemetry/jaeger-query.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
     })
     destination = "/home/ubuntu/jaeger-query.service"
@@ -655,7 +655,7 @@ resource "null_resource" "otelcol_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -671,14 +671,14 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/otelcol.service.tpl", {
+    content = templatefile("${path.module}/../../../shared/telemetry/otelcol.service.tpl", {
       elasticsearch_urls = var.elasticsearch_urls
     })
     destination = "/home/ubuntu/otelcol.service"
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/otelcol.yaml.tpl", {
+    content = templatefile("${path.module}/../../../shared/telemetry/otelcol.yaml.tpl", {
       jaeger_collector = "${ var.nginx_hosts.app[0] }:${ var.jaeger_collector_port }"
     })
     destination = "/home/ubuntu/otelcol.yaml"

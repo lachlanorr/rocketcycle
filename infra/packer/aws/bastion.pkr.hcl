@@ -8,7 +8,7 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "rkcy-bastion-{{isotime `20060102-150405`}}"
+  ami_name      = "rkcy/bastion-{{isotime `20060102-150405`}}"
   instance_type = "t2.micro"
   region        = "us-east-2"
   source_ami_filter {
@@ -27,6 +27,6 @@ build {
   sources = [ "source.amazon-ebs.ubuntu" ]
 
   provisioner "shell" {
-    script = "install_baseline.sh"
+    script = "../shared/install_baseline.sh"
   }
 }

@@ -42,7 +42,7 @@ variable "nginx_count" {
 
 data "aws_ami" "nginx" {
   most_recent      = true
-  name_regex       = "^rkcy-nginx-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy/nginx-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -241,7 +241,7 @@ resource "null_resource" "nginx_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "file" {
-    content = templatefile("${path.module}/../../shared/node_exporter_install.sh", {})
+    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
   }
   provisioner "remote-exec" {
@@ -257,12 +257,12 @@ EOF
   #---------------------------------------------------------
 
   provisioner "file" {
-    content = templatefile("${path.module}/index.html.tpl", {})
+    content = templatefile("${path.module}/../../../shared/nginx/index.html.tpl", {})
     destination = "/home/ubuntu/index.html"
   }
 
   provisioner "file" {
-    content = templatefile("${path.module}/default.tpl", {
+    content = templatefile("${path.module}/../../../shared/nginx/default.tpl", {
       routes = var.routes
     })
     destination = "/home/ubuntu/default"
