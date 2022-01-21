@@ -53,7 +53,7 @@ variable "ssh_key_path" {
 
 data "aws_ami" "dev" {
   most_recent      = true
-  name_regex       = "^rkcy/dev-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-dev-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -149,7 +149,7 @@ resource "aws_instance" "dev" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_dev"
+    Name = "rkcy_${var.stack}_dev"
   }
 }
 
@@ -188,6 +188,9 @@ resource "null_resource" "dev_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname dev.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

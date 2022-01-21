@@ -42,7 +42,7 @@ variable "nginx_count" {
 
 data "aws_ami" "nginx" {
   most_recent      = true
-  name_regex       = "^rkcy/nginx-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-nginx-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -189,7 +189,7 @@ resource "aws_instance" "nginx" {
   }
 
   tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_nginx_${count.index}"
+    Name = "rkcy_${var.cluster}_${var.stack}_nginx_${count.index}"
   }
 }
 
@@ -240,6 +240,9 @@ resource "null_resource" "nginx_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname nginx-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

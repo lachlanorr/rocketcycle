@@ -51,7 +51,7 @@ locals {
 
 data "aws_ami" "postgresql" {
   most_recent      = true
-  name_regex       = "^rkcy/postgres-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-postgresql-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -162,7 +162,7 @@ resource "aws_instance" "postgresql" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_postgresql_${count.index}"
+    Name = "rkcy_${var.stack}_postgresql_${count.index}"
   }
 }
 
@@ -205,6 +205,9 @@ resource "null_resource" "postgresql_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname postgresql-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

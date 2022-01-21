@@ -22,7 +22,7 @@ variable "dns_zone" {
   type = string
 }
 
-variable "vpc_cidr_block" {
+variable "cidr_block" {
   type = string
   default = "10.0.0.0/16"
 }
@@ -58,7 +58,7 @@ variable "storage_subnet_count" {
 }
 
 resource "aws_vpc" "rkcy" {
-  cidr_block = var.vpc_cidr_block
+  cidr_block = var.cidr_block
 
   tags = {
     Name = "rkcy_${var.stack}_vpc"
@@ -219,7 +219,7 @@ resource "aws_network_interface" "bastion" {
 
 data "aws_ami" "bastion" {
   most_recent      = true
-  name_regex       = "^rkcy/bastion-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-bastion-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -245,7 +245,7 @@ resource "aws_instance" "bastion" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_bastion_${count.index}"
+    Name = "rkcy_${var.stack}_bastion_${count.index}"
   }
 }
 
@@ -293,6 +293,9 @@ resource "null_resource" "bastion_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname bastion-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

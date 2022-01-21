@@ -64,7 +64,7 @@ locals {
 
 data "aws_ami" "kafka" {
   most_recent      = true
-  name_regex       = "^rkcy/kafka-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-kafka-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -200,7 +200,7 @@ resource "aws_instance" "zookeeper" {
   }
 
   tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_zookeeper_${count.index}"
+    Name = "rkcy_${var.cluster}_${var.stack}_zookeeper_${count.index}"
   }
 }
 
@@ -222,6 +222,9 @@ resource "null_resource" "zookeeper_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname zookeeper-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
@@ -384,7 +387,7 @@ resource "aws_instance" "kafka" {
   }
 
   tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_inst_kafka_${count.index}"
+    Name = "rkcy_${var.cluster}_${var.stack}_kafka_${count.index}"
   }
 }
 
@@ -427,6 +430,9 @@ resource "null_resource" "kafka_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname ${local.kafka_internal_hosts[count.index]}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

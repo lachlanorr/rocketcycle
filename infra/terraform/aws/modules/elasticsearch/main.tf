@@ -60,7 +60,7 @@ locals {
 
 data "aws_ami" "elasticsearch" {
   most_recent      = true
-  name_regex       = "^rkcy/elastic-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-elasticsearch-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -172,7 +172,7 @@ resource "aws_instance" "elasticsearch" {
     cpu_credits = "unlimited"
   }
   tags = {
-    Name = "rkcy_${var.stack}_inst_elasticsearch_${count.index}"
+    Name = "rkcy_${var.stack}_elasticsearch_${count.index}"
   }
 }
 
@@ -194,6 +194,9 @@ resource "null_resource" "elasticsearch_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname elasticsearch-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

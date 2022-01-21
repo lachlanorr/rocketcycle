@@ -84,7 +84,7 @@ locals {
 
 data "aws_ami" "telemetry" {
   most_recent      = true
-  name_regex       = "^rkcy/telem-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-telemetry-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -209,7 +209,7 @@ resource "aws_instance" "jaeger_collector" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_jaeger_collector_${count.index}"
+    Name = "rkcy_${var.stack}_jaeger_collector_${count.index}"
   }
 }
 
@@ -231,6 +231,9 @@ resource "null_resource" "jaeger_collector_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname jaeger-collector-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
@@ -410,7 +413,7 @@ resource "aws_instance" "jaeger_query" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_jaeger_query_${count.index}"
+    Name = "rkcy_${var.stack}_jaeger_query_${count.index}"
   }
 }
 
@@ -432,6 +435,9 @@ resource "null_resource" "jaeger_query_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname jaeger-query-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
@@ -632,7 +638,7 @@ resource "aws_instance" "otelcol" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_otelcol_${count.index}"
+    Name = "rkcy_${var.stack}_otelcol_${count.index}"
   }
 }
 
@@ -654,6 +660,9 @@ resource "null_resource" "otelcol_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname otelcol-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

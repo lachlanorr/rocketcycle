@@ -22,17 +22,18 @@ variable "dns_zone" {
   type = string
 }
 
-variable "vpc_cidr_block" {
+variable "cidr_block" {
   type = string
 }
 
 variable "public" {
   type = bool
 }
+
 module "network" {
   source = "../../modules/network"
 
-  vpc_cidr_block = var.vpc_cidr_block
+  cidr_block = var.cidr_block
   stack = var.stack
   dns_zone = var.dns_zone
 }

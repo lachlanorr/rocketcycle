@@ -2,8 +2,7 @@ variable "az_subscription_id" {}
 variable "az_client_id" {}
 variable "az_client_secret" {}
 variable "az_tenant_id" {}
-variable "az_resource_group" {}
-variable "az_storage_account" {}
+variable "az_image_resource_group" {}
 
 source "azure-arm" "ubuntu" {
   subscription_id = "${var.az_subscription_id}"
@@ -11,11 +10,8 @@ source "azure-arm" "ubuntu" {
   client_secret =   "${var.az_client_secret}"
   tenant_id =       "${var.az_tenant_id}"
 
-  resource_group_name = "${var.az_resource_group}"
-  storage_account = "${var.az_storage_account}"
-
-  capture_container_name = "rkcy"
-  capture_name_prefix = "hashi-{{isotime `20060102-150405`}}"
+  managed_image_resource_group_name = "${var.az_image_resource_group}"
+  managed_image_name = "rkcy-hashi-{{isotime `20060102-150405`}}"
 
   os_type = "Linux"
   image_publisher = "Canonical"

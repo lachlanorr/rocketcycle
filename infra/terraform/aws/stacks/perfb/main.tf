@@ -14,10 +14,12 @@ provider "aws" {
   region = "us-east-2"
 }
 
+variable "aws_dns_zone" {}
+
 module "rkcy" {
   source = "../../modules/rkcy"
 
-  vpc_cidr_block = "10.1.0.0/16"
+  cidr_block = "10.1.0.0/16"
   stack = basename(abspath(path.module))
-  dns_zone = "rkcy.net"
+  dns_zone = var.aws_domain
 }

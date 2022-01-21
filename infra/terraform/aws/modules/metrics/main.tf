@@ -76,7 +76,7 @@ locals {
 
 data "aws_ami" "metrics" {
   most_recent      = true
-  name_regex       = "^rkcy/metrics-[0-9]{8}-[0-9]{6}$"
+  name_regex       = "^rkcy-metrics-[0-9]{8}-[0-9]{6}$"
   owners           = ["self"]
 }
 
@@ -179,7 +179,7 @@ resource "aws_instance" "prometheus" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_prometheus_${count.index}"
+    Name = "rkcy_${var.stack}_prometheus_${count.index}"
   }
 }
 
@@ -201,6 +201,9 @@ resource "null_resource" "prometheus_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname prometheus-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"
@@ -380,7 +383,7 @@ resource "aws_instance" "grafana" {
   }
 
   tags = {
-    Name = "rkcy_${var.stack}_inst_grafana_${count.index}"
+    Name = "rkcy_${var.stack}_grafana_${count.index}"
   }
 }
 
@@ -402,6 +405,9 @@ resource "null_resource" "grafana_provisioner" {
   #---------------------------------------------------------
   # node_exporter
   #---------------------------------------------------------
+  provisioner "remote-exec" {
+    inline = ["sudo hostnamectl set-hostname grafana-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+  }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
     destination = "/home/ubuntu/node_exporter_install.sh"

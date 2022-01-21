@@ -8,7 +8,7 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "rkcy/postgres-{{isotime `20060102-150405`}}"
+  ami_name      = "rkcy-telemetry-{{isotime `20060102-150405`}}"
   instance_type = "t2.micro"
   region        = "us-east-2"
   source_ami_filter {
@@ -30,6 +30,6 @@ build {
     script = "../shared/install_baseline.sh"
   }
   provisioner "shell" {
-    script = "../shared/install_postgres.sh"
+    script = "../shared/install_telem.sh"
   }
 }
