@@ -135,10 +135,26 @@ locals {
 
 resource "azurerm_subnet" "rkcy_edge" {
   count                = var.edge_subnet_count
-  name                 = "rkcy_${var.stack}_app_${count.index}"
+  name                 = "rkcy_${var.stack}_edge_${count.index}"
   resource_group_name  = azurerm_resource_group.rkcy.name
   virtual_network_name = azurerm_virtual_network.rkcy.name
   address_prefixes     = [cidrsubnet(azurerm_virtual_network.rkcy.address_space[0], 8, 0 + count.index)]
+}
+
+resource "azurerm_subnet" "rkcy_app" {
+  count                = var.edge_subnet_count
+  name                 = "rkcy_${var.stack}_app_${count.index}"
+  resource_group_name  = azurerm_resource_group.rkcy.name
+  virtual_network_name = azurerm_virtual_network.rkcy.name
+  address_prefixes     = [cidrsubnet(azurerm_virtual_network.rkcy.address_space[0], 8, 100 + count.index)]
+}
+
+resource "azurerm_subnet" "rkcy_storage" {
+  count                = var.edge_subnet_count
+  name                 = "rkcy_${var.stack}_storage_${count.index}"
+  resource_group_name  = azurerm_resource_group.rkcy.name
+  virtual_network_name = azurerm_virtual_network.rkcy.name
+  address_prefixes     = [cidrsubnet(azurerm_virtual_network.rkcy.address_space[0], 8, 200 + count.index)]
 }
 
 locals {
@@ -165,16 +181,6 @@ resource "azurerm_network_interface_security_group_association" "bastion" {
   depends_on                = [azurerm_network_interface.bastion, azurerm_network_security_group.bastion]
   network_interface_id      = azurerm_network_interface.bastion[count.index].id
   network_security_group_id = azurerm_network_security_group.bastion.id
-}
-
-resource "azurerm_public_ip" "bastion" {
-  count               = var.bastion_count
-  name                = "rkcy_${var.stack}_bastion_${count.index}"
-  resource_group_name = azurerm_resource_group.rkcy.name
-  location            = azurerm_resource_group.rkcy.location
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  availability_zone = local.azs[count.index % length(local.azs)]
 }
 
 data "azurerm_image" "bastion" {
@@ -220,6 +226,16 @@ resource "azurerm_virtual_machine" "bastion" {
       path = "/home/ubuntu/.ssh/authorized_keys"
     }
   }
+}
+
+resource "azurerm_public_ip" "bastion" {
+  count               = var.bastion_count
+  name                = "rkcy_${var.stack}_bastion_${count.index}"
+  resource_group_name = azurerm_resource_group.rkcy.name
+  location            = azurerm_resource_group.rkcy.location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  availability_zone = local.azs[count.index % length(local.azs)]
 }
 
 resource "azurerm_dns_a_record" "bastion_public" {
@@ -283,6 +299,34 @@ EOF
     host     = azurerm_public_ip.bastion[count.index].ip_address
     private_key = file(var.ssh_key_path)
   }
+}
+
+output "stack" {
+  value = var.stack
+}
+
+output "resource_group" {
+  value = azurerm_resource_group.rkcy
+}
+
+output "dns_zone" {
+  value = var.dns_zone
+}
+
+output "subnet_edge" {
+  value = azurerm_subnet.rkcy_edge
+}
+
+output "subnet_app" {
+  value = azurerm_subnet.rkcy_app
+}
+
+output "subnet_storage" {
+  value = azurerm_subnet.rkcy_storage
+}
+
+output "bastion_ips" {
+  value = azurerm_public_ip.bastion.*.ip_address
 }
 
 output "availability_zones" {
