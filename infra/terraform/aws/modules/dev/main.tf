@@ -189,7 +189,7 @@ resource "null_resource" "dev_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname dev.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.dev_private.name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})

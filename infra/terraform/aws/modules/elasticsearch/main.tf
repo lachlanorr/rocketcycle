@@ -195,7 +195,7 @@ resource "null_resource" "elasticsearch_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname elasticsearch-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.elasticsearch_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})

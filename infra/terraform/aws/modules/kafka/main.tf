@@ -223,7 +223,7 @@ resource "null_resource" "zookeeper_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname zookeeper-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.zookeeper_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
@@ -432,7 +432,7 @@ resource "null_resource" "kafka_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${local.kafka_internal_hosts[count.index]}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.kafka_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})

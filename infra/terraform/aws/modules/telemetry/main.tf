@@ -232,7 +232,7 @@ resource "null_resource" "jaeger_collector_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname jaeger-collector-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.jaeger_collector_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
@@ -436,7 +436,7 @@ resource "null_resource" "jaeger_query_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname jaeger-query-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.jaeger_query_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
@@ -661,7 +661,7 @@ resource "null_resource" "otelcol_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname otelcol-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.otelcol_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})

@@ -202,7 +202,7 @@ resource "null_resource" "prometheus_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname prometheus-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.prometheus_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
@@ -406,7 +406,7 @@ resource "null_resource" "grafana_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname grafana-${count.index}.${var.stack}.local.${var.dns_zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.grafana_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})

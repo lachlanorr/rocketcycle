@@ -294,7 +294,7 @@ resource "null_resource" "bastion_provisioner" {
   # node_exporter
   #---------------------------------------------------------
   provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname bastion-${count.index}.${var.stack}.local.${data.aws_route53_zone.zone.name}"]
+    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.bastion_private[count.index].name}"]
   }
   provisioner "file" {
     content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
