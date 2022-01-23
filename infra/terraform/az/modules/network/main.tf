@@ -181,47 +181,12 @@ resource "azurerm_dns_a_record" "bastion_private" {
   records             = [local.bastion_private_ips[count.index]]
 }
 
-resource "null_resource" "bastion_provisioner" {
+module "bastion_configure" {
+  source = "../../../shared/network"
   count = var.bastion_count
   depends_on = [azurerm_linux_virtual_machine.bastion]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${azurerm_dns_a_record.bastion_private[count.index].fqdn}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
-
-  provisioner "file" {
-    source = var.ssh_key_path
-    destination = "~/.ssh/id_rsa"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "chmod 600 ~/.ssh/id_rsa"
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-    user     = "ubuntu"
-    host     = azurerm_public_ip.bastion[count.index].ip_address
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = azurerm_dns_a_record.bastion_private[count.index].fqdn
+  bastion_ip = azurerm_public_ip.bastion[count.index].ip_address
+  ssh_key_path = var.ssh_key_path
 }

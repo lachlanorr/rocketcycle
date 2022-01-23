@@ -225,49 +225,12 @@ resource "aws_route53_record" "bastion_private" {
   records = [local.bastion_private_ips[count.index]]
 }
 
-resource "null_resource" "bastion_provisioner" {
+module "bastion_configure" {
+  source = "../../../shared/network"
   count = var.bastion_count
-  depends_on = [
-    aws_instance.bastion
-  ]
+  depends_on = [aws_instance.bastion]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.bastion_private[count.index].name}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
-
-  provisioner "file" {
-    source = var.ssh_key_path
-    destination = "~/.ssh/id_rsa"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "chmod 600 ~/.ssh/id_rsa"
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-    user     = "ubuntu"
-    host     = aws_eip.bastion[count.index].public_ip
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = aws_route53_record.bastion_private[count.index].name
+  bastion_ip = aws_eip.bastion[count.index].public_ip
+  ssh_key_path = var.ssh_key_path
 }
