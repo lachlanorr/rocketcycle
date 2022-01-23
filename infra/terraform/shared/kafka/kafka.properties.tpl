@@ -4,7 +4,7 @@
 
 # The id of the broker. This must be set to a unique integer for each broker.
 broker.id=${idx}
-broker.rack=${kafka_racks[idx]}
+broker.rack=${kafka_rack}
 
 ############################# Socket Server Settings #############################
 
@@ -19,7 +19,7 @@ listeners=INTERNAL://${kafka_internal_ips[idx]}:9092%{ if public },EXTERNAL://${
 # Hostname and port the broker will advertise to producers and consumers. If not set,
 # it uses the value for "listeners" if configured.  Otherwise, it will use the value
 # returned from java.net.InetAddress.getCanonicalHostName().
-advertised.listeners=INTERNAL://${kafka_internal_hosts[idx]}:9092%{ if public },EXTERNAL://${kafka_external_hosts[idx]}:9093%{ endif }
+advertised.listeners=INTERNAL://${kafka_internal_host}:9092%{ if public },EXTERNAL://${kafka_external_host}:9093%{ endif }
 
 # Maps listener names to security protocols, the default is for them to be the same. See the config documentation for more details
 listener.security.protocol.map=INTERNAL:PLAINTEXT%{ if public },EXTERNAL:PLAINTEXT%{ endif }

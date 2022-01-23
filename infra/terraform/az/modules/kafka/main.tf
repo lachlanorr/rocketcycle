@@ -174,76 +174,16 @@ resource "azurerm_dns_a_record" "zookeeper_private" {
   records             = [local.zookeeper_ips[count.index]]
 }
 
-resource "null_resource" "zookeeper_provisioner" {
+module "zookeeper_configure" {
+  source = "../../../shared/kafka/zookeeper"
   count = var.zookeeper_count
-  depends_on = [
-    azurerm_linux_virtual_machine.zookeeper
-  ]
+  depends_on = [azurerm_linux_virtual_machine.zookeeper]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${azurerm_dns_a_record.zookeeper_private[count.index].fqdn}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
-
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/kafka/zookeeper.service.tpl", {})
-    destination = "/home/ubuntu/zookeeper.service"
-  }
-
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/kafka/zookeeper.properties.tpl",
-      {
-        zookeeper_ips = local.zookeeper_ips
-      })
-    destination = "/home/ubuntu/zookeeper.properties"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo mv /home/ubuntu/zookeeper.service /etc/systemd/system/zookeeper.service
-sudo mv /home/ubuntu/zookeeper.properties /etc/zookeeper.properties
-sudo chown kafka:kafka /etc/zookeeper.properties
-
-sudo mkdir -p /data/zookeeper
-sudo bash -c 'echo ${count.index+1} > /data/zookeeper/myid'
-sudo chown -R kafka:kafka /data
-sudo systemctl daemon-reload
-sudo systemctl start zookeeper
-sudo systemctl enable zookeeper
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-
-    bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_ips[0]
-    bastion_private_key = file(var.ssh_key_path)
-
-    user        = "ubuntu"
-    host        = local.zookeeper_ips[count.index]
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = azurerm_dns_a_record.zookeeper_private[count.index].fqdn
+  bastion_ip = var.bastion_ips[0]
+  ssh_key_path = var.ssh_key_path
+  zookeeper_index = count.index
+  zookeeper_ips = local.zookeeper_ips
 }
 #-------------------------------------------------------------------------------
 # Zookeepers (END)
@@ -418,94 +358,26 @@ resource "azurerm_dns_a_record" "kafka_private" {
   records             = [local.kafka_internal_ips[count.index]]
 }
 
-resource "null_resource" "kafka_provisioner" {
+module "kafka_configure" {
+  source = "../../../shared/kafka"
   count = var.kafka_count
   depends_on = [
     azurerm_linux_virtual_machine.kafka,
-    null_resource.zookeeper_provisioner,
+    module.zookeeper_configure,
   ]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${azurerm_dns_a_record.kafka_private[count.index].fqdn}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
+  hostname = azurerm_dns_a_record.kafka_private[count.index].fqdn
+  bastion_ip = var.bastion_ips[0]
+  ssh_key_path = var.ssh_key_path
+  public = var.public
 
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/kafka/kafka.service.tpl", {})
-    destination = "/home/ubuntu/kafka.service"
-  }
+  kafka_index = count.index
+  kafka_rack = local.kafka_racks[count.index]
+  kafka_internal_ips = local.kafka_internal_ips
+  kafka_internal_host = local.kafka_internal_hosts[count.index]
+  kafka_external_host = local.kafka_external_hosts[count.index]
 
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/kafka/kafka.properties.tpl",
-      {
-        idx = count.index,
-        kafka_racks = local.kafka_racks,
-        kafka_internal_ips = local.kafka_internal_ips,
-        kafka_internal_hosts = local.kafka_internal_hosts,
-        kafka_external_hosts = local.kafka_external_hosts,
-        public = var.public,
-        zookeeper_ips = local.zookeeper_ips,
-      })
-    destination = "/home/ubuntu/kafka.properties"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo mv /home/ubuntu/kafka.service /etc/systemd/system/kafka.service
-sudo mv /home/ubuntu/kafka.properties /etc/kafka.properties
-sudo chown kafka:kafka /etc/kafka.properties
-
-sudo mkdir -p /data/kafka
-sudo chown -R kafka:kafka /data
-sudo systemctl daemon-reload
-
-%{for ip in local.zookeeper_ips}
-RET=1
-while [ $RET -ne 0 ]; do
-  echo Trying zookeeper ${ip}:2181
-  nc -z ${ip} 2181
-  RET=$?
-  sleep 2
-done
-echo Connected zookeeper ${ip}:2181
-%{endfor}
-
-sudo systemctl start kafka
-sudo systemctl enable kafka
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-
-    bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_ips[0]
-    bastion_private_key = file(var.ssh_key_path)
-
-    user        = "ubuntu"
-    host        = local.kafka_internal_ips[count.index]
-    private_key = file(var.ssh_key_path)
-  }
+  zookeeper_ips = local.zookeeper_ips
 }
 #-------------------------------------------------------------------------------
 # Brokers (END)
