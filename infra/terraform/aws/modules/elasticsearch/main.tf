@@ -1,58 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.27"
-    }
-  }
-
-  required_version = ">= 0.14.9"
-}
-
-provider "aws" {
-  profile = "default"
-  region = "us-east-2"
-}
-
-variable "stack" {
-  type = string
-}
-
-variable "dns_zone" {
-  type = any
-}
-
-variable "vpc" {
-  type = any
-}
-
-variable "subnet_storage" {
-  type = any
-}
-
-variable "bastion_ips" {
-  type = list
-}
-
-variable "azs" {
-  type = list
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "elasticsearch_count" {
-  type = number
-  default = 3
-}
-
-variable "elasticsearch_port" {
-  type = number
-  default = 9200
-}
-
 locals {
   sn_ids   = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.id))}"
   sn_cidrs = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.cidr_block))}"
@@ -253,16 +198,4 @@ EOF
     host        = local.elasticsearch_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-}
-
-output "elasticsearch_urls" {
-  value = [for host in sort(aws_route53_record.elasticsearch_private.*.name): "http://${host}:${var.elasticsearch_port}"]
-}
-
-output "elasticsearch_hosts" {
-  value = sort(aws_route53_record.elasticsearch_private.*.name)
-}
-
-output "elasticsearch_port" {
-  value = var.elasticsearch_port
 }

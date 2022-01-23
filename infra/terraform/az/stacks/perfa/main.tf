@@ -5,14 +5,12 @@ terraform {
       version = "=2.91.0"
     }
   }
+
+  required_version = ">= 1.0.4"
 }
 
 provider "azurerm" {
   features {}
-}
-
-variable "az_image_resource_group" {
-  type = string
 }
 
 module "rkcy" {

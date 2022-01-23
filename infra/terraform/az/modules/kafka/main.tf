@@ -1,67 +1,3 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "=2.91.0"
-    }
-  }
-}
-
-provider "azurerm" {
-  features {}
-}
-
-variable "image_resource_group_name" {
-  type = string
-}
-
-variable "stack" {
-  type = string
-}
-
-variable "cluster" {
-  type = string
-}
-
-variable "resource_group" {
-  type = any
-}
-
-variable "network" {
-  type = any
-}
-
-variable "subnet_app" {
-  type = any
-}
-
-variable "dns_zone" {
-  type = string
-}
-
-variable "bastion_ips" {
-  type = list
-}
-
-variable "azs" {
-  type = list
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "zookeeper_count" {
-  type = number
-  default = 3
-}
-
-variable "kafka_count" {
-  type = number
-  default = 3
-}
-
 locals {
   sn_ids   = var.subnet_app.*.id
   sn_cidrs = flatten(var.subnet_app.*.address_prefixes)
@@ -73,12 +9,10 @@ data "azurerm_image" "kafka" {
   resource_group_name = var.image_resource_group_name
 }
 
-variable "public" {
-  type = bool
-}
 data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
+
 locals {
   ingress_cidrs = var.public ? [ var.network.address_space[0], "${chomp(data.http.myip.body)}/32"] : [ var.network.address_space[0] ]
 }
@@ -576,19 +510,3 @@ EOF
 #-------------------------------------------------------------------------------
 # Brokers (END)
 #-------------------------------------------------------------------------------
-
-output "zookeeper_hosts" {
-  value = sort(azurerm_dns_a_record.zookeeper_private.*.fqdn)
-}
-
-output "kafka_cluster" {
-  value = "${var.stack}_${var.cluster}"
-}
-
-output "kafka_internal_hosts" {
-  value = sort(azurerm_dns_a_record.kafka_private.*.fqdn)
-}
-
-output "kafka_external_hosts" {
-  value = sort(azurerm_dns_a_record.kafka_public.*.fqdn)
-}

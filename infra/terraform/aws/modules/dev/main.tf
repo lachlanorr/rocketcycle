@@ -1,56 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.27"
-    }
-  }
-
-  required_version = ">= 0.14.9"
-}
-
-provider "aws" {
-  profile = "default"
-  region = "us-east-2"
-}
-
-variable "stack" {
-  type = string
-}
-
-variable "vpc" {
-  type = any
-}
-
-variable "subnet_edge" {
-  type = any
-}
-
-variable "dns_zone" {
-  type = any
-}
-
-variable "postgresql_hosts" {
-  type = any
-}
-
-variable "kafka_cluster" {
-  type = string
-}
-
-variable "kafka_hosts" {
-  type = any
-}
-
-variable "otelcol_endpoint" {
-  type = string
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
 data "aws_ami" "dev" {
   most_recent      = true
   name_regex       = "^rkcy-dev-[0-9]{8}-[0-9]{6}$"
@@ -256,9 +203,4 @@ EOF
     host     = aws_eip.dev.public_ip
     private_key = file(var.ssh_key_path)
   }
-}
-
-
-output "dev_hosts" {
-  value = sort(aws_route53_record.dev_private.*.name)
 }

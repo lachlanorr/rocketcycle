@@ -1,62 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.27"
-    }
-  }
-
-  required_version = ">= 0.14.9"
-}
-
-provider "aws" {
-  profile = "default"
-  region = "us-east-2"
-}
-
-variable "stack" {
-  type = string
-}
-
-variable "cluster" {
-  type = string
-}
-
-variable "vpc" {
-  type = any
-}
-
-variable "subnet_app" {
-  type = any
-}
-
-variable "dns_zone" {
-  type = any
-}
-
-variable "bastion_ips" {
-  type = list
-}
-
-variable "azs" {
-  type = list
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "zookeeper_count" {
-  type = number
-  default = 3
-}
-
-variable "kafka_count" {
-  type = number
-  default = 3
-}
-
 locals {
   sn_ids   = var.subnet_app.*.id
   sn_cidrs = var.subnet_app.*.cidr_block
@@ -73,12 +14,10 @@ resource "aws_key_pair" "kafka" {
   public_key = file("${var.ssh_key_path}.pub")
 }
 
-variable "public" {
-  type = bool
-}
 data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
+
 locals {
   ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
   egress_cidrs = var.public ? [ "0.0.0.0/0" ] : [ var.vpc.cidr_block ]
@@ -513,19 +452,3 @@ EOF
 #-------------------------------------------------------------------------------
 # Brokers (END)
 #-------------------------------------------------------------------------------
-
-output "zookeeper_hosts" {
-  value = sort(aws_route53_record.zookeeper_private.*.name)
-}
-
-output "kafka_cluster" {
-  value = "${var.cluster}_${var.stack}"
-}
-
-output "kafka_internal_hosts" {
-  value = sort(aws_route53_record.kafka_private.*.name)
-}
-
-output "kafka_external_hosts" {
-  value = sort(aws_route53_record.kafka_public.*.name)
-}

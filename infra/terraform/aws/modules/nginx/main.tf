@@ -1,45 +1,3 @@
-variable "stack" {
-  type = string
-}
-
-variable "cluster" {
-  type = string
-}
-
-variable "vpc" {
-  type = any
-}
-
-variable "subnet" {
-  type = any
-}
-
-variable "dns_zone" {
-  type = any
-}
-
-variable "bastion_ips" {
-  type = list
-}
-
-variable "inbound_cidr" {
-  type = string
-}
-
-variable "routes" {
-  type = any
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "nginx_count" {
-  type = number
-  default = 1
-}
-
 data "aws_ami" "nginx" {
   most_recent      = true
   name_regex       = "^rkcy-nginx-[0-9]{8}-[0-9]{6}$"
@@ -53,12 +11,10 @@ locals {
   nginx_ips = [for i in range(var.nginx_count) : "${cidrhost(local.sn_cidrs[i], 80)}"]
 }
 
-variable "public" {
-  type = bool
-}
 data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
+
 locals {
   ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
   ingress_80443_cidrs = var.public ? [ var.inbound_cidr, "${chomp(data.http.myip.body)}/32"] : [ var.inbound_cidr ]
@@ -297,16 +253,4 @@ EOF
     host        = local.nginx_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-}
-
-output "balancer_internal_url" {
-  value = "http://${aws_route53_record.nginx_private_aggregate.name}"
-}
-
-output "balancer_external_url" {
-  value = var.public ? "http://${aws_route53_record.nginx_public[0].name}" : ""
-}
-
-output "nginx_hosts" {
-  value = sort(aws_route53_record.nginx_private.*.name)
 }

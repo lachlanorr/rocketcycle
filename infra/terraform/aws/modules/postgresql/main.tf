@@ -1,49 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.27"
-    }
-  }
-
-  required_version = ">= 0.14.9"
-}
-
-provider "aws" {
-  profile = "default"
-  region = "us-east-2"
-}
-
-variable "stack" {
-  type = string
-}
-
-variable "vpc" {
-  type = any
-}
-
-variable "subnet_storage" {
-  type = any
-}
-
-variable "dns_zone" {
-  type = any
-}
-
-variable "bastion_ips" {
-  type = list
-}
-
-variable "ssh_key_path" {
-  type = string
-  default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "postgresql_count" {
-  type = number
-  default = 1
-}
-
 locals {
   sn_ids   = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.id))}"
   sn_cidrs = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.cidr_block))}"
@@ -60,12 +14,10 @@ resource "aws_key_pair" "postgresql" {
   public_key = file("${var.ssh_key_path}.pub")
 }
 
-variable "public" {
-  type = bool
-}
 data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
+
 locals {
   ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
   egress_cidrs = var.public ? [ "0.0.0.0/0" ] : [ var.vpc.cidr_block ]
@@ -274,8 +226,4 @@ EOF
     host        = local.postgresql_ips[count.index]
     private_key = file(var.ssh_key_path)
   }
-}
-
-output "postgresql_hosts" {
-  value = sort(aws_route53_record.postgresql_private.*.name)
 }
