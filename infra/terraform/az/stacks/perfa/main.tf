@@ -19,7 +19,7 @@ module "rkcy" {
   source = "../../modules/rkcy"
 
   cidr_block = "10.0.0.0/16"
-  image_resource_group = var.az_image_resource_group
+  image_resource_group_name = var.az_image_resource_group
   stack = basename(abspath(path.module))
   dns_zone = "rkcy.us"
   public = true

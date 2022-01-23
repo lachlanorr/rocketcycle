@@ -38,7 +38,7 @@ variable "bastion_ips" {
   type = list
 }
 
-variable "availability_zones" {
+variable "azs" {
   type = list
 }
 
@@ -58,8 +58,8 @@ variable "kafka_count" {
 }
 
 locals {
-  sn_ids   = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.id))}"
-  sn_cidrs = "${values(zipmap(var.subnet_app.*.cidr_block, var.subnet_app.*.cidr_block))}"
+  sn_ids   = var.subnet_app.*.id
+  sn_cidrs = var.subnet_app.*.cidr_block
 }
 
 data "aws_ami" "kafka" {
@@ -293,7 +293,7 @@ EOF
 # Brokers
 #-------------------------------------------------------------------------------
 locals {
-  kafka_racks = [for i in range(var.kafka_count) : "${var.availability_zones[i % var.kafka_count]}"]
+  kafka_racks = [for i in range(var.kafka_count) : "${var.azs[i % length(var.azs)]}"]
   kafka_internal_ips = [for i in range(var.kafka_count) : "${cidrhost(local.sn_cidrs[i], 101)}"]
   kafka_internal_hosts = [for i in range(var.kafka_count) : "kafka-${i}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"]
   kafka_external_ips = aws_eip.kafka.*.public_ip
@@ -404,7 +404,7 @@ resource "aws_eip" "kafka" {
 }
 
 resource "aws_route53_record" "kafka_public" {
-  count = var.public ? var.kafka_count : 0
+  count   = var.public ? var.kafka_count : 0
   zone_id = var.dns_zone.zone_id
   name    = local.kafka_external_hosts[count.index]
   type    = "A"
@@ -424,7 +424,8 @@ resource "aws_route53_record" "kafka_private" {
 resource "null_resource" "kafka_provisioner" {
   count = var.kafka_count
   depends_on = [
-    aws_instance.kafka
+    aws_instance.kafka,
+    null_resource.zookeeper_provisioner,
   ]
 
   #---------------------------------------------------------
@@ -518,7 +519,7 @@ output "zookeeper_hosts" {
 }
 
 output "kafka_cluster" {
-  value = "${var.stack}_${var.cluster}"
+  value = "${var.cluster}_${var.stack}"
 }
 
 output "kafka_internal_hosts" {

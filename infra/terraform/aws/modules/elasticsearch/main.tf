@@ -34,7 +34,7 @@ variable "bastion_ips" {
   type = list
 }
 
-variable "availability_zones" {
+variable "azs" {
   type = list
 }
 
@@ -70,7 +70,7 @@ resource "aws_key_pair" "elasticsearch" {
 }
 
 locals {
-  elasticsearch_racks = [for i in range(var.elasticsearch_count) : "${var.availability_zones[i % var.elasticsearch_count]}"]
+  elasticsearch_racks = [for i in range(var.elasticsearch_count) : "${var.azs[i % var.elasticsearch_count]}"]
   elasticsearch_ips = [for i in range(var.elasticsearch_count) : "${cidrhost(local.sn_cidrs[i], 92)}"]
   elasticsearch_nodes = [for i in range(var.elasticsearch_count) : "master-${i}"]
 }
