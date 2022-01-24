@@ -28,8 +28,6 @@ resource "azurerm_network_security_group" "zookeeper" {
   name                = "rkcy_${var.cluster}_${var.stack}_zookeeper"
   location            = var.resource_group.location
   resource_group_name = var.resource_group.name
-
-  security_rule = []
 }
 
 resource "azurerm_network_security_rule" "zookeeper_ssh" {
@@ -137,6 +135,12 @@ resource "azurerm_network_interface_security_group_association" "zookeeper" {
   network_security_group_id = azurerm_network_security_group.zookeeper.id
 }
 
+resource "azurerm_user_assigned_identity" "zookeeper" {
+  resource_group_name = var.resource_group.name
+  location            = var.resource_group.location
+  name                = "rkcy_${var.stack}_zookeeper"
+}
+
 resource "azurerm_linux_virtual_machine" "zookeeper" {
   count                 = var.zookeeper_count
   depends_on            = [azurerm_network_interface_security_group_association.zookeeper]
@@ -148,6 +152,11 @@ resource "azurerm_linux_virtual_machine" "zookeeper" {
   zone                  = var.azs[count.index % length(var.azs)]
 
   source_image_id = data.azurerm_image.kafka.id
+
+  identity {
+    type = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.zookeeper.id]
+  }
 
   computer_name = "zookeeper-${count.index}"
   os_disk {
@@ -205,8 +214,6 @@ resource "azurerm_network_security_group" "kafka" {
   name                = "rkcy_${var.cluster}_${var.stack}_kafka"
   location            = var.resource_group.location
   resource_group_name = var.resource_group.name
-
-  security_rule = []
 }
 
 resource "azurerm_network_security_rule" "kafka_ssh" {
@@ -301,6 +308,12 @@ resource "azurerm_network_interface_security_group_association" "kafka" {
   network_security_group_id = azurerm_network_security_group.kafka.id
 }
 
+resource "azurerm_user_assigned_identity" "kafka" {
+  resource_group_name = var.resource_group.name
+  location            = var.resource_group.location
+  name                = "rkcy_${var.stack}_kafka"
+}
+
 resource "azurerm_linux_virtual_machine" "kafka" {
   count                 = var.kafka_count
   depends_on            = [azurerm_network_interface_security_group_association.kafka]
@@ -312,6 +325,11 @@ resource "azurerm_linux_virtual_machine" "kafka" {
   zone                  = var.azs[count.index % length(var.azs)]
 
   source_image_id = data.azurerm_image.kafka.id
+
+  identity {
+    type = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.kafka.id]
+  }
 
   computer_name = "kafka-${count.index}"
   os_disk {

@@ -19,8 +19,6 @@ resource "azurerm_network_security_group" "elasticsearch" {
   name                = "rkcy_${var.stack}_elasticsearch"
   location            = var.resource_group.location
   resource_group_name = var.resource_group.name
-
-  security_rule = []
 }
 
 resource "azurerm_network_security_rule" "elasticsearch_ssh" {
@@ -51,7 +49,7 @@ resource "azurerm_network_security_rule" "elasticsearch_node_exporter_in" {
   network_security_group_name = azurerm_network_security_group.elasticsearch.name
 }
 
-resource "azurerm_network_security_rule" "elasticsearch_client" {
+resource "azurerm_network_security_rule" "elasticsearch_rest_in" {
   name                        = "AllowElasticsearchRestInbound"
   priority                    = 102
   direction                   = "Inbound"
@@ -65,7 +63,7 @@ resource "azurerm_network_security_rule" "elasticsearch_client" {
   network_security_group_name = azurerm_network_security_group.elasticsearch.name
 }
 
-resource "azurerm_network_security_rule" "elasticsearch_nodes" {
+resource "azurerm_network_security_rule" "elasticsearch_nodes_in" {
   name                        = "AllowElasticsearchNodesInbound"
   priority                    = 103
   direction                   = "Inbound"
@@ -114,6 +112,12 @@ resource "azurerm_network_interface_security_group_association" "elasticsearch" 
   network_security_group_id = azurerm_network_security_group.elasticsearch.id
 }
 
+resource "azurerm_user_assigned_identity" "elasticsearch" {
+  resource_group_name = var.resource_group.name
+  location            = var.resource_group.location
+  name                = "rkcy_${var.stack}_elasticsearch"
+}
+
 resource "azurerm_linux_virtual_machine" "elasticsearch" {
   count                 = var.elasticsearch_count
   depends_on            = [azurerm_network_interface_security_group_association.elasticsearch]
@@ -125,6 +129,11 @@ resource "azurerm_linux_virtual_machine" "elasticsearch" {
   zone                  = var.azs[count.index % length(var.azs)]
 
   source_image_id = data.azurerm_image.elasticsearch.id
+
+  identity {
+    type = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.elasticsearch.id]
+  }
 
   computer_name = "elasticsearch-${count.index}"
   os_disk {

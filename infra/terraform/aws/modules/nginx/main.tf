@@ -16,8 +16,8 @@ data "http" "myip" {
 }
 
 locals {
-  ingress_cidrs = var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]
-  ingress_80443_cidrs = var.public ? [ var.inbound_cidr, "${chomp(data.http.myip.body)}/32"] : [ var.inbound_cidr ]
+  ingress_cidrs = sort(distinct(var.public ? [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32"] : [ var.vpc.cidr_block ]))
+  ingress_80443_cidrs = sort(distinct(var.public ? [ var.inbound_cidr, "${chomp(data.http.myip.body)}/32"] : [ var.inbound_cidr ]))
 }
 
 resource "aws_security_group" "rkcy_nginx" {

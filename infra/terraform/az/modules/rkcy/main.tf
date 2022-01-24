@@ -35,6 +35,20 @@ module "elasticsearch" {
   bastion_ips = module.network.bastion_ips
 }
 
+module "postgresql" {
+  source = "../../modules/postgresql"
+
+  image_resource_group_name = var.image_resource_group_name
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  resource_group = module.network.resource_group
+  network = module.network.network
+  subnet_storage = module.network.subnet_storage
+  azs = module.network.azs
+  bastion_ips = module.network.bastion_ips
+  public = var.public
+}
+
 #module "dev" {
 #  source = "../../modules/dev"
 #

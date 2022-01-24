@@ -148,82 +148,13 @@ resource "aws_route53_record" "postgresql_private" {
   records = [local.postgresql_ips[count.index]]
 }
 
-resource "null_resource" "postgresql_provisioner" {
+module "postgresql_configure" {
+  source = "../../../shared/postgresql"
   count = var.postgresql_count
-  depends_on = [
-    aws_instance.postgresql
-  ]
+  depends_on = [aws_instance.postgresql]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.postgresql_private[count.index].name}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
-
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/postgresql/postgresql.conf.tpl", {})
-    destination = "/home/ubuntu/postgresql.conf"
-  }
-
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/postgresql/pg_hba.conf.tpl", {})
-    destination = "/home/ubuntu/pg_hba.conf"
-  }
-
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/postgresql/pg_ident.conf.tpl", {})
-    destination = "/home/ubuntu/pg_ident.conf"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-# backup original config files
-sudo mv /etc/postgresql/12/main/postgresql.conf /etc/postgresql/12/main/postgresql.conf.orig
-sudo mv /etc/postgresql/12/main/pg_hba.conf /etc/postgresql/12/main/pg_hba.conf.orig
-sudo mv /etc/postgresql/12/main/pg_ident.conf /etc/postgresql/12/main/pg_ident.conf.orig
-
-sudo mv /home/ubuntu/postgresql.conf /etc/postgresql/12/main/
-sudo mv /home/ubuntu/pg_hba.conf /etc/postgresql/12/main/
-sudo mv /home/ubuntu/pg_ident.conf /etc/postgresql/12/main/
-
-sudo chown postgres:postgres /etc/postgresql/12/main/postgresql.conf
-sudo chmod 644 /etc/postgresql/12/main/postgresql.conf
-sudo chown postgres:postgres /etc/postgresql/12/main/pg_hba.conf
-sudo chmod 640 /etc/postgresql/12/main/pg_hba.conf
-sudo chown postgres:postgres /etc/postgresql/12/main/pg_ident.conf
-sudo chmod 640 /etc/postgresql/12/main/pg_ident.conf
-
-sudo systemctl restart postgresql
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-
-    bastion_user        = "ubuntu"
-    bastion_host        = "${var.bastion_ips[0]}"
-    bastion_private_key = file(var.ssh_key_path)
-
-    user        = "ubuntu"
-    host        = local.postgresql_ips[count.index]
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = aws_route53_record.postgresql_private[count.index].name
+  bastion_ip = var.bastion_ips[0]
+  ssh_key_path = var.ssh_key_path
+  postgresql_ip = local.postgresql_ips[count.index]
 }

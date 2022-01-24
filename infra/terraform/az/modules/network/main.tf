@@ -18,8 +18,6 @@ resource "azurerm_network_security_group" "bastion" {
   name                = "rkcy_${var.stack}_bastion"
   location            = azurerm_resource_group.rkcy.location
   resource_group_name = azurerm_resource_group.rkcy.name
-
-  security_rule = []
 }
 
 resource "azurerm_network_security_rule" "bastion_ssh" {
@@ -124,6 +122,12 @@ data "azurerm_image" "bastion" {
   resource_group_name = var.image_resource_group_name
 }
 
+resource "azurerm_user_assigned_identity" "bastion" {
+  resource_group_name = azurerm_resource_group.rkcy.name
+  location            = azurerm_resource_group.rkcy.location
+  name                = "rkcy_${var.stack}_bastion"
+}
+
 resource "azurerm_linux_virtual_machine" "bastion" {
   count                 = var.bastion_count
   depends_on            = [azurerm_network_interface_security_group_association.bastion]
@@ -135,6 +139,11 @@ resource "azurerm_linux_virtual_machine" "bastion" {
   zone                  = local.azs[count.index % length(local.azs)]
 
   source_image_id       = data.azurerm_image.bastion.id
+
+  identity {
+    type = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.bastion.id]
+  }
 
   computer_name = "bastion-${count.index}"
   os_disk {
@@ -169,7 +178,6 @@ resource "azurerm_dns_a_record" "bastion_public" {
   resource_group_name = var.image_resource_group_name
   ttl                 = 300
   records             = [azurerm_public_ip.bastion[count.index].ip_address]
-#  target_resource_id  = azurerm_public_ip.bastion[count.index].id
 }
 
 resource "azurerm_dns_a_record" "bastion_private" {
