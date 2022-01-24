@@ -6,19 +6,6 @@ module "network" {
   dns_zone = var.dns_zone
 }
 
-module "dev" {
-  source = "../../modules/dev"
-
-  stack = module.network.stack
-  dns_zone = module.network.dns_zone
-  vpc = module.network.vpc
-  subnet_edge = module.network.subnet_edge
-  postgresql_hosts = module.postgresql.postgresql_hosts
-  kafka_cluster = module.kafka.kafka_cluster
-  kafka_hosts = module.kafka.kafka_internal_hosts
-  otelcol_endpoint = "${module.balancers.nginx_hosts.app[0]}:${module.telemetry.otelcol_port}"
-}
-
 module "kafka" {
   source = "../../modules/kafka"
 
@@ -29,6 +16,28 @@ module "kafka" {
   subnet_app = module.network.subnet_app
   bastion_ips = module.network.bastion_ips
   azs = module.network.azs
+  public = var.public
+}
+
+module "elasticsearch" {
+  source = "../../modules/elasticsearch"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_storage = module.network.subnet_storage
+  azs = module.network.azs
+  bastion_ips = module.network.bastion_ips
+}
+
+module "postgresql" {
+  source = "../../modules/postgresql"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_storage = module.network.subnet_storage
+  bastion_ips = module.network.bastion_ips
   public = var.public
 }
 
@@ -154,7 +163,7 @@ module "metrics" {
     },
     {
       name = "nginx",
-      targets = [for host in concat(module.balancers.nginx_hosts.edge, module.balancers.nginx_hosts.edge): "${host}:9100"]
+      targets = [for host in concat(module.balancers.nginx_hosts.app, module.balancers.nginx_hosts.edge): "${host}:9100"]
       relabel = [
         {
           source_labels = ["__address__"]
@@ -185,28 +194,6 @@ module "metrics" {
   ]
 }
 
-module "elasticsearch" {
-  source = "../../modules/elasticsearch"
-
-  stack = module.network.stack
-  dns_zone = module.network.dns_zone
-  vpc = module.network.vpc
-  subnet_storage = module.network.subnet_storage
-  azs = module.network.azs
-  bastion_ips = module.network.bastion_ips
-}
-
-module "postgresql" {
-  source = "../../modules/postgresql"
-
-  stack = module.network.stack
-  dns_zone = module.network.dns_zone
-  vpc = module.network.vpc
-  subnet_storage = module.network.subnet_storage
-  bastion_ips = module.network.bastion_ips
-  public = var.public
-}
-
 module "balancers" {
   source = "../../modules/balancers"
 
@@ -227,4 +214,17 @@ module "balancers" {
   grafana_hosts = module.metrics.grafana_hosts
   grafana_port = module.metrics.grafana_port
   public = var.public
+}
+
+module "dev" {
+  source = "../../modules/dev"
+
+  stack = module.network.stack
+  dns_zone = module.network.dns_zone
+  vpc = module.network.vpc
+  subnet_edge = module.network.subnet_edge
+  postgresql_hosts = module.postgresql.postgresql_hosts
+  kafka_cluster = module.kafka.kafka_cluster
+  kafka_hosts = module.kafka.kafka_internal_hosts
+  otelcol_endpoint = "${module.balancers.nginx_hosts.app[0]}:${module.telemetry.otelcol_port}"
 }
