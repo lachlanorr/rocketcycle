@@ -1,6 +1,6 @@
 locals {
-  sn_ids   = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.id))}"
-  sn_cidrs = "${values(zipmap(var.subnet_storage.*.cidr_block, var.subnet_storage.*.cidr_block))}"
+  sn_ids   = var.subnet_storage.*.id
+  sn_cidrs = var.subnet_storage.*.cidr_block
 }
 
 data "aws_ami" "elasticsearch" {
@@ -130,72 +130,17 @@ resource "aws_route53_record" "elasticsearch_private" {
   records = [local.elasticsearch_ips[count.index]]
 }
 
-resource "null_resource" "elasticsearch_provisioner" {
+module "elasticsearch_configure" {
+  source = "../../../shared/elasticsearch"
   count = var.elasticsearch_count
-  depends_on = [
-    aws_instance.elasticsearch
-  ]
+  depends_on = [aws_instance.elasticsearch]
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.elasticsearch_private[count.index].name}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
-
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/elasticsearch/elasticsearch.yml.tpl",
-      {
-        stack = var.stack
-        idx = count.index
-        elasticsearch_ips = local.elasticsearch_ips
-        elasticsearch_nodes = local.elasticsearch_nodes
-        elasticsearch_racks = local.elasticsearch_racks
-      })
-    destination = "/home/ubuntu/elasticsearch.yml"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-# backup original config file
-sudo mv /etc/elasticsearch/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml.orig
-sudo mv /home/ubuntu/elasticsearch.yml /etc/elasticsearch/elasticsearch.yml
-
-sudo chown root:elasticsearch /etc/elasticsearch/elasticsearch.yml
-sudo chmod 660 /etc/elasticsearch/elasticsearch.yml
-
-sudo systemctl start elasticsearch
-sudo systemctl enable elasticsearch
-
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-
-    bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_ips[0]
-    bastion_private_key = file(var.ssh_key_path)
-
-    user        = "ubuntu"
-    host        = local.elasticsearch_ips[count.index]
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = aws_route53_record.elasticsearch_private[count.index].name
+  bastion_ip = var.bastion_ips[0]
+  ssh_key_path = var.ssh_key_path
+  stack = var.stack
+  elasticsearch_index = count.index
+  elasticsearch_ips = local.elasticsearch_ips
+  elasticsearch_nodes = local.elasticsearch_nodes
+  elasticsearch_rack = local.elasticsearch_racks[count.index]
 }
