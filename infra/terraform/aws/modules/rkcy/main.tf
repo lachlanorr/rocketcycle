@@ -13,8 +13,8 @@ module "kafka" {
   cluster = "clusa"
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_app = module.network.subnet_app
-  bastion_ips = module.network.bastion_ips
+  subnets = module.network.subnets_app
+  bastion_ip = module.network.bastion_ips[0]
   azs = module.network.azs
   public = var.public
 }
@@ -25,9 +25,9 @@ module "elasticsearch" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_storage = module.network.subnet_storage
+  subnets = module.network.subnets_storage
   azs = module.network.azs
-  bastion_ips = module.network.bastion_ips
+  bastion_ip = module.network.bastion_ips[0]
 }
 
 module "postgresql" {
@@ -36,8 +36,8 @@ module "postgresql" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_storage = module.network.subnet_storage
-  bastion_ips = module.network.bastion_ips
+  subnets = module.network.subnets_storage
+  bastion_ip = module.network.bastion_ips[0]
   public = var.public
 }
 
@@ -47,10 +47,10 @@ module "telemetry" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_app = module.network.subnet_app
-  bastion_ips = module.network.bastion_ips
+  subnets = module.network.subnets_app
+  bastion_ip = module.network.bastion_ips[0]
   elasticsearch_urls = module.elasticsearch.elasticsearch_urls
-  nginx_hosts = module.balancers.nginx_hosts
+  nginx_telem_host = module.balancers.nginx_hosts.app[0]
 }
 
 module "metrics" {
@@ -59,8 +59,8 @@ module "metrics" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_app = module.network.subnet_app
-  bastion_ips = module.network.bastion_ips
+  subnets = module.network.subnets_app
+  bastion_ip = module.network.bastion_ips[0]
   balancer_internal_urls = module.balancers.balancer_internal_urls
   balancer_external_urls = module.balancers.balancer_external_urls
 
@@ -200,9 +200,9 @@ module "balancers" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_edge = module.network.subnet_edge
-  subnet_app = module.network.subnet_app
-  bastion_ips = module.network.bastion_ips
+  subnets_edge = module.network.subnets_edge
+  subnets_app = module.network.subnets_app
+  bastion_ip = module.network.bastion_ips[0]
   jaeger_query_hosts = module.telemetry.jaeger_query_hosts
   jaeger_query_port = module.telemetry.jaeger_query_port
   jaeger_collector_hosts = module.telemetry.jaeger_collector_hosts
@@ -222,7 +222,7 @@ module "dev" {
   stack = module.network.stack
   dns_zone = module.network.dns_zone
   vpc = module.network.vpc
-  subnet_edge = module.network.subnet_edge
+  subnets = module.network.subnets_edge
   postgresql_hosts = module.postgresql.postgresql_hosts
   kafka_cluster = module.kafka.kafka_cluster
   kafka_hosts = module.kafka.kafka_internal_hosts

@@ -2,24 +2,33 @@ variable "stack" {
   type = string
 }
 
-variable "dns_zone" {
-  type = any
-}
-
 variable "vpc" {
-  type = any
+  type = object({
+    id = string
+    cidr_block = string
+  })
 }
 
-variable "subnet_storage" {
-  type = any
+variable "subnets" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
-variable "bastion_ips" {
-  type = list
+variable "dns_zone" {
+  type = object({
+    name = string
+    zone_id = string
+  })
+}
+
+variable "bastion_ip" {
+  type = string
 }
 
 variable "azs" {
-  type = list
+  type = list(string)
 }
 
 variable "ssh_key_path" {

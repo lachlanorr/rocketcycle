@@ -1,3 +1,3 @@
 output "postgresql_hosts" {
-  value = sort(aws_route53_record.postgresql_private.*.name)
+  value = sort(module.postgresql_vm.vms[*].hostname)
 }

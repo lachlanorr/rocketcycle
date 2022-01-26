@@ -3,19 +3,28 @@ variable "stack" {
 }
 
 variable "vpc" {
-  type = any
+  type = object({
+    id = string
+    cidr_block = string
+  })
 }
 
-variable "subnet_edge" {
-  type = any
+variable "subnets" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
 variable "dns_zone" {
-  type = any
+  type = object({
+    name = string
+    zone_id = string
+  })
 }
 
 variable "postgresql_hosts" {
-  type = any
+  type = list(string)
 }
 
 variable "kafka_cluster" {
@@ -23,7 +32,7 @@ variable "kafka_cluster" {
 }
 
 variable "kafka_hosts" {
-  type = any
+  type = list(string)
 }
 
 variable "otelcol_endpoint" {

@@ -1,5 +1,5 @@
 output "prometheus_hosts" {
-  value = sort(aws_route53_record.prometheus_private.*.name)
+  value = sort(module.prometheus_vm.vms[*].hostname)
 }
 
 output "prometheus_port" {
@@ -7,7 +7,7 @@ output "prometheus_port" {
 }
 
 output "grafana_hosts" {
-  value = sort(aws_route53_record.grafana_private.*.name)
+  value = sort(module.grafana_vm.vms[*].hostname)
 }
 
 output "grafana_port" {

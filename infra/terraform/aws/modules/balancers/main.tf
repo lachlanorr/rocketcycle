@@ -46,9 +46,9 @@ module "nginx_edge" {
   stack = var.stack
   cluster = "edge"
   vpc = var.vpc
-  subnet = var.subnet_edge
+  subnets = var.subnets_edge
   dns_zone = var.dns_zone
-  bastion_ips = var.bastion_ips
+  bastion_ip = var.bastion_ip
   inbound_cidr = "${chomp(data.http.myip.body)}/32"
   public = true
   nginx_count = var.edge_count
@@ -61,9 +61,9 @@ module "nginx_app" {
   stack = var.stack
   cluster = "app"
   vpc = var.vpc
-  subnet = var.subnet_app
+  subnets = var.subnets_app
   dns_zone = var.dns_zone
-  bastion_ips = var.bastion_ips
+  bastion_ip = var.bastion_ip
   inbound_cidr = var.vpc.cidr_block
   public = var.public
   nginx_count = var.app_count

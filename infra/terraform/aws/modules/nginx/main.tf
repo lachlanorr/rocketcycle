@@ -4,11 +4,9 @@ data "aws_ami" "nginx" {
   owners           = ["self"]
 }
 
-locals {
-  sn_ids   = "${values(zipmap(var.subnet.*.cidr_block, var.subnet.*.id))}"
-  sn_cidrs = "${values(zipmap(var.subnet.*.cidr_block, var.subnet.*.cidr_block))}"
-
-  nginx_ips = [for i in range(var.nginx_count) : "${cidrhost(local.sn_cidrs[i], 80)}"]
+resource "aws_key_pair" "nginx" {
+  key_name = "rkcy_${var.cluster}_${var.stack}_nginx"
+  public_key = file("${var.ssh_key_path}.pub")
 }
 
 data "http" "myip" {
@@ -20,237 +18,72 @@ locals {
   ingress_80443_cidrs = sort(distinct(var.public ? [ var.inbound_cidr, "${chomp(data.http.myip.body)}/32"] : [ var.inbound_cidr ]))
 }
 
-resource "aws_security_group" "rkcy_nginx" {
-  name        = "rkcy_${var.cluster}_${var.stack}_nginx"
-  description = "Allow SSH, HTTP, and HTTPS inbound traffic"
-  vpc_id      = var.vpc.id
+module "nginx_vm" {
+  source = "../vm"
 
-  ingress = [
-    {
-      cidr_blocks      = local.ingress_cidrs
-      description      = ""
-      from_port        = 22
-      to_port          = 22
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = local.ingress_80443_cidrs
-      description      = ""
-      from_port        = 80
-      to_port          = 80
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = local.ingress_80443_cidrs
-      description      = ""
-      from_port        = 443
-      to_port          = 443
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = local.ingress_cidrs
-      description      = "node_exporter"
-      from_port        = 9100
-      to_port          = 9100
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = local.ingress_cidrs
-      description      = "otelcol"
-      from_port        = 4317
-      to_port          = 4317
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = local.ingress_cidrs
-      description      = "jaeger collector"
-      from_port        = 14250
-      to_port          = 14250
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-  ]
+  name = "nginx"
+  stack = var.stack
+  cluster = {
+    name = var.cluster
+    aggregate = true
+  }
+  vpc_id = var.vpc.id
+  dns_zone = var.dns_zone
 
-  egress = [
+  vms = [for i in range(var.nginx_count) :
     {
-      cidr_blocks      = [ "0.0.0.0/0" ]
-      description      = ""
-      from_port        = 0
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "-1"
-      security_groups  = []
-      self             = false
-      to_port          = 0
+      subnet_id = var.subnets[i % length(var.subnets)].id
+      ip = cidrhost(var.subnets[i % length(var.subnets)].cidr_block, 80)
     }
   ]
-}
 
-resource "aws_network_interface" "nginx" {
-  count = var.nginx_count
-  subnet_id   = local.sn_ids[count.index]
-  private_ips = [local.nginx_ips[count.index]]
-
-  security_groups = [aws_security_group.rkcy_nginx.id]
-}
-
-resource "aws_placement_group" "nginx" {
-  name     = "rkcy_${var.cluster}_${var.stack}_nginx_pc"
-  strategy = "spread"
-}
-
-resource "aws_key_pair" "nginx" {
-  key_name = "rkcy_${var.cluster}_${var.stack}_nginx"
-  public_key = file("${var.ssh_key_path}.pub")
-}
-
-resource "aws_instance" "nginx" {
-  count = var.nginx_count
-  ami = data.aws_ami.nginx.id
+  image_id = data.aws_ami.nginx.id
   instance_type = "m4.large"
-  placement_group = aws_placement_group.nginx.name
-
   key_name = aws_key_pair.nginx.key_name
+  public = var.public
 
-  network_interface {
-    network_interface_id = aws_network_interface.nginx[count.index].id
-    device_index = 0
-  }
-
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-
-  tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_nginx_${count.index}"
-  }
-}
-
-resource "aws_eip" "nginx" {
-  count = var.public ? var.nginx_count : 0
-  vpc = true
-
-  instance = aws_instance.nginx[count.index].id
-  associate_with_private_ip = local.nginx_ips[count.index]
-
-  tags = {
-    Name = "rkcy_${var.cluster}_${var.stack}_eip_nginx_${count.index}"
-  }
-}
-
-resource "aws_route53_record" "nginx_public" {
-  count = var.public ? 1 : 0
-  zone_id = var.dns_zone.zone_id
-  name    = "${var.cluster}.${var.stack}.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = aws_eip.nginx.*.public_ip
-}
-
-resource "aws_route53_record" "nginx_private_aggregate" {
-  zone_id = var.dns_zone.zone_id
-  name    = "${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = local.nginx_ips
-}
-
-resource "aws_route53_record" "nginx_private" {
-  count = var.nginx_count
-  zone_id = var.dns_zone.zone_id
-  name    = "nginx-${count.index}.${var.cluster}.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.nginx_ips[count.index]]
-}
-
-resource "null_resource" "nginx_provisioner" {
-  count = var.nginx_count
-  depends_on = [
-    aws_instance.nginx
+  in_rules = [
+    {
+      name  = "ssh"
+      cidrs = local.ingress_cidrs
+      port  = 22
+    },
+    {
+      name  = "node_exporter"
+      cidrs = local.ingress_cidrs
+      port  = 9100
+    },
+    {
+      name  = "nginx_http"
+      cidrs = local.ingress_80443_cidrs
+      port  = 80
+    },
+    {
+      name  = "nginx_https"
+      cidrs = local.ingress_80443_cidrs
+      port  = 443
+    },
+    {
+      name  = "nginx_otelcol"
+      cidrs = local.ingress_cidrs
+      port  = 4317
+    },
+    {
+      name  = "nginx_jaeger_collector"
+      cidrs = local.ingress_cidrs
+      port  = 14250
+    },
   ]
+  out_cidrs = [ "0.0.0.0/0" ]
+}
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.nginx_private[count.index].name}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
+module "nginx_configure" {
+  source = "../../../shared/nginx"
+  count = var.nginx_count
 
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/nginx/index.html.tpl", {})
-    destination = "/home/ubuntu/index.html"
-  }
-
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/nginx/default.tpl", {
-      routes = var.routes
-    })
-    destination = "/home/ubuntu/default"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo rm -rf /var/www/html/*
-sudo mv /home/ubuntu/index.html /var/www/html/index.html
-sudo chown root:root /var/www/html/index.html
-
-sudo mv /home/ubuntu/default /etc/nginx/sites-enabled/default
-
-sudo systemctl reload nginx
-
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-
-    bastion_user        = "ubuntu"
-    bastion_host        = var.bastion_ips[0]
-    bastion_private_key = file(var.ssh_key_path)
-
-    user        = "ubuntu"
-    host        = local.nginx_ips[count.index]
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = module.nginx_vm.vms[0].hostname
+  bastion_ip = var.bastion_ip
+  ssh_key_path = var.ssh_key_path
+  nginx_ip = module.nginx_vm.vms[count.index].ip
+  routes = var.routes
 }

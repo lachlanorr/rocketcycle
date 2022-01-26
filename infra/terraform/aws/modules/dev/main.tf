@@ -13,194 +13,49 @@ data "http" "myip" {
   url = "http://ipv4.icanhazip.com"
 }
 
-locals {
-  dev_ip = cidrhost(var.subnet_edge[0].cidr_block, 113)
-}
+module "dev_vm" {
+  source = "../vm"
 
-resource "aws_security_group" "rkcy_dev" {
-  name        = "rkcy_${var.stack}_dev"
-  description = "Allow SSH and zookeeper inbound traffic"
-  vpc_id      = var.vpc.id
+  name = "dev"
+  stack = var.stack
+  vpc_id = var.vpc.id
+  dns_zone = var.dns_zone
 
-  ingress = [
+  vms = [
     {
-      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
-      description      = ""
-      from_port        = 22
-      to_port          = 22
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
-      description      = ""
-      from_port        = 11300
-      to_port          = 11399
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-    {
-      cidr_blocks      = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
-      description      = "node_exporter"
-      from_port        = 9100
-      to_port          = 9100
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "tcp"
-      security_groups  = []
-      self             = false
-    },
-  ]
-
-  egress = [
-    {
-      cidr_blocks      = [ "0.0.0.0/0", ]
-      description      = ""
-      from_port        = 0
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      protocol         = "-1"
-      security_groups  = []
-      self             = false
-      to_port          = 0
+      subnet_id = var.subnets[0].id
+      ip = cidrhost(var.subnets[0].cidr_block, 113)
     }
   ]
-}
 
-resource "aws_network_interface" "dev" {
-  subnet_id   = var.subnet_edge[0].id
-  private_ips = [local.dev_ip]
-
-  security_groups = [aws_security_group.rkcy_dev.id]
-}
-
-resource "aws_instance" "dev" {
-  ami = data.aws_ami.dev.id
+  image_id = data.aws_ami.dev.id
   instance_type = "m4.large"
-
   key_name = aws_key_pair.dev.key_name
+  public = true
 
-  network_interface {
-    network_interface_id = aws_network_interface.dev.id
-    device_index = 0
-  }
-
-  credit_specification {
-    cpu_credits = "unlimited"
-  }
-
-  tags = {
-    Name = "rkcy_${var.stack}_dev"
-  }
-}
-
-resource "aws_eip" "dev" {
-  vpc = true
-
-  instance = aws_instance.dev.id
-  associate_with_private_ip = local.dev_ip
-
-  tags = {
-    Name = "rkcy_${var.stack}_eip_dev"
-  }
-}
-
-resource "aws_route53_record" "dev_public" {
-  zone_id = var.dns_zone.zone_id
-  name    = "dev.${var.stack}.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [aws_eip.dev.public_ip]
-}
-
-resource "aws_route53_record" "dev_private" {
-  zone_id = var.dns_zone.zone_id
-  name    = "dev.${var.stack}.local.${var.dns_zone.name}"
-  type    = "A"
-  ttl     = "300"
-  records = [local.dev_ip]
-}
-
-resource "null_resource" "dev_provisioner" {
-  depends_on = [
-    aws_instance.dev
+  in_rules = [
+    {
+      name  = "ssh"
+      cidrs = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
+      port  = 22
+    },
+    {
+      name  = "node_exporter"
+      cidrs = [ var.vpc.cidr_block, "${chomp(data.http.myip.body)}/32" ]
+      port  = 9100
+    },
   ]
+  out_cidrs = [ "0.0.0.0/0" ]
+}
 
-  #---------------------------------------------------------
-  # node_exporter
-  #---------------------------------------------------------
-  provisioner "remote-exec" {
-    inline = ["sudo hostnamectl set-hostname ${aws_route53_record.dev_private.name}"]
-  }
-  provisioner "file" {
-    content = templatefile("${path.module}/../../../shared/node_exporter_install.sh", {})
-    destination = "/home/ubuntu/node_exporter_install.sh"
-  }
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-sudo bash /home/ubuntu/node_exporter_install.sh
-rm /home/ubuntu/node_exporter_install.sh
-EOF
-    ]
-  }
-  #---------------------------------------------------------
-  # node_exporter (END)
-  #---------------------------------------------------------
+module "dev_configure" {
+  source = "../../../shared/dev"
 
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/dev/init_db.sh.tpl",
-      {
-        postgresql_hosts = var.postgresql_hosts
-      })
-    destination = "/code/rocketcycle/build/bin/init_db_aws.sh"
-  }
-
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/dev/platform.json.tpl",
-      {
-        kafka_cluster = var.kafka_cluster
-        kafka_hosts = var.kafka_hosts
-        postgresql_hosts = var.postgresql_hosts
-      })
-    destination = "/code/rocketcycle/build/bin/platform_aws.json"
-  }
-
-  provisioner "file" {
-    content = templatefile(
-      "${path.module}/../../../shared/dev/run_aws.sh.tpl",
-      {
-        kafka_hosts = var.kafka_hosts
-        otelcol_endpoint = var.otelcol_endpoint
-      })
-    destination = "/code/rocketcycle/build/bin/run_aws.sh"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      <<EOF
-echo 'export DATABASE_URL=postgresql://postgres@${var.postgresql_hosts[0]}:5432/rpg' >> ~/.bashrc
-
-chmod +x /code/rocketcycle/build/bin/init_db_aws.sh
-chmod +x /code/rocketcycle/build/bin/run_aws.sh
-
-ulimit -n 10240
-EOF
-    ]
-  }
-
-  connection {
-    type     = "ssh"
-    user     = "ubuntu"
-    host     = aws_eip.dev.public_ip
-    private_key = file(var.ssh_key_path)
-  }
+  hostname = module.dev_vm.vms[0].hostname
+  dev_public_ip = module.dev_vm.vms[0].public_ip
+  ssh_key_path = var.ssh_key_path
+  postgresql_hosts = var.postgresql_hosts
+  kafka_hosts = var.kafka_hosts
+  kafka_cluster = var.kafka_cluster
+  otelcol_endpoint = var.otelcol_endpoint
 }

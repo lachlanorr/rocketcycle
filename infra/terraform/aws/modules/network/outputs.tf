@@ -10,20 +10,20 @@ output "dns_zone" {
   value = data.aws_route53_zone.zone
 }
 
-output "subnet_edge" {
+output "subnets_edge" {
   value = aws_subnet.rkcy_edge
 }
 
-output "subnet_app" {
+output "subnets_app" {
   value = aws_subnet.rkcy_app
 }
 
-output "subnet_storage" {
+output "subnets_storage" {
   value = aws_subnet.rkcy_storage
 }
 
 output "bastion_ips" {
-  value = aws_eip.bastion.*.public_ip
+  value = module.bastion_vm.vms[*].public_ip
 }
 
 output "azs" {

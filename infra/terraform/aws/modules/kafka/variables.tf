@@ -7,23 +7,32 @@ variable "cluster" {
 }
 
 variable "vpc" {
-  type = any
+  type = object({
+    id = string
+    cidr_block = string
+  })
 }
 
-variable "subnet_app" {
-  type = any
+variable "subnets" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
 variable "dns_zone" {
-  type = any
+  type = object({
+    name = string
+    zone_id = string
+  })
 }
 
-variable "bastion_ips" {
-  type = list
+variable "bastion_ip" {
+  type = string
 }
 
 variable "azs" {
-  type = list
+  type = list(string)
 }
 
 variable "ssh_key_path" {

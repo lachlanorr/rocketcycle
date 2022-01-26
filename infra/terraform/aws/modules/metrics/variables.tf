@@ -2,32 +2,56 @@ variable "stack" {
   type = string
 }
 
-variable "dns_zone" {
-  type = any
-}
-
 variable "vpc" {
-  type = any
+  type = object({
+    id = string
+    cidr_block = string
+  })
 }
 
-variable "subnet_app" {
-  type = any
+variable "subnets" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
-variable "bastion_ips" {
-  type = list
+variable "dns_zone" {
+  type = object({
+    name = string
+    zone_id = string
+  })
+}
+
+variable "bastion_ip" {
+  type = string
 }
 
 variable "balancer_external_urls" {
-  type = any
+  type = object({
+    edge = string
+    app = string
+  })
 }
 
 variable "balancer_internal_urls" {
-  type = any
+  type = object({
+    edge = string
+    app = string
+  })
 }
 
 variable "jobs" {
-  type = list
+  type = list(object({
+    name = string
+    targets = list(string)
+    relabel = list(object({
+      source_labels = list(string)
+      regex = string
+      target_label = string
+      replacement = string
+    }))
+  }))
 }
 
 variable "ssh_key_path" {

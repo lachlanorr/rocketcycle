@@ -2,56 +2,68 @@ variable "stack" {
   type = string
 }
 
-variable "dns_zone" {
-  type = any
-}
-
 variable "vpc" {
-  type = any
+  type = object({
+    id = string
+    cidr_block = string
+  })
 }
 
-variable "subnet_edge" {
-  type = any
+variable "subnets_edge" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
-variable "subnet_app" {
-  type = any
+variable "subnets_app" {
+  type = list(object({
+    id = string
+    cidr_block = string
+  }))
 }
 
-variable "bastion_ips" {
-  type = list
+variable "dns_zone" {
+  type = object({
+    name = string
+    zone_id = string
+  })
+}
+
+variable "bastion_ip" {
+  type = string
 }
 
 variable "jaeger_query_hosts" {
-  type = list
+  type = list(string)
 }
 variable "jaeger_query_port" {
   type = number
 }
 
 variable "jaeger_collector_hosts" {
-  type = list
+  type = list(string)
 }
 variable "jaeger_collector_port" {
   type = number
 }
 
 variable "otelcol_hosts" {
-  type = list
+  type = list(string)
 }
 variable "otelcol_port" {
   type = number
 }
 
 variable "prometheus_hosts" {
-  type = list
+  type = list(string)
 }
 variable "prometheus_port" {
   type = number
 }
 
 variable "grafana_hosts" {
-  type = list
+  type = list(string)
 }
 variable "grafana_port" {
   type = number

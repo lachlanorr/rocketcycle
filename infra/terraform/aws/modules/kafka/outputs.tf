@@ -1,5 +1,5 @@
 output "zookeeper_hosts" {
-  value = sort(aws_route53_record.zookeeper_private.*.name)
+  value = sort(module.zookeeper_vm.vms[*].hostname)
 }
 
 output "kafka_cluster" {
@@ -7,9 +7,9 @@ output "kafka_cluster" {
 }
 
 output "kafka_internal_hosts" {
-  value = sort(aws_route53_record.kafka_private.*.name)
+  value = sort(module.kafka_vm.vms[*].hostname)
 }
 
 output "kafka_external_hosts" {
-  value = sort(aws_route53_record.kafka_public.*.name)
+  value = sort(module.kafka_vm.vms[*].public_hostname)
 }
