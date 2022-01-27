@@ -1,15 +1,15 @@
 output "zookeeper_hosts" {
-  value = sort(azurerm_dns_a_record.zookeeper_private.*.fqdn)
+  value = sort(module.zookeeper_vm.vms[*].hostname)
 }
 
 output "kafka_cluster" {
-  value = "${var.stack}_${var.cluster}"
+  value = "${var.cluster}_${var.stack}"
 }
 
 output "kafka_internal_hosts" {
-  value = sort(azurerm_dns_a_record.kafka_private.*.fqdn)
+  value = sort(module.kafka_vm.vms[*].hostname)
 }
 
 output "kafka_external_hosts" {
-  value = sort(azurerm_dns_a_record.kafka_public.*.fqdn)
+  value = sort(module.kafka_vm.vms[*].public_hostname)
 }

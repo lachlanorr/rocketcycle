@@ -6,7 +6,7 @@ variable "stack" {
   type = string
 }
 
-variable "cluster" {
+variable "dns_zone" {
   type = string
 }
 
@@ -28,15 +28,19 @@ variable "subnets" {
   }))
 }
 
-variable "dns_zone" {
-  type = string
+variable "azs" {
+  type = list(string)
 }
 
 variable "bastion_ip" {
   type = string
 }
 
-variable "azs" {
+variable "nginx_telem_host" {
+  type = string
+}
+
+variable "elasticsearch_urls" {
   type = list(string)
 }
 
@@ -45,16 +49,33 @@ variable "ssh_key_path" {
   default = "~/.ssh/rkcy_id_rsa"
 }
 
-variable "zookeeper_count" {
+variable "jaeger_collector_count" {
   type = number
-  default = 3
+  default = 1
 }
 
-variable "kafka_count" {
+variable "jaeger_query_count" {
   type = number
-  default = 3
+  default = 1
 }
 
-variable "public" {
-  type = bool
+variable "jaeger_collector_port" {
+  type = number
+  default = 14250
 }
+
+variable "jaeger_query_port" {
+  type = number
+  default = 16686
+}
+
+variable "otelcol_count" {
+  type = number
+  default = 1
+}
+
+variable "otelcol_port" {
+  type = number
+  default = 4317
+}
+

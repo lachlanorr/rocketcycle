@@ -11,23 +11,29 @@ variable "dns_zone" {
 }
 
 variable "resource_group" {
-  type = any
+  type = object({
+    name = string
+    location = string
+  })
 }
 
-variable "network" {
-  type = any
+variable "network_cidr" {
+  type = string
 }
 
-variable "subnet_storage" {
-  type = any
+variable "subnets" {
+  type = list(object({
+    id = string
+    address_prefixes = list(string)
+  }))
 }
 
-variable "bastion_ips" {
-  type = list
+variable "bastion_ip" {
+  type = string
 }
 
 variable "azs" {
-  type = list
+  type = list(string)
 }
 
 variable "ssh_key_path" {

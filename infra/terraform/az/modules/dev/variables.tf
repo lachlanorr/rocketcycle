@@ -6,7 +6,7 @@ variable "stack" {
   type = string
 }
 
-variable "cluster" {
+variable "dns_zone" {
   type = string
 }
 
@@ -28,33 +28,27 @@ variable "subnets" {
   }))
 }
 
-variable "dns_zone" {
-  type = string
-}
-
-variable "bastion_ip" {
-  type = string
-}
-
 variable "azs" {
   type = list(string)
+}
+
+variable "postgresql_hosts" {
+  type = list(string)
+}
+
+variable "kafka_cluster" {
+  type = string
+}
+
+variable "kafka_hosts" {
+  type = list(string)
+}
+
+variable "otelcol_endpoint" {
+  type = string
 }
 
 variable "ssh_key_path" {
   type = string
   default = "~/.ssh/rkcy_id_rsa"
-}
-
-variable "zookeeper_count" {
-  type = number
-  default = 3
-}
-
-variable "kafka_count" {
-  type = number
-  default = 3
-}
-
-variable "public" {
-  type = bool
 }

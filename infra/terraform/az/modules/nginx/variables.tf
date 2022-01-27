@@ -10,6 +10,10 @@ variable "cluster" {
   type = string
 }
 
+variable "dns_zone" {
+  type = string
+}
+
 variable "resource_group" {
   type = object({
     name = string
@@ -28,16 +32,25 @@ variable "subnets" {
   }))
 }
 
-variable "dns_zone" {
-  type = string
+variable "azs" {
+  type = list(string)
 }
 
 variable "bastion_ip" {
   type = string
 }
 
-variable "azs" {
-  type = list(string)
+variable "inbound_cidr" {
+  type = string
+}
+
+variable "routes" {
+  type = list(object({
+    name = string
+    hosts = list(string)
+    port = number
+    grpc = bool
+  }))
 }
 
 variable "ssh_key_path" {
@@ -45,14 +58,9 @@ variable "ssh_key_path" {
   default = "~/.ssh/rkcy_id_rsa"
 }
 
-variable "zookeeper_count" {
+variable "nginx_count" {
   type = number
-  default = 3
-}
-
-variable "kafka_count" {
-  type = number
-  default = 3
+  default = 1
 }
 
 variable "public" {

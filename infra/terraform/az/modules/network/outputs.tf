@@ -14,20 +14,20 @@ output "dns_zone" {
   value = var.dns_zone
 }
 
-output "subnet_edge" {
+output "subnets_edge" {
   value = azurerm_subnet.rkcy_edge
 }
 
-output "subnet_app" {
+output "subnets_app" {
   value = azurerm_subnet.rkcy_app
 }
 
-output "subnet_storage" {
+output "subnets_storage" {
   value = azurerm_subnet.rkcy_storage
 }
 
 output "bastion_ips" {
-  value = azurerm_public_ip.bastion.*.ip_address
+  value = module.bastion_vm.vms[*].public_ip
 }
 
 output "azs" {

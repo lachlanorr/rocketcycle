@@ -54,10 +54,6 @@ module "elasticsearch_vm" {
   out_cidrs = [ var.vpc.cidr_block ]
 }
 
-locals {
-  elasticsearch_nodes = [for i in range(var.elasticsearch_count) : "master-${i}"]
-}
-
 module "elasticsearch_configure" {
   source = "../../../shared/elasticsearch"
   count = var.elasticsearch_count
@@ -68,6 +64,6 @@ module "elasticsearch_configure" {
   stack = var.stack
   elasticsearch_index = count.index
   elasticsearch_ips = module.elasticsearch_vm.vms[*].ip
-  elasticsearch_nodes = local.elasticsearch_nodes
+  elasticsearch_nodes = [for i in range(var.elasticsearch_count) : "master-${i}"]
   elasticsearch_rack = var.azs[count.index % length(var.azs)]
 }

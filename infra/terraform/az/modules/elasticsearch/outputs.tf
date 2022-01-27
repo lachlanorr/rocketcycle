@@ -1,9 +1,9 @@
 output "elasticsearch_urls" {
-  value = [for host in sort(azurerm_dns_a_record.elasticsearch_private[*].fqdn): "http://${host}:${var.elasticsearch_port}"]
+  value = [for host in sort(module.elasticsearch_vm.vms[*].hostname): "http://${host}:${var.elasticsearch_port}"]
 }
 
 output "elasticsearch_hosts" {
-  value = sort(azurerm_dns_a_record.elasticsearch_private[*].fqdn)
+  value = sort(module.elasticsearch_vm.vms[*].hostname)
 }
 
 output "elasticsearch_port" {

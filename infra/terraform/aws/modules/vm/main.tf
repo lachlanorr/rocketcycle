@@ -77,7 +77,7 @@ resource "aws_instance" "vm" {
   }
 }
 
-resource "aws_route53_record" "vm_private" {
+resource "aws_route53_record" "private" {
   count = length(var.vms)
   zone_id = var.dns_zone.zone_id
   name    = local.hostnames[count.index]
@@ -107,7 +107,7 @@ resource "aws_eip" "vm" {
   }
 }
 
-resource "aws_route53_record" "vm_public" {
+resource "aws_route53_record" "public" {
   count = var.public ? length(var.vms) : 0
   zone_id = var.dns_zone.zone_id
   name    = local.public_hostnames[count.index]
